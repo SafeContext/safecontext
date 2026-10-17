@@ -4,6 +4,13 @@ Checks Claude Code prompts and cleans tool output with a company-run model, usin
 IT controls from a dashboard. Read `SPEC.md` for the architecture, contracts, done-when tests
 and open decisions. Scope: Claude Code only for pilot, then extend across all agentic apps, macOS (Apple Silicon) only for now.
 
+## Work tracking
+
+- All work is in GitHub issues. **Start at the pinned roadmap: issue #1.**
+- Pick one issue. Check its "Depends on" list is done first.
+- Branch `issue-<n>-short-name`; open a PR with `Closes #<n>`. `main` is protected (PR + 1 approval).
+- Keep PRs to one issue. If you find new work, open a new issue instead of growing the PR.
+
 ## Ground rules
 
 - **Ask before guessing.** If a spec detail, API shape or product decision is unclear, ask.
