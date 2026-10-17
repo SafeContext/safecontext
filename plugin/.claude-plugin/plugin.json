@@ -1,0 +1,8 @@
+{
+  "name": "safe-context",
+  "description": "Checks prompts and cleans tool output with your company's own model before Claude sees it.",
+  "version": "0.0.1",
+  "author": {
+    "name": "Safe Context"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:4747/v1/prompt",
+            "statusMessage": "Safe Context is checking your prompt\u2026",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Read|Bash|Grep|WebFetch|WebSearch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:4747/v1/tool-input",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Read|Bash|Grep|WebFetch|WebSearch|mcp__.*)$",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:4747/v1/tool-output",
+            "statusMessage": "Safe Context is checking what Claude read\u2026"
+          }
+        ]
+      }
+    ]
+  }
+}
