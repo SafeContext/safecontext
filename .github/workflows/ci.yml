@@ -78,5 +78,6 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - run: npm install --global @anthropic-ai/claude-code
+      # Pinned so a new release cannot break this check on unrelated PRs; bump deliberately.
+      - run: npm install --global @anthropic-ai/claude-code@2.1.302
       - run: claude plugin validate ./plugin
