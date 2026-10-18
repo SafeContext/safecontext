@@ -1,0 +1,65 @@
+{
+	"_note": "Real Claude Code hook payloads, scrubbed (ids, paths, usernames replaced). Test data is made-up Macrohard text. See docs/hook-shapes.md.",
+	"claudeCodeVersion": "2.1.302",
+	"tool": "Read",
+	"preToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PreToolUse",
+		"tool_name": "Read",
+		"tool_input": {
+			"file_path": "/work/macrohard-proj/Q3-launch-review.md"
+		},
+		"tool_use_id": "toolu_FIXTURE_1"
+	},
+	"postToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Read",
+		"tool_input": {
+			"file_path": "/work/macrohard-proj/Q3-launch-review.md"
+		},
+		"tool_response": {
+			"type": "text",
+			"file": {
+				"filePath": "/work/macrohard-proj/Q3-launch-review.md",
+				"content": "# Macrohard Q3 launch review (made-up test data)\n\nProject codename: Nimbus-7. Customer: Contoso Widgets. Revenue forecast: $4.2M, up 18%.\nContact: jane.doe@macrohard.example, phone +1 555 0100.\nInternal key: MH_API_KEY=mh_test_0000000000000000\n",
+				"numLines": 6,
+				"startLine": 1,
+				"totalLines": 6
+			}
+		},
+		"tool_use_id": "toolu_FIXTURE_1",
+		"duration_ms": 2
+	},
+	"postToolUseOutputThatWasApplied": {
+		"hookSpecificOutput": {
+			"hookEventName": "PostToolUse",
+			"updatedToolOutput": {
+				"type": "text",
+				"file": {
+					"filePath": "/work/macrohard-proj/Q3-launch-review.md",
+					"content": "SC-REWRITE-OK Read replaced",
+					"numLines": 6,
+					"startLine": 1,
+					"totalLines": 6
+				}
+			}
+		}
+	}
+}

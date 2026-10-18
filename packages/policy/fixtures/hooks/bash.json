@@ -1,0 +1,61 @@
+{
+	"_note": "Real Claude Code hook payloads, scrubbed (ids, paths, usernames replaced). Test data is made-up Macrohard text. See docs/hook-shapes.md.",
+	"claudeCodeVersion": "2.1.302",
+	"tool": "Bash",
+	"preToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PreToolUse",
+		"tool_name": "Bash",
+		"tool_input": {
+			"command": "cat notes.txt",
+			"description": "Print contents of notes.txt"
+		},
+		"tool_use_id": "toolu_FIXTURE_2"
+	},
+	"postToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PostToolUse",
+		"tool_name": "Bash",
+		"tool_input": {
+			"command": "cat notes.txt",
+			"description": "Print contents of notes.txt"
+		},
+		"tool_response": {
+			"stdout": "Macrohard incident log\n2026-03-01 outage in Azure-like region \"Redmond-2\" affected Fabrikam Ltd.\nFabrikam Ltd paid $120,000 for the Nimbus-7 pilot.",
+			"stderr": "",
+			"interrupted": false,
+			"isImage": false,
+			"noOutputExpected": false
+		},
+		"tool_use_id": "toolu_FIXTURE_2",
+		"duration_ms": 420
+	},
+	"postToolUseOutputThatWasApplied": {
+		"hookSpecificOutput": {
+			"hookEventName": "PostToolUse",
+			"updatedToolOutput": {
+				"stdout": "SC-REWRITE-OK Bash replaced",
+				"stderr": "",
+				"interrupted": false,
+				"isImage": false,
+				"noOutputExpected": false
+			}
+		}
+	}
+}
