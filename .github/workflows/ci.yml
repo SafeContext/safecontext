@@ -1,0 +1,83 @@
+name: CI
+
+# Runs on every pull request (and on main after merge). Job names below are the check names to
+# require in the "Protect main" ruleset.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node (check, lint, test)
+    runs-on: ubuntu-latest
+    env:
+      # Dummy value so `prisma generate` can load its config. Nothing connects to a database.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v7
+
+      # pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # The dashboard's `prepare` script runs `prisma generate` before `svelte-kit sync` and
+      # swallows errors, so on a fresh checkout nothing is generated. Run both, in order.
+      - run: pnpm --filter @safecontext/dashboard exec svelte-kit sync
+      - run: pnpm --filter @safecontext/dashboard db:generate
+
+      - run: pnpm check
+      - run: pnpm lint
+
+      # Everything except the dashboard, which needs browsers for its `client` project and e2e.
+      - run: pnpm --filter '!@safecontext/dashboard' test
+      # Dashboard: only the node-based `server` Vitest project for now (no Playwright in CI yet).
+      - run: pnpm --filter @safecontext/dashboard exec vitest run --project server
+
+  python:
+    name: Python (ruff)
+    # uv.lock only supports Apple Silicon macOS (see ml/pyproject.toml), so run on macOS arm64.
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          working-directory: ml
+
+      # Dev tools only, so torch and the other ML dependencies are never downloaded.
+      - run: uv sync --only-dev --locked
+      # --no-sync: don't let `uv run` install the full project.
+      - run: uv run --no-sync ruff check .
+
+  plugin:
+    name: Plugin (validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Pinned so a new release cannot break this check on unrelated PRs; bump deliberately.
+      - run: npm install --global @anthropic-ai/claude-code@2.1.302
+      - run: claude plugin validate ./plugin
