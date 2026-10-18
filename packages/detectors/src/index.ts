@@ -8,7 +8,13 @@ import { mergeSpans } from './spans.ts';
 import type { Detector, Span } from './types.ts';
 
 export type { Detector, Span } from './types.ts';
-export { SECRET_RULES, secretsDetector, type SecretRule } from './secrets.ts';
+export {
+	PRIVATE_KEY_RULE_ID,
+	SECRET_RULES,
+	findPrivateKeys,
+	secretsDetector,
+	type SecretRule
+} from './secrets.ts';
 export {
 	cardDetector,
 	emailDetector,

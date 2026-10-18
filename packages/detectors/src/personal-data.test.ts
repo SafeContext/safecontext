@@ -22,7 +22,11 @@ describe('emailDetector', () => {
 		'jane@northwind.com',
 		'jane.doe+billing@northwind.co.uk',
 		'jane_doe@mail.northwind.io',
-		'J.DOE@NORTHWIND.COM'
+		'J.DOE@NORTHWIND.COM',
+		'josé@example.com',
+		'名前@example.jp',
+		'müller@münchen.de',
+		'jose\u0301@example.com'
 	])('finds %s', (email) => {
 		expect(found(emailDetector, `contact ${email} today`)).toEqual([email]);
 	});
@@ -53,7 +57,8 @@ describe('emailDetector', () => {
 		'logo@2x.png and sprite@3x.webp',
 		'npm install react@18.2.0',
 		'decorator @dataclass(frozen=True)',
-		'email me at jane at northwind dot com'
+		'email me at jane at northwind dot com',
+		`${'a'.repeat(70)}@northwind.com` // not a valid address: local part over 64 characters
 	])('ignores the near-miss: %s', (text) => {
 		expect(emailDetector.detect(text)).toEqual([]);
 	});

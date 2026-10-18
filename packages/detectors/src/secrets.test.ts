@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SECRET_RULES, secretsDetector } from './secrets.ts';
+import { PRIVATE_KEY_RULE_ID, SECRET_RULES, findPrivateKeys, secretsDetector } from './secrets.ts';
 import { ALNUM, HEX, LETTERS, fill } from './test-helpers.ts';
 
 const DIGITS10 = '1234567890';
@@ -69,7 +69,10 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 		secret: `sk-ant-api03-${fill(ALNUM, 93)}AA`,
 		nearMisses: [`sk-ant-api03-${fill(ALNUM, 40)}AA`, `sk-ant-${fill(ALNUM, 40)}`]
 	},
-	'gcp-api-key': { secret: `AIza${fill(ALNUM, 35)}`, nearMisses: [`AIza${fill(ALNUM, 12)}`] },
+	'gcp-api-key': {
+		secret: `AIza${fill(ALNUM, 35)}`,
+		nearMisses: [`AIza${fill(ALNUM, 12)}`, `AIza${fill(ALNUM, 50)}`]
+	},
 	'private-key': {
 		secret: keyBlock('RSA PRIVATE KEY', 256),
 		nearMisses: [
@@ -80,7 +83,10 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 			'a private key is stored in the vault'
 		]
 	},
-	'npm-access-token': { secret: `npm_${fill(ALNUM, 36)}`, nearMisses: [`npm_${fill(ALNUM, 12)}`] },
+	'npm-access-token': {
+		secret: `npm_${fill(ALNUM, 36)}`,
+		nearMisses: [`npm_${fill(ALNUM, 12)}`, `npm_${fill(ALNUM, 44)}`]
+	},
 	'sendgrid-api-token': {
 		secret: `SG.${fill(ALNUM, 66)}`,
 		nearMisses: [`SG.${fill(ALNUM, 20)}`]
@@ -121,7 +127,9 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 
 describe('SECRET_RULES', () => {
 	it('has a test case for every rule, and no stray cases', () => {
-		expect(Object.keys(CASES).sort()).toEqual(SECRET_RULES.map((rule) => rule.id).sort());
+		expect(Object.keys(CASES).sort()).toEqual(
+			[...SECRET_RULES.map((rule) => rule.id), PRIVATE_KEY_RULE_ID].sort()
+		);
 	});
 
 	it('uses the global flag on every rule, so each match is found', () => {
@@ -131,7 +139,7 @@ describe('SECRET_RULES', () => {
 
 describe('secretsDetector', () => {
 	describe.each(Object.entries(CASES))('%s', (id, { secret, nearMisses }) => {
-		const rule = SECRET_RULES.find((r) => r.id === id)!;
+		const rule = SECRET_RULES.find((r) => r.id === id);
 
 		it('finds the secret, and exactly the secret, in surrounding text', () => {
 			const text = `export TOKEN="${secret}" # see runbook`;
@@ -142,9 +150,19 @@ describe('secretsDetector', () => {
 			}
 		});
 
-		it('is found by its own rule', () => {
-			expect(`x ${secret} x`.match(rule.regex)).not.toBeNull();
+		it.skipIf(rule === undefined)('is found by its own rule', () => {
+			expect(`x ${secret} x`.match(rule!.regex)).not.toBeNull();
 		});
+
+		it.each([',', ')', ']', '}', '.', ':', '>', "'", '"'])(
+			'finds the secret when it is followed by %s',
+			(after) => {
+				const text = `see (${secret}${after}rest`;
+				expect(secretsDetector.detect(text).map((s) => text.slice(s.start, s.end))).toContain(
+					secret
+				);
+			}
+		);
 
 		it.each(nearMisses)('ignores the near-miss %s', (nearMiss) => {
 			expect(secretsDetector.detect(`value: ${nearMiss}\n`)).toEqual([]);
@@ -165,11 +183,67 @@ describe('secretsDetector', () => {
 		expect(secretsDetector.detect(text)).toHaveLength(1);
 	});
 
-	it('flags the whole multi-line private key block', () => {
-		const key = keyBlock('OPENSSH PRIVATE KEY', 400);
-		const text = `before\n${key}\nafter`;
-		const [span] = secretsDetector.detect(text);
-		expect(text.slice(span!.start, span!.end)).toBe(key);
+	describe('private keys', () => {
+		const header = (label = 'RSA PRIVATE KEY') => `-----${'BEGIN'} ${label}-----`;
+		const footer = (label = 'RSA PRIVATE KEY') => `-----${'END'} ${label}-----`;
+		const lines = (n: number) => Array.from({ length: n }, () => fill(ALNUM, 64));
+		const flagged = (text: string) => findPrivateKeys(text).map(([a, b]) => text.slice(a, b));
+
+		it('flags the whole multi-line block, header to footer', () => {
+			const key = keyBlock('OPENSSH PRIVATE KEY', 400);
+			const text = `before\n${key}\nafter`;
+			const [span] = secretsDetector.detect(text);
+			expect(text.slice(span!.start, span!.end)).toBe(key);
+		});
+
+		it('flags a key that is cut off before its footer', () => {
+			const partial = [header(), ...lines(3), fill(ALNUM, 20)].join('\n');
+			expect(flagged(`output:\n${partial}`)).toEqual([partial]);
+			// Cut off in the middle of a line, with Windows line endings.
+			const crlf = [header(), ...lines(2), fill(ALNUM, 7)].join('\r\n');
+			expect(flagged(crlf)).toEqual([crlf]);
+		});
+
+		it('keeps the key-looking lines only, not the prose after a cut-off key', () => {
+			const partial = [header(), ...lines(2)].join('\n');
+			expect(flagged(`${partial}\nThat was the key, please rotate it.`)).toEqual([partial]);
+		});
+
+		it('flags an encrypted key with its PEM header lines', () => {
+			const key = [
+				header(),
+				'Proc-Type: 4,ENCRYPTED',
+				'DEK-Info: AES-128-CBC,0123456789ABCDEF0123456789ABCDEF',
+				'',
+				...lines(2),
+				fill(ALNUM, 12),
+				footer()
+			].join('\n');
+			expect(flagged(`x\n${key}\ny`)).toEqual([key]);
+		});
+
+		it('flags a key stored in a JSON string with escaped newlines', () => {
+			const key = [header(), ...lines(2), footer()].join('\\n');
+			const text = `{"private_key": "${key}\\n", "id": 1}`;
+			expect(flagged(text)).toEqual([key]);
+		});
+
+		it('flags every key in the text', () => {
+			const a = [header(), ...lines(2), footer()].join('\n');
+			const b = [header('PRIVATE KEY'), ...lines(2), footer('PRIVATE KEY')].join('\n');
+			expect(flagged(`${a}\n\nand\n\n${b}`)).toEqual([a, b]);
+		});
+
+		it.each([
+			['a bare header', header()],
+			['a header followed by prose', `${header()}\nsee the vault for the real thing`],
+			['an empty key', `${header()}\n${footer()}`],
+			['a placeholder', `${header()}\n...\n${footer()}`],
+			['a public key', keyBlock('PUBLIC KEY', 256)],
+			['a certificate', keyBlock('CERTIFICATE', 256)]
+		])('ignores %s', (_what, text) => {
+			expect(findPrivateKeys(text)).toEqual([]);
+		});
 	});
 
 	it('leaves ordinary text, code and identifiers alone', () => {

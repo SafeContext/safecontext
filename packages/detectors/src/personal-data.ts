@@ -33,9 +33,11 @@ const digitsOf = (value: string) => value.replace(/\D/g, '');
 // ---------------------------------------------------------------------------------------------
 
 // Lengths are bounded (RFC 5321 limits) and the lookbehind stops the scan restarting inside a
-// long run of letters, so a 5 KB blob with no `@` costs one pass, not thousands.
+// long run of letters, so a 5 KB blob with no `@` costs one pass, not thousands. Letters, marks
+// and digits are Unicode-aware (`josé@example.com`, `名前@example.jp`, `müller@münchen.de`). A
+// local part over 64 characters is not a valid address and is not flagged.
 const EMAIL =
-	/(?<![\w.%+-])[\w.%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\.){1,8}[A-Za-z]{2,24}(?![A-Za-z0-9-])/g;
+	/(?<![\p{L}\p{M}\p{N}_.%+-])[\p{L}\p{M}\p{N}_.%+-]{1,64}@(?:[\p{L}\p{M}\p{N}-]{1,63}\.){1,8}\p{L}{2,24}(?![\p{L}\p{M}\p{N}-])/gu;
 
 // `logo@2x.png`, `sprite@3x.webp`: image names that look like emails.
 const FILE_EXTENSIONS = new Set([

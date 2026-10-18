@@ -61,3 +61,32 @@ describe(`benchmark: 5 KB in < ${BUDGET_MS} ms (median of ${RUNS} runs)`, () => 
 		expect(medianMs(text)).toBeLessThan(BUDGET_MS);
 	});
 });
+
+// Not the 5 KB budget: a guard against rules that get slow (quadratic) on big tool output.
+// Linear time on 1 MB is a few tens of milliseconds, so one second leaves room for slow CI.
+describe('large inputs (1 MB) stay linear', () => {
+	const MB = 1024 * 1024;
+	const toMb = (unit: string) => unit.repeat(Math.ceil(MB / unit.length)).slice(0, MB);
+	const LARGE: Record<string, string> = {
+		'private key headers with no footer': toMb(`-----${'BEGIN'} PRIVATE KEY-----\nabc\n`),
+		'private key headers with key lines': toMb(
+			`-----${'BEGIN'} PRIVATE KEY-----\n${fill(ALNUM, 64)}\n`
+		),
+		'one long run of letters and digits': toMb(fill(ALNUM, 64)),
+		'one long digit run': toMb('1234567890'),
+		'many @ signs': toMb('a@b.'),
+		'many colons': toMb('1a:2b:'),
+		'almost-secret prefixes': toMb(
+			`ghp_ AKIA sk-ant-api03- eyJ.eyJ. xoxb-1-1- ${fill(ALNUM, 20)} `
+		),
+		'realistic text': toMb(REALISTIC)
+	};
+
+	it.each(Object.entries(LARGE))('%s', (_name, text) => {
+		const t0 = performance.now();
+		detectAll(text);
+		const elapsed = performance.now() - t0;
+		console.info(`${_name}: ${elapsed.toFixed(0)} ms`);
+		expect(elapsed).toBeLessThan(1000);
+	});
+});
