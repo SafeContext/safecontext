@@ -11,7 +11,8 @@ and open decisions. Scope: Claude Code only for pilot, then extend across all ag
 - Branch `issue-<n>-short-name`; open a PR with `Closes #<n>`. `main` is protected (PR + 1 approval).
 - Keep PRs to one issue. If you find new work, open a new issue instead of growing the PR.
 - **PR descriptions must follow `.github/pull_request_template.md`.** Fill every section; write
-  "None" rather than deleting one. Put anything a human must decide or do under "Needs human input".
+  "None" rather than deleting one. Write the Summary for someone who doesn't code, and explain any
+  technical term. Put anything a human must decide or do under "Needs human input".
   With `gh pr create`, pass the filled-in template via `--body-file`.
 
 ## Ground rules
