@@ -38,7 +38,7 @@ Source: https://code.claude.com/docs/en/hooks. Re-check the docs before relying 
 
 | Hook | Our use | What it can do |
 | --- | --- | --- |
-| `UserPromptSubmit` | Check what the user types | **Block** (`decision: "block"` + `reason` shown to the user). **Cannot rewrite the prompt.** Default timeout 30 s; on timeout the prompt proceeds unless `onFailure: "block"`. |
+| `UserPromptSubmit` | Check what the user types | **Block** (`decision: "block"` + `reason` shown to the user; set `hookSpecificOutput.suppressOriginalPrompt: true` so the prompt isn't echoed back). **Cannot rewrite the prompt.** Default timeout 30 s; on timeout the prompt proceeds unless `onFailure: "block"`. |
 | `PreToolUse` | Stop secrets leaving (Bash, WebFetch, WebSearch, MCP); also the fail-closed gate for Read/Grep (see §2a) | `permissionDecision` allow/deny/ask/defer; `updatedInput` replaces the **whole** input object. |
 | `PostToolUse` | Clean what Claude reads (Read, Bash, Grep, WebFetch, WebSearch, MCP) | `updatedToolOutput` replaces what Claude sees. **Must match the tool's output shape**; for built-in tools a mismatch is **silently ignored** (raw data gets through). |
 | `SessionStart` | Health check: warn if the agent isn't running | Not implemented yet. Confirm the output fields in the docs first. |
@@ -94,7 +94,7 @@ Source: https://code.claude.com/docs/en/server-managed-settings
 
 ## 3. Contracts
 
-Source of truth: `packages/policy/src/index.ts` (v0 draft).
+Source of truth: `packages/policy` (v1). JSON Schema copies for Python: `packages/policy/schema/`.
 
 - **Policy**: data types, each with id, name, description, examples, tier (green/yellow/red) and
   action (allow, generalize, pseudonymize, mask, block). Plus admin term lists and `failMode`.
