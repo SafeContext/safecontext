@@ -36,7 +36,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The dashboard's `prepare` script swallows prisma errors, so generate explicitly.
+      # The dashboard's `prepare` script runs `prisma generate` before `svelte-kit sync` and
+      # swallows errors, so on a fresh checkout nothing is generated. Run both, in order.
+      - run: pnpm --filter @safecontext/dashboard exec svelte-kit sync
       - run: pnpm --filter @safecontext/dashboard db:generate
 
       - run: pnpm check
