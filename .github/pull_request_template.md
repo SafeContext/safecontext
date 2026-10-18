@@ -1,5 +1,6 @@
 ## Summary
-<!-- 1–2 plain-English sentences: what this PR does and why. No jargon. -->
+<!-- 1–3 plain-English sentences: what this PR does and why, written for someone who doesn't code.
+     If you must use a technical term (e.g. "contract", "hook"), explain it in a few words. -->
 
 ## Needs human input
 <!-- Decisions, approvals or manual steps needed before merge. Write "None" if nothing. -->
