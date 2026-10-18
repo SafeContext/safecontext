@@ -1,7 +1,8 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Dashboard database. Prisma 7 (https://www.prisma.io/docs/v7). Contracts live in packages/policy;
+// keep these models in step with `Policy`, `DataType`, `TermList` and `AgentEvent` there.
+//
+// Rules that can't be expressed in this file (CHECK constraints) are added by hand in the
+// migration SQL: green <=> allow on DataType, id-shaped keys, non-negative counts.
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +11,194 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums. Values match the Zod enums in packages/policy exactly.
+// ---------------------------------------------------------------------------
+
+/// Traffic-light column a data type sits in.
+enum Tier {
+  green
+  yellow
+  red
+}
+
+/// What the agent does to a span of a data type.
+enum Action {
+  allow
+  generalize
+  pseudonymize
+  mask
+  block
+}
+
+/// What the agent does when it can't finish checking (SPEC.md §2a).
+enum FailMode {
+  block
+  allow
+}
+
+enum HookEventName {
+  UserPromptSubmit
+  PreToolUse
+  PostToolUse
+}
+
+// ---------------------------------------------------------------------------
+// Organisation, people, policy
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  slug      String   @unique
+  /// Draft setting. Copied into each PolicyVersion when published.
+  failMode  FailMode @default(block)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  members        Member[]
+  dataTypes      DataType[]
+  policyVersions PolicyVersion[]
+  devices        Device[]
+  events         Event[]
+}
+
+/// An admin who can sign in to the dashboard.
+///
+/// Better Auth (issue #19) will add its own `user` table. To link them later, `userId` holds
+/// Better Auth's `user.id`: #19 adds a foreign key from `Member.userId` to that table and fills it
+/// in at first sign-in by matching on `email`. Nothing here depends on Better Auth until then.
+model Member {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @db.Uuid
+  email          String
+  name           String?
+  /// Better Auth `user.id`. Null until the person first signs in. Unique: one user, one member.
+  userId         String?  @unique
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  published    PolicyVersion[]
+
+  @@unique([organizationId, email])
+}
+
+/// The editable (draft) data types. Moving a card between columns on the dashboard changes
+/// `tier` and `action`. Publishing copies the current rows into a PolicyVersion snapshot.
+model DataType {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @db.Uuid
+  /// Policy id, e.g. "customer-names". Also the key events count against.
+  key            String   @db.VarChar(64)
+  name           String   @db.VarChar(80)
+  description    String   @db.VarChar(500)
+  examples       String[]
+  tier           Tier
+  action         Action
+  /// Order within its column.
+  position       Int      @default(0)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  termList     TermList?
+
+  @@unique([organizationId, key])
+  @@index([organizationId, tier, position])
+}
+
+/// Exact-match terms an admin uploads for one data type (codenames, customer names).
+model TermList {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  dataTypeId String   @unique @db.Uuid
+  terms      String[]
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  dataType DataType @relation(fields: [dataTypeId], references: [id], onDelete: Cascade)
+}
+
+/// An immutable published policy. `snapshot` is a complete `Policy` (packages/policy), which is
+/// exactly what the agent pulls. Versions start at 1; 0 means "never published" in the contract.
+model PolicyVersion {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @db.Uuid
+  version        Int
+  failMode       FailMode
+  snapshot       Json
+  publishedAt    DateTime @default(now()) @db.Timestamptz(3)
+  publishedById  String?  @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  publishedBy  Member?      @relation(fields: [publishedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, version])
+}
+
+// ---------------------------------------------------------------------------
+// Devices and events. METADATA ONLY: ids, names of tools, numbers and timestamps.
+// No column here may ever hold prompt, file or tool text (SPEC.md §3).
+// ---------------------------------------------------------------------------
+
+model Device {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  organizationId    String    @db.Uuid
+  /// The agent's anonymised device id (`AgentEvent.deviceId`).
+  deviceId          String    @db.VarChar(64)
+  firstSeenAt       DateTime  @default(now()) @db.Timestamptz(3)
+  lastSeenAt        DateTime  @default(now()) @db.Timestamptz(3)
+  /// Policy version from the device's latest event; shows whether it has picked up a publish.
+  lastPolicyVersion Int?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       Event[]
+
+  @@unique([organizationId, deviceId])
+  // Lets Event point at (organisation, device) together so an event can't name another org's device.
+  @@unique([organizationId, id])
+}
+
+/// One check the agent made (`AgentEvent`). Counts are typed columns plus `EventCount` rows;
+/// there is deliberately no Json or free-text column.
+model Event {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  organizationId String        @db.Uuid
+  deviceId       String        @db.Uuid
+  /// When the agent made the check (`AgentEvent.ts`).
+  ts             DateTime      @db.Timestamptz(3)
+  receivedAt     DateTime      @default(now()) @db.Timestamptz(3)
+  policyVersion  Int
+  hookEvent      HookEventName
+  /// Claude Code tool name, e.g. "Read" or "mcp__slack__post". Null for UserPromptSubmit.
+  toolName       String?       @db.VarChar(128)
+  blocked        Boolean
+  latencyMs      Float
+  /// Spans handled, per action (`AgentEvent.actions`).
+  actionAllow        Int @default(0)
+  actionGeneralize   Int @default(0)
+  actionPseudonymize Int @default(0)
+  actionMask         Int @default(0)
+  actionBlock        Int @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  device       Device       @relation(fields: [organizationId, deviceId], references: [organizationId, id], onDelete: Cascade)
+  counts       EventCount[]
+
+  @@index([organizationId, ts(sort: Desc)])
+  @@index([deviceId, ts(sort: Desc)])
+}
+
+/// Spans found in one event for one data type (`AgentEvent.counts`).
+/// `dataTypeKey` is not a foreign key on purpose: events are history and must outlive data types.
+model EventCount {
+  eventId     String @db.Uuid
+  dataTypeKey String @db.VarChar(64)
+  count       Int
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, dataTypeKey])
+  @@index([dataTypeKey])
 }
