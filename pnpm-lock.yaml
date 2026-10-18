@@ -208,6 +208,9 @@ importers:
       '@prisma/client':
         specifier: 7.10.1
         version: 7.10.1(prisma@7.10.1(@types/node@24.19.2)(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(typescript@6.0.3)
+      '@safecontext/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
       dotenv:
         specifier: ^18.0.8
         version: 18.0.8
