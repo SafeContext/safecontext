@@ -28,11 +28,6 @@ on:
   issue_comment:
     types: [created]
 
-# One review per PR at a time; a new trigger cancels a run already in progress.
-concurrency:
-  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
-
 jobs:
   review:
     if: >-
@@ -45,6 +40,12 @@ jobs:
         github.event.comment.user.login == 'joethompson1' &&
         contains(github.event.comment.body, '@claude review')
       )
+    # Concurrency is on the JOB, not the workflow: every PR comment (incl. Claude's own progress
+    # comment) starts a workflow run, and a workflow-level group let those skipped runs cancel a
+    # real review. Job-level concurrency only applies to runs that pass the `if` above.
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
