@@ -1,0 +1,1073 @@
+{
+ "model": "urchade/gliner_small-v2.1",
+ "threshold": 0.5,
+ "flat_ner": true,
+ "labels": [
+  "person name",
+  "customer name",
+  "revenue figure",
+  "project codename",
+  "api key or token",
+  "internal hostname"
+ ],
+ "token_counts": [
+  32,
+  19,
+  38,
+  20,
+  19,
+  20,
+  27,
+  24,
+  20,
+  22,
+  12,
+  21,
+  299,
+  264,
+  299,
+  288,
+  291,
+  285,
+  288,
+  276
+ ],
+ "torch": [
+  [
+   {
+    "start": 15,
+    "end": 30,
+    "label": "project codename",
+    "score": 0.50122
+   },
+   {
+    "start": 42,
+    "end": 47,
+    "label": "revenue figure",
+    "score": 0.67816
+   }
+  ],
+  [
+   {
+    "start": 5,
+    "end": 16,
+    "label": "person name",
+    "score": 0.72006
+   },
+   {
+    "start": 23,
+    "end": 39,
+    "label": "project codename",
+    "score": 0.68682
+   },
+   {
+    "start": 73,
+    "end": 87,
+    "label": "person name",
+    "score": 0.77144
+   }
+  ],
+  [
+   {
+    "start": 4,
+    "end": 14,
+    "label": "api key or token",
+    "score": 0.71608
+   }
+  ],
+  [],
+  [
+   {
+    "start": 37,
+    "end": 49,
+    "label": "project codename",
+    "score": 0.93992
+   }
+  ],
+  [
+   {
+    "start": 65,
+    "end": 80,
+    "label": "person name",
+    "score": 0.83898
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 51,
+    "label": "person name",
+    "score": 0.68983
+   }
+  ],
+  [
+   {
+    "start": 85,
+    "end": 97,
+    "label": "person name",
+    "score": 0.74411
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 42,
+    "label": "revenue figure",
+    "score": 0.66358
+   }
+  ],
+  [],
+  [
+   {
+    "start": 0,
+    "end": 3,
+    "label": "person name",
+    "score": 0.70362
+   }
+  ],
+  [],
+  [
+   {
+    "start": 82,
+    "end": 87,
+    "label": "revenue figure",
+    "score": 0.54197
+   },
+   {
+    "start": 152,
+    "end": 157,
+    "label": "revenue figure",
+    "score": 0.59908
+   },
+   {
+    "start": 159,
+    "end": 171,
+    "label": "person name",
+    "score": 0.74416
+   },
+   {
+    "start": 374,
+    "end": 385,
+    "label": "person name",
+    "score": 0.69423
+   },
+   {
+    "start": 562,
+    "end": 577,
+    "label": "person name",
+    "score": 0.65163
+   },
+   {
+    "start": 675,
+    "end": 705,
+    "label": "api key or token",
+    "score": 0.71762
+   },
+   {
+    "start": 768,
+    "end": 782,
+    "label": "person name",
+    "score": 0.72226
+   },
+   {
+    "start": 1119,
+    "end": 1133,
+    "label": "person name",
+    "score": 0.74591
+   },
+   {
+    "start": 1465,
+    "end": 1475,
+    "label": "person name",
+    "score": 0.62063
+   }
+  ],
+  [
+   {
+    "start": 193,
+    "end": 207,
+    "label": "person name",
+    "score": 0.922
+   },
+   {
+    "start": 539,
+    "end": 549,
+    "label": "person name",
+    "score": 0.70989
+   },
+   {
+    "start": 709,
+    "end": 724,
+    "label": "person name",
+    "score": 0.63025
+   },
+   {
+    "start": 757,
+    "end": 768,
+    "label": "person name",
+    "score": 0.8752
+   },
+   {
+    "start": 1053,
+    "end": 1064,
+    "label": "person name",
+    "score": 0.7504
+   },
+   {
+    "start": 1282,
+    "end": 1296,
+    "label": "person name",
+    "score": 0.8957
+   }
+  ],
+  [
+   {
+    "start": 224,
+    "end": 235,
+    "label": "person name",
+    "score": 0.7901
+   },
+   {
+    "start": 334,
+    "end": 350,
+    "label": "project codename",
+    "score": 0.73462
+   },
+   {
+    "start": 453,
+    "end": 467,
+    "label": "person name",
+    "score": 0.76784
+   },
+   {
+    "start": 697,
+    "end": 702,
+    "label": "revenue figure",
+    "score": 0.55376
+   },
+   {
+    "start": 704,
+    "end": 716,
+    "label": "person name",
+    "score": 0.76176
+   },
+   {
+    "start": 901,
+    "end": 917,
+    "label": "project codename",
+    "score": 0.77825
+   },
+   {
+    "start": 919,
+    "end": 930,
+    "label": "person name",
+    "score": 0.74117
+   },
+   {
+    "start": 1107,
+    "end": 1122,
+    "label": "person name",
+    "score": 0.70303
+   },
+   {
+    "start": 1220,
+    "end": 1250,
+    "label": "api key or token",
+    "score": 0.70879
+   },
+   {
+    "start": 1313,
+    "end": 1327,
+    "label": "person name",
+    "score": 0.75994
+   }
+  ],
+  [
+   {
+    "start": 40,
+    "end": 56,
+    "label": "project codename",
+    "score": 0.52819
+   },
+   {
+    "start": 58,
+    "end": 69,
+    "label": "person name",
+    "score": 0.84203
+   },
+   {
+    "start": 246,
+    "end": 261,
+    "label": "person name",
+    "score": 0.90287
+   },
+   {
+    "start": 516,
+    "end": 530,
+    "label": "person name",
+    "score": 0.90527
+   },
+   {
+    "start": 762,
+    "end": 777,
+    "label": "person name",
+    "score": 0.88634
+   },
+   {
+    "start": 810,
+    "end": 821,
+    "label": "person name",
+    "score": 0.87686
+   },
+   {
+    "start": 950,
+    "end": 966,
+    "label": "project codename",
+    "score": 0.58625
+   },
+   {
+    "start": 1069,
+    "end": 1083,
+    "label": "person name",
+    "score": 0.8922
+   },
+   {
+    "start": 1313,
+    "end": 1318,
+    "label": "revenue figure",
+    "score": 0.56643
+   },
+   {
+    "start": 1320,
+    "end": 1332,
+    "label": "person name",
+    "score": 0.83525
+   }
+  ],
+  [
+   {
+    "start": 36,
+    "end": 66,
+    "label": "api key or token",
+    "score": 0.56104
+   },
+   {
+    "start": 129,
+    "end": 143,
+    "label": "person name",
+    "score": 0.77654
+   },
+   {
+    "start": 545,
+    "end": 555,
+    "label": "person name",
+    "score": 0.62387
+   },
+   {
+    "start": 781,
+    "end": 792,
+    "label": "person name",
+    "score": 0.72087
+   },
+   {
+    "start": 975,
+    "end": 980,
+    "label": "revenue figure",
+    "score": 0.55582
+   },
+   {
+    "start": 982,
+    "end": 994,
+    "label": "person name",
+    "score": 0.6834
+   },
+   {
+    "start": 1332,
+    "end": 1346,
+    "label": "person name",
+    "score": 0.77179
+   }
+  ],
+  [
+   {
+    "start": 187,
+    "end": 201,
+    "label": "person name",
+    "score": 0.80047
+   },
+   {
+    "start": 361,
+    "end": 366,
+    "label": "revenue figure",
+    "score": 0.55191
+   },
+   {
+    "start": 431,
+    "end": 436,
+    "label": "revenue figure",
+    "score": 0.6285
+   },
+   {
+    "start": 438,
+    "end": 450,
+    "label": "person name",
+    "score": 0.82346
+   },
+   {
+    "start": 502,
+    "end": 519,
+    "label": "customer name",
+    "score": 0.55662
+   },
+   {
+    "start": 853,
+    "end": 863,
+    "label": "person name",
+    "score": 0.72373
+   },
+   {
+    "start": 1023,
+    "end": 1038,
+    "label": "person name",
+    "score": 0.78931
+   },
+   {
+    "start": 1071,
+    "end": 1082,
+    "label": "person name",
+    "score": 0.87756
+   },
+   {
+    "start": 1201,
+    "end": 1212,
+    "label": "person name",
+    "score": 0.77901
+   },
+   {
+    "start": 1389,
+    "end": 1404,
+    "label": "person name",
+    "score": 0.80434
+   }
+  ],
+  [
+   {
+    "start": 158,
+    "end": 173,
+    "label": "person name",
+    "score": 0.7894
+   },
+   {
+    "start": 206,
+    "end": 217,
+    "label": "person name",
+    "score": 0.8746
+   },
+   {
+    "start": 502,
+    "end": 513,
+    "label": "person name",
+    "score": 0.85033
+   },
+   {
+    "start": 584,
+    "end": 600,
+    "label": "project codename",
+    "score": 0.55053
+   },
+   {
+    "start": 602,
+    "end": 613,
+    "label": "person name",
+    "score": 0.82655
+   },
+   {
+    "start": 790,
+    "end": 805,
+    "label": "person name",
+    "score": 0.81226
+   },
+   {
+    "start": 903,
+    "end": 933,
+    "label": "api key or token",
+    "score": 0.76708
+   },
+   {
+    "start": 996,
+    "end": 1010,
+    "label": "person name",
+    "score": 0.80748
+   },
+   {
+    "start": 1412,
+    "end": 1422,
+    "label": "person name",
+    "score": 0.69305
+   }
+  ],
+  [
+   {
+    "start": 193,
+    "end": 207,
+    "label": "person name",
+    "score": 0.91602
+   },
+   {
+    "start": 468,
+    "end": 482,
+    "label": "person name",
+    "score": 0.89663
+   },
+   {
+    "start": 596,
+    "end": 626,
+    "label": "api key or token",
+    "score": 0.67696
+   },
+   {
+    "start": 689,
+    "end": 703,
+    "label": "person name",
+    "score": 0.84574
+   },
+   {
+    "start": 1071,
+    "end": 1082,
+    "label": "person name",
+    "score": 0.81264
+   },
+   {
+    "start": 1271,
+    "end": 1286,
+    "label": "person name",
+    "score": 0.62816
+   },
+   {
+    "start": 1319,
+    "end": 1330,
+    "label": "person name",
+    "score": 0.86394
+   }
+  ]
+ ],
+ "onnx_python": [
+  [
+   {
+    "start": 15,
+    "end": 30,
+    "label": "project codename",
+    "score": 0.50122
+   },
+   {
+    "start": 42,
+    "end": 47,
+    "label": "revenue figure",
+    "score": 0.67816
+   }
+  ],
+  [
+   {
+    "start": 5,
+    "end": 16,
+    "label": "person name",
+    "score": 0.72006
+   },
+   {
+    "start": 23,
+    "end": 39,
+    "label": "project codename",
+    "score": 0.68682
+   },
+   {
+    "start": 73,
+    "end": 87,
+    "label": "person name",
+    "score": 0.77144
+   }
+  ],
+  [
+   {
+    "start": 4,
+    "end": 14,
+    "label": "api key or token",
+    "score": 0.71608
+   }
+  ],
+  [],
+  [
+   {
+    "start": 37,
+    "end": 49,
+    "label": "project codename",
+    "score": 0.93992
+   }
+  ],
+  [
+   {
+    "start": 65,
+    "end": 80,
+    "label": "person name",
+    "score": 0.83898
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 51,
+    "label": "person name",
+    "score": 0.68983
+   }
+  ],
+  [
+   {
+    "start": 85,
+    "end": 97,
+    "label": "person name",
+    "score": 0.74411
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 42,
+    "label": "revenue figure",
+    "score": 0.66358
+   }
+  ],
+  [],
+  [
+   {
+    "start": 0,
+    "end": 3,
+    "label": "person name",
+    "score": 0.70362
+   }
+  ],
+  [],
+  [
+   {
+    "start": 82,
+    "end": 87,
+    "label": "revenue figure",
+    "score": 0.54197
+   },
+   {
+    "start": 152,
+    "end": 157,
+    "label": "revenue figure",
+    "score": 0.59908
+   },
+   {
+    "start": 159,
+    "end": 171,
+    "label": "person name",
+    "score": 0.74416
+   },
+   {
+    "start": 374,
+    "end": 385,
+    "label": "person name",
+    "score": 0.69423
+   },
+   {
+    "start": 562,
+    "end": 577,
+    "label": "person name",
+    "score": 0.65163
+   },
+   {
+    "start": 675,
+    "end": 705,
+    "label": "api key or token",
+    "score": 0.71762
+   },
+   {
+    "start": 768,
+    "end": 782,
+    "label": "person name",
+    "score": 0.72226
+   },
+   {
+    "start": 1119,
+    "end": 1133,
+    "label": "person name",
+    "score": 0.74591
+   },
+   {
+    "start": 1465,
+    "end": 1475,
+    "label": "person name",
+    "score": 0.62063
+   }
+  ],
+  [
+   {
+    "start": 193,
+    "end": 207,
+    "label": "person name",
+    "score": 0.922
+   },
+   {
+    "start": 539,
+    "end": 549,
+    "label": "person name",
+    "score": 0.70989
+   },
+   {
+    "start": 709,
+    "end": 724,
+    "label": "person name",
+    "score": 0.63025
+   },
+   {
+    "start": 757,
+    "end": 768,
+    "label": "person name",
+    "score": 0.8752
+   },
+   {
+    "start": 1053,
+    "end": 1064,
+    "label": "person name",
+    "score": 0.7504
+   },
+   {
+    "start": 1282,
+    "end": 1296,
+    "label": "person name",
+    "score": 0.8957
+   }
+  ],
+  [
+   {
+    "start": 224,
+    "end": 235,
+    "label": "person name",
+    "score": 0.7901
+   },
+   {
+    "start": 334,
+    "end": 350,
+    "label": "project codename",
+    "score": 0.73462
+   },
+   {
+    "start": 453,
+    "end": 467,
+    "label": "person name",
+    "score": 0.76784
+   },
+   {
+    "start": 697,
+    "end": 702,
+    "label": "revenue figure",
+    "score": 0.55376
+   },
+   {
+    "start": 704,
+    "end": 716,
+    "label": "person name",
+    "score": 0.76176
+   },
+   {
+    "start": 901,
+    "end": 917,
+    "label": "project codename",
+    "score": 0.77825
+   },
+   {
+    "start": 919,
+    "end": 930,
+    "label": "person name",
+    "score": 0.74117
+   },
+   {
+    "start": 1107,
+    "end": 1122,
+    "label": "person name",
+    "score": 0.70303
+   },
+   {
+    "start": 1220,
+    "end": 1250,
+    "label": "api key or token",
+    "score": 0.70879
+   },
+   {
+    "start": 1313,
+    "end": 1327,
+    "label": "person name",
+    "score": 0.75994
+   }
+  ],
+  [
+   {
+    "start": 40,
+    "end": 56,
+    "label": "project codename",
+    "score": 0.52819
+   },
+   {
+    "start": 58,
+    "end": 69,
+    "label": "person name",
+    "score": 0.84203
+   },
+   {
+    "start": 246,
+    "end": 261,
+    "label": "person name",
+    "score": 0.90287
+   },
+   {
+    "start": 516,
+    "end": 530,
+    "label": "person name",
+    "score": 0.90527
+   },
+   {
+    "start": 762,
+    "end": 777,
+    "label": "person name",
+    "score": 0.88634
+   },
+   {
+    "start": 810,
+    "end": 821,
+    "label": "person name",
+    "score": 0.87686
+   },
+   {
+    "start": 950,
+    "end": 966,
+    "label": "project codename",
+    "score": 0.58625
+   },
+   {
+    "start": 1069,
+    "end": 1083,
+    "label": "person name",
+    "score": 0.8922
+   },
+   {
+    "start": 1313,
+    "end": 1318,
+    "label": "revenue figure",
+    "score": 0.56643
+   },
+   {
+    "start": 1320,
+    "end": 1332,
+    "label": "person name",
+    "score": 0.83525
+   }
+  ],
+  [
+   {
+    "start": 36,
+    "end": 66,
+    "label": "api key or token",
+    "score": 0.56104
+   },
+   {
+    "start": 129,
+    "end": 143,
+    "label": "person name",
+    "score": 0.77654
+   },
+   {
+    "start": 545,
+    "end": 555,
+    "label": "person name",
+    "score": 0.62387
+   },
+   {
+    "start": 781,
+    "end": 792,
+    "label": "person name",
+    "score": 0.72087
+   },
+   {
+    "start": 975,
+    "end": 980,
+    "label": "revenue figure",
+    "score": 0.55582
+   },
+   {
+    "start": 982,
+    "end": 994,
+    "label": "person name",
+    "score": 0.6834
+   },
+   {
+    "start": 1332,
+    "end": 1346,
+    "label": "person name",
+    "score": 0.77179
+   }
+  ],
+  [
+   {
+    "start": 187,
+    "end": 201,
+    "label": "person name",
+    "score": 0.80047
+   },
+   {
+    "start": 361,
+    "end": 366,
+    "label": "revenue figure",
+    "score": 0.55191
+   },
+   {
+    "start": 431,
+    "end": 436,
+    "label": "revenue figure",
+    "score": 0.6285
+   },
+   {
+    "start": 438,
+    "end": 450,
+    "label": "person name",
+    "score": 0.82346
+   },
+   {
+    "start": 502,
+    "end": 519,
+    "label": "customer name",
+    "score": 0.55662
+   },
+   {
+    "start": 853,
+    "end": 863,
+    "label": "person name",
+    "score": 0.72373
+   },
+   {
+    "start": 1023,
+    "end": 1038,
+    "label": "person name",
+    "score": 0.78931
+   },
+   {
+    "start": 1071,
+    "end": 1082,
+    "label": "person name",
+    "score": 0.87756
+   },
+   {
+    "start": 1201,
+    "end": 1212,
+    "label": "person name",
+    "score": 0.77901
+   },
+   {
+    "start": 1389,
+    "end": 1404,
+    "label": "person name",
+    "score": 0.80434
+   }
+  ],
+  [
+   {
+    "start": 158,
+    "end": 173,
+    "label": "person name",
+    "score": 0.7894
+   },
+   {
+    "start": 206,
+    "end": 217,
+    "label": "person name",
+    "score": 0.8746
+   },
+   {
+    "start": 502,
+    "end": 513,
+    "label": "person name",
+    "score": 0.85033
+   },
+   {
+    "start": 584,
+    "end": 600,
+    "label": "project codename",
+    "score": 0.55053
+   },
+   {
+    "start": 602,
+    "end": 613,
+    "label": "person name",
+    "score": 0.82655
+   },
+   {
+    "start": 790,
+    "end": 805,
+    "label": "person name",
+    "score": 0.81226
+   },
+   {
+    "start": 903,
+    "end": 933,
+    "label": "api key or token",
+    "score": 0.76708
+   },
+   {
+    "start": 996,
+    "end": 1010,
+    "label": "person name",
+    "score": 0.80748
+   },
+   {
+    "start": 1412,
+    "end": 1422,
+    "label": "person name",
+    "score": 0.69306
+   }
+  ],
+  [
+   {
+    "start": 193,
+    "end": 207,
+    "label": "person name",
+    "score": 0.91602
+   },
+   {
+    "start": 468,
+    "end": 482,
+    "label": "person name",
+    "score": 0.89663
+   },
+   {
+    "start": 596,
+    "end": 626,
+    "label": "api key or token",
+    "score": 0.67696
+   },
+   {
+    "start": 689,
+    "end": 703,
+    "label": "person name",
+    "score": 0.84574
+   },
+   {
+    "start": 1071,
+    "end": 1082,
+    "label": "person name",
+    "score": 0.81264
+   },
+   {
+    "start": 1271,
+    "end": 1286,
+    "label": "person name",
+    "score": 0.62816
+   },
+   {
+    "start": 1319,
+    "end": 1330,
+    "label": "person name",
+    "score": 0.86394
+   }
+  ]
+ ]
+}

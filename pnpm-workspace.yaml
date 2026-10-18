@@ -8,5 +8,7 @@ permissions:
     build: false
   '@prisma/engines':
     build: true
+  onnxruntime-node:
+    build: false
   prisma:
     build: true

@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run"
   },
   "dependencies": {
@@ -16,7 +16,9 @@
     "hono": "^4.13.13"
   },
   "devDependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
     "@types/node": "^24",
+    "onnxruntime-node": "^1.30.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^4.1.12"
