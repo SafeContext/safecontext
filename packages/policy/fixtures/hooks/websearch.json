@@ -1,0 +1,145 @@
+{
+	"_note": "Real Claude Code hook payloads, scrubbed (ids, paths, usernames replaced). Test data is made-up Macrohard text. See docs/hook-shapes.md.",
+	"claudeCodeVersion": "2.1.302",
+	"tool": "WebSearch",
+	"preToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PreToolUse",
+		"tool_name": "WebSearch",
+		"tool_input": {
+			"query": "Macrohard Nimbus-7 roadmap",
+			"mode": "standard"
+		},
+		"tool_use_id": "toolu_FIXTURE_5"
+	},
+	"postToolUseInput": {
+		"session_id": "SESSION_ID",
+		"transcript_path": "/home/USER/.claude/projects/PROJECT/SESSION_ID.jsonl",
+		"cwd": "/work/macrohard-proj",
+		"scratchpad_dir": "/tmp/claude/PROJECT/SESSION_ID/scratchpad",
+		"prompt_id": "PROMPT_ID",
+		"permission_mode": "default",
+		"effort": {
+			"level": "medium"
+		},
+		"hook_event_name": "PostToolUse",
+		"tool_name": "WebSearch",
+		"tool_input": {
+			"query": "Macrohard Nimbus-7 roadmap",
+			"mode": "standard"
+		},
+		"tool_response": {
+			"query": "Macrohard Nimbus-7 roadmap",
+			"results": [
+				{
+					"tool_use_id": "srvtoolu_FIXTURE",
+					"content": [
+						{
+							"title": "Nimbus 7",
+							"url": "https://en.wikipedia.org/wiki/Nimbus_7"
+						},
+						{
+							"title": "Nimbus program",
+							"url": "https://en.wikipedia.org/wiki/Nimbus_program"
+						},
+						{
+							"title": "Nimbus Satellite Program",
+							"url": "https://earthobservatory.nasa.gov/glossary/Nimbus%20Satellite%20Program"
+						},
+						{
+							"title": "musk officially announces macrohard launch",
+							"url": "https://technews.tw/2025/08/26/musk-officially-announces-macrohard-launch/"
+						},
+						{
+							"title": "Macrohard: what it is — and what it isn’t (yet)",
+							"url": "https://medium.com/@fahey_james/macrohard-what-it-is-and-what-it-isnt-yet-3a08de39ca22"
+						},
+						{
+							"title": "Nimbus 7",
+							"url": "https://www.Wikipedia.com/wiki/Nimbus_7"
+						},
+						{
+							"title": "oceancolor.sci.gsfc.nasa.gov",
+							"url": "https://oceancolor.sci.gsfc.nasa.gov/staff/gene/PUBS/N8922152.pdf"
+						},
+						{
+							"title": "BackForward Satellite: Nimbus-7",
+							"url": "https://space.oscar.wmo.int/satellites/view/nimbus_7"
+						},
+						{
+							"title": "core.ac.uk",
+							"url": "https://core.ac.uk/works/24892350"
+						}
+					]
+				},
+				"The search found no roadmap for a \"Macrohard Nimbus-7\" product. The results cover two unrelated topics.\n\n**Macrohard:** A Medium explainer says official roadmaps haven't been published. Reporting, and even answers from xAI's Grok when asked, frame Macrohard as an agentic software company, with specialized agents for coding, testing, workflow automation, and content generation. The same source notes that nothing like named products or launch dates has been disclosed. A Taiwanese tech article reports that Musk announced the Macrohard launch in August 2025, but its text in the results is mostly page boilerplate.\n\n**Nimbus-7:** The results only cover the 1978 NASA weather satellite. It was the seventh and last in a series of the Nimbus program, and functioned nominally until 1994. Nothing links it to Macrohard.\n\nSearching for \"Macrohard\" together with \"xAI\" or \"Musk\" might turn up more current reporting on its plans."
+			],
+			"durationSeconds": 4.849805542,
+			"searchCount": 1
+		},
+		"tool_use_id": "toolu_FIXTURE_5",
+		"duration_ms": 4850
+	},
+	"postToolUseOutputThatWasApplied": {
+		"hookSpecificOutput": {
+			"hookEventName": "PostToolUse",
+			"updatedToolOutput": {
+				"query": "Macrohard Nimbus-7 roadmap",
+				"results": [
+					{
+						"tool_use_id": "srvtoolu_FIXTURE",
+						"content": [
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://en.wikipedia.org/wiki/Nimbus_7"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://en.wikipedia.org/wiki/Nimbus_program"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://earthobservatory.nasa.gov/glossary/Nimbus%20Satellite%20Program"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://technews.tw/2025/08/26/musk-officially-announces-macrohard-launch/"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://medium.com/@fahey_james/macrohard-what-it-is-and-what-it-isnt-yet-3a08de39ca22"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://www.Wikipedia.com/wiki/Nimbus_7"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://oceancolor.sci.gsfc.nasa.gov/staff/gene/PUBS/N8922152.pdf"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://space.oscar.wmo.int/satellites/view/nimbus_7"
+							},
+							{
+								"title": "SC-REWRITE-OK WebSearch replaced",
+								"url": "https://core.ac.uk/works/24892350"
+							}
+						]
+					},
+					"SC-REWRITE-OK WebSearch replaced"
+				],
+				"durationSeconds": 4.849805542,
+				"searchCount": 1
+			}
+		}
+	}
+}
