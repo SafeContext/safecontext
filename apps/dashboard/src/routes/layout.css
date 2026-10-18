@@ -1,1 +1,36 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/instrument-sans';
+@import '@fontsource-variable/geist-mono';
+
+@theme {
+	/* Brand colours, from the pitch deck */
+	--color-ink: #10132b;
+	--color-canvas: #f4f4f6;
+	--color-lemon: #ffe95c; /* vague */
+	--color-mint: #a6f4c5; /* safe */
+	--color-pink: #ffb3c7; /* never share */
+
+	--font-heading: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+	body {
+		@apply bg-canvas font-sans text-ink antialiased;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4 {
+		@apply font-heading tracking-tight;
+	}
+
+	code,
+	kbd,
+	pre {
+		@apply font-mono;
+	}
+}
