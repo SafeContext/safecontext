@@ -5,7 +5,8 @@ import { Hono } from 'hono';
 // See SPEC.md ("Agent API") for the endpoints to implement.
 const app = new Hono();
 
-app.get('/health', (c) => c.json({ ok: true }));
+// Matches HealthResponse in @safecontext/policy. Policy loading lands in issue #9.
+app.get('/health', (c) => c.json({ ok: true, policyVersion: 0 }));
 
 const port = Number(process.env.SC_AGENT_PORT ?? 4747);
 

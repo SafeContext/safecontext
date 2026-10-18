@@ -6,7 +6,7 @@ describe('emailDetector', () => {
 		const text = 'payment declined for jane@northwind.com today';
 		const [span] = emailDetector.detect(text);
 		expect(text.slice(span.start, span.end)).toBe('jane@northwind.com');
-		expect(span.dataTypeId).toBe('builtin:email');
+		expect(span.dataTypeId).toBe('customer-personal-data');
 	});
 
 	it('returns nothing for clean text', () => {
