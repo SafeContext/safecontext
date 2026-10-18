@@ -1,0 +1,128 @@
+/**
+ * Secret detector: API keys, access tokens and private keys.
+ *
+ * The patterns in `SECRET_RULES` are a subset of the Gitleaks default rule set
+ * (https://github.com/gitleaks/gitleaks, config/gitleaks.toml at v8.30.1), translated from Go
+ * (RE2) to JavaScript regular expressions. Gitleaks is distributed under the MIT licence, whose
+ * notice must travel with the ported rules:
+ *
+ *   MIT License
+ *
+ *   Copyright (c) 2019 Zachary Rice
+ *
+ *   Permission is hereby granted, free of charge, to any person obtaining a copy
+ *   of this software and associated documentation files (the "Software"), to deal
+ *   in the Software without restriction, including without limitation the rights
+ *   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *   copies of the Software, and to permit persons to whom the Software is
+ *   furnished to do so, subject to the following conditions:
+ *
+ *   The above copyright notice and this permission notice shall be included in all
+ *   copies or substantial portions of the Software.
+ *
+ *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *   SOFTWARE.
+ *
+ * Changes from Gitleaks: inline `(?i)` flags became explicit character classes or the `i` flag;
+ * capture groups became non-capturing, and the trailing "end of token" check is a lookahead, so a
+ * match covers exactly the secret. Deliberate additions are marked "SafeContext".
+ */
+import { BUILTIN_DATA_TYPE } from '@safecontext/policy';
+import { ruleSpan } from './spans.ts';
+import type { Detector, Span } from './types.ts';
+
+export type SecretRule = {
+	/** Gitleaks rule id, so a rule can be traced back to its source. */
+	id: string;
+	regex: RegExp;
+};
+
+// Gitleaks ends many rules with `(?:[`'"\s;]|\\[nr]|$)`: the token must be followed by a quote,
+// whitespace, `;`, an escaped newline or the end of the text.
+const END = String.raw`(?=[\x60'"\s;]|\\[nr]|$)`;
+
+export const SECRET_RULES: readonly SecretRule[] = [
+	{
+		id: 'aws-access-token',
+		regex: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}\b/g
+	},
+	{ id: 'github-pat', regex: /ghp_[0-9a-zA-Z]{36}/g },
+	{ id: 'github-fine-grained-pat', regex: /github_pat_\w{82}/g },
+	{ id: 'github-oauth', regex: /gho_[0-9a-zA-Z]{36}/g },
+	{ id: 'github-app-token', regex: /(?:ghu|ghs)_[0-9a-zA-Z]{36}/g },
+	{ id: 'github-refresh-token', regex: /ghr_[0-9a-zA-Z]{36}/g },
+	{ id: 'gitlab-pat', regex: /glpat-[\w-]{20}/g },
+	{ id: 'slack-bot-token', regex: /xoxb-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*/g },
+	{ id: 'slack-user-token', regex: /xox[pe](?:-[0-9]{10,13}){3}-[a-zA-Z0-9-]{28,34}/g },
+	{ id: 'slack-app-token', regex: /xapp-\d-[A-Z0-9]+-\d+-[a-z0-9]+/gi },
+	{
+		id: 'slack-webhook-url',
+		regex:
+			/(?:https?:\/\/)?hooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/g
+	},
+	{
+		id: 'stripe-access-token',
+		regex: new RegExp(String.raw`\b(?:sk|rk)_(?:test|live|prod)_[a-zA-Z0-9]{10,99}${END}`, 'g')
+	},
+	{
+		id: 'openai-api-key',
+		regex: new RegExp(
+			String.raw`\b(?:sk-(?:proj|svcacct|admin)-(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})T3BlbkFJ(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})\b|sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})${END}`,
+			'g'
+		)
+	},
+	{
+		id: 'anthropic-api-key',
+		regex: new RegExp(String.raw`\bsk-ant-api03-[a-zA-Z0-9_\-]{93}AA${END}`, 'g')
+	},
+	{ id: 'gcp-api-key', regex: new RegExp(String.raw`\bAIza[\w-]{35}${END}`, 'g') },
+	{
+		id: 'private-key',
+		regex:
+			/-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----[\s\S-]{64,}?KEY(?: BLOCK)?-----/gi
+	},
+	{ id: 'npm-access-token', regex: new RegExp(String.raw`\bnpm_[a-z0-9]{36}${END}`, 'gi') },
+	{
+		id: 'sendgrid-api-token',
+		regex: new RegExp(String.raw`\bSG\.[A-Za-z0-9=_\-.]{66}${END}`, 'g')
+	},
+	// SafeContext: Gitleaks has no boundaries here, which matches inside longer hex strings.
+	{ id: 'twilio-api-key', regex: /\bSK[0-9a-fA-F]{32}(?![0-9a-fA-F])/g },
+	{ id: 'shopify-access-token', regex: /shpat_[a-fA-F0-9]{32}/g },
+	{
+		id: 'jwt',
+		regex: new RegExp(
+			String.raw`\bey[a-zA-Z0-9]{17,}\.ey[a-zA-Z0-9\/\\_-]{17,}\.(?:[a-zA-Z0-9\/\\_-]{10,}={0,2})?${END}`,
+			'g'
+		)
+	},
+	{ id: 'digitalocean-pat', regex: new RegExp(String.raw`\bdop_v1_[a-f0-9]{64}${END}`, 'g') },
+	{ id: 'huggingface-access-token', regex: new RegExp(String.raw`\bhf_[A-Za-z]{34}${END}`, 'g') },
+	{ id: 'pypi-upload-token', regex: /pypi-AgEIcHlwaS5vcmc[\w-]{50,1000}/g },
+	{
+		id: 'square-access-token',
+		regex: new RegExp(String.raw`\b(?:EAAA|sq0atp-)[\w-]{22,60}${END}`, 'g')
+	},
+	{
+		id: 'databricks-api-token',
+		regex: new RegExp(String.raw`\bdapi[a-f0-9]{32}(?:-\d)?${END}`, 'g')
+	}
+];
+
+export const secretsDetector: Detector = {
+	id: 'secrets',
+	detect(text) {
+		const spans: Span[] = [];
+		for (const { regex } of SECRET_RULES) {
+			for (const m of text.matchAll(regex)) {
+				spans.push(ruleSpan(m.index, m.index + m[0].length, BUILTIN_DATA_TYPE.secrets));
+			}
+		}
+		return spans;
+	}
+};
