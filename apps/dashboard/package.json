@@ -17,6 +17,7 @@
 		"test:e2e": "playwright install && playwright test",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
+		"db:seed": "prisma db seed",
 		"db:studio": "prisma studio"
 	},
 	"devDependencies": {
@@ -55,6 +56,7 @@
 	"dependencies": {
 		"@prisma/adapter-pg": "7.10.1",
 		"@prisma/client": "7.10.1",
+		"@safecontext/policy": "workspace:*",
 		"dotenv": "^18.0.8",
 		"pg": "^8.23.1"
 	}
