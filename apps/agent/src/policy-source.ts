@@ -12,8 +12,11 @@ export interface PolicySource {
 	 * (return a cached value) and must never throw.
 	 */
 	current(): Policy;
-	/** Where `current()` came from, for logs and /health. */
-	readonly kind: 'file' | 'default' | 'static';
+	/**
+	 * Where `current()` came from, for logs and /health. `dashboard` and `cache` come from
+	 * dashboard sync (sync/policy-sync.ts).
+	 */
+	readonly kind: 'file' | 'default' | 'static' | 'dashboard' | 'cache';
 	/** Stop any timers or watchers. */
 	close?(): void | Promise<void>;
 }
