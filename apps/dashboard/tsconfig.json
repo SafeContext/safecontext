@@ -4,5 +4,5 @@
 		"strict": true,
 		"types": ["$app/types", "node"]
 	},
-	"include": ["src", "prisma/seed.ts", "vite.config.ts", "playwright.config.ts"]
+	"include": ["src", "prisma/seed.ts", "scripts", "vite.config.ts", "playwright.config.ts"]
 }
