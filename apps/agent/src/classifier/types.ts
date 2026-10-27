@@ -1,4 +1,4 @@
-import type { Policy } from '@safecontext/policy';
+import type { HookEventName, Policy } from '@safecontext/policy';
 import type { Span } from '@safecontext/detectors';
 
 /**
@@ -42,6 +42,13 @@ export interface ClassifyState {
 	texts: readonly string[];
 	/** Merged spans so far, one array per text. */
 	spans: readonly Span[][];
+	/** Which hook the texts come from, if known. */
+	hook?: HookEventName;
+}
+
+export interface ClassifyOptions {
+	/** Which hook the texts come from. Lets a tier skip work that can't change the outcome. */
+	hook?: HookEventName;
 }
 
 export interface TierTiming {
@@ -55,5 +62,5 @@ export type ClassifyResult =
 	| { ok: false; failure: 'error' | 'timeout'; tiers: TierTiming[]; ms: number };
 
 export interface Classifier {
-	classify(texts: readonly string[], policy: Policy): Promise<ClassifyResult>;
+	classify(texts: readonly string[], policy: Policy, options?: ClassifyOptions): Promise<ClassifyResult>;
 }

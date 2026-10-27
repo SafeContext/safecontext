@@ -1,6 +1,6 @@
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import type { Policy } from '@safecontext/policy';
-import type { Classifier, ClassifierTier, ClassifyResult, TierTiming } from './types.ts';
+import type { Classifier, ClassifierTier, ClassifyOptions, ClassifyResult, TierTiming } from './types.ts';
 
 export interface ClassifierOptions {
 	/** Tiers in the order they run (normally 0, 1, 2). */
@@ -20,7 +20,7 @@ class Timeout extends Error {}
  */
 export function createClassifier({ tiers, budgetMs, now = () => performance.now() }: ClassifierOptions): Classifier {
 	return {
-		async classify(texts: readonly string[], policy: Policy): Promise<ClassifyResult> {
+		async classify(texts: readonly string[], policy: Policy, { hook }: ClassifyOptions = {}): Promise<ClassifyResult> {
 			const start = now();
 			const deadline = start + budgetMs;
 			const timings: TierTiming[] = [];
@@ -29,7 +29,7 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 
 			try {
 				for (const tier of tiers) {
-					if (tier.shouldRun && !tier.shouldRun({ policy, texts, spans })) continue;
+					if (tier.shouldRun && !tier.shouldRun({ policy, texts, spans, hook })) continue;
 					const remainingMs = deadline - now();
 					if (remainingMs <= (tier.minBudgetMs ?? 0)) throw new Timeout();
 
