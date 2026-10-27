@@ -52,6 +52,45 @@ describe('per-tool fields', () => {
 		expect(toolOutputTexts('mcp__x__y', 'plain')).toEqual(['plain']);
 	});
 
+	describe('Agent (subagent report)', () => {
+		// Shape from https://code.claude.com/docs/en/hooks (Agent tool) and the e2e run (issue #41).
+		const report = {
+			status: 'completed',
+			agentId: 'a4d2c8f1e0b3a297',
+			content: [
+				{ type: 'text', text: 'first' },
+				{ type: 'image', source: { data: 'b64' } },
+				{ type: 'text', text: 'second' }
+			],
+			resolvedModel: 'claude-haiku-4-5',
+			totalTokens: 10,
+			totalDurationMs: 5,
+			totalToolUseCount: 1,
+			usage: { input_tokens: 8, output_tokens: 2 }
+		};
+
+		it('only the text blocks', () => {
+			expect(toolOutputTexts('Agent', report)).toEqual(['first', 'second']);
+		});
+
+		it('keeps status and the other fields when every text is replaced', () => {
+			const mapped = mapToolOutputText('Agent', report, () => 'notice');
+			expect(mapped).toEqual({
+				...report,
+				content: [
+					{ type: 'text', text: 'notice' },
+					{ type: 'image', source: { data: 'b64' } },
+					{ type: 'text', text: 'notice' }
+				]
+			});
+		});
+
+		it('a background launch (no content) falls back to every string', () => {
+			const launched = { status: 'async_launched', agentId: 'a1', description: 'd', prompt: 'p', outputFile: '/o' };
+			expect(toolOutputTexts('Agent', launched)).toEqual(['async_launched', 'a1', 'd', 'p', '/o']);
+		});
+	});
+
 	it('falls back to every string when a known tool has an unexpected shape', () => {
 		expect(toolOutputTexts('Read', { type: 'image', file: { base64: 'abc', type: 'image/png' } })).toEqual([
 			'image',
