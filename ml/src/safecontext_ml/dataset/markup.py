@@ -12,7 +12,9 @@ import re
 from .labels import SPAN_LABELS
 from .schema import Record, Span
 
-_NAMES = "|".join(re.escape(label) for label in sorted(SPAN_LABELS, key=len, reverse=True))
+_NAMES = "|".join(
+    re.escape(label) for label in sorted(SPAN_LABELS, key=len, reverse=True)
+)
 TAG_RE = re.compile(rf"<({_NAMES})>(.*?)</\1>", re.DOTALL)
 STRAY_RE = re.compile(rf"</?({_NAMES})>")
 

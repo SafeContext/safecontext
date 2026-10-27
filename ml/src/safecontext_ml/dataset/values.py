@@ -104,7 +104,11 @@ def _people() -> tuple[str, ...]:
 
 @cache
 def _pool(name: str, split: Split) -> tuple[str, ...]:
-    values = {"customer": _customers(), "person": _people(), "codename": CODENAME_WORDS}[name]
+    values = {
+        "customer": _customers(),
+        "person": _people(),
+        "codename": CODENAME_WORDS,
+    }[name]
     out = tuple(partition(name, values, split))
     if not out:
         raise ValueError(f"pool {name!r} has no values for split {split!r}")
@@ -211,7 +215,9 @@ def future_date(rng: random.Random, _split: Split) -> str:
 
 def past_date(rng: random.Random, _split: Split) -> str:
     m = rng.randrange(12)
-    return rng.choice((f"{MONTHS[m]} 2025", f"{MONTHS[m]} {rng.randrange(1, 29)}, 2026", "last year"))
+    return rng.choice(
+        (f"{MONTHS[m]} 2025", f"{MONTHS[m]} {rng.randrange(1, 29)}, 2026", "last year")
+    )
 
 
 def clock(rng: random.Random, _split: Split) -> str:
@@ -229,7 +235,9 @@ def _domain(company: str) -> str:
 def email(rng: random.Random, split: Split) -> str:
     first, last = person(rng, split).lower().split(" ", 1)
     last = last.replace(" ", "").replace("ü", "ue")
-    local = rng.choice((f"{first}.{last}", f"{first[0]}{last}", f"{first}", f"{first}_{last[:3]}"))
+    local = rng.choice(
+        (f"{first}.{last}", f"{first[0]}{last}", f"{first}", f"{first}_{last[:3]}")
+    )
     return f"{local}@{_domain(customer(rng, split))}"
 
 
@@ -237,12 +245,16 @@ def phone(rng: random.Random, _split: Split) -> str:
     n = rng.randrange(100, 200)
     if rng.random() < 0.6:
         area = rng.choice(("415", "312", "646", "503", "512", "919"))
-        return rng.choice((f"({area}) 555-0{n % 100:02d}{rng.randrange(10)}", f"+1 {area} 555 0{n}"))
+        return rng.choice(
+            (f"({area}) 555-0{n % 100:02d}{rng.randrange(10)}", f"+1 {area} 555 0{n}")
+        )
     return rng.choice((f"+44 7700 900{n:03d}", f"07700 900{n:03d}"))
 
 
 def _luhn_complete(prefix: str, length: int, rng: random.Random) -> str:
-    digits = prefix + "".join(rng.choice(string.digits) for _ in range(length - len(prefix) - 1))
+    digits = prefix + "".join(
+        rng.choice(string.digits) for _ in range(length - len(prefix) - 1)
+    )
     total = 0
     for i, ch in enumerate(reversed(digits)):
         d = int(ch)
@@ -287,7 +299,10 @@ def address(rng: random.Random, _split: Split) -> str:
 
 def ip(rng: random.Random, _split: Split) -> str:
     first = rng.choice((23, 31, 51, 62, 81, 86, 92, 109, 146, 178, 185, 203, 212))
-    return ".".join(str(x) for x in (first, rng.randrange(256), rng.randrange(256), rng.randrange(1, 255)))
+    return ".".join(
+        str(x)
+        for x in (first, rng.randrange(256), rng.randrange(256), rng.randrange(1, 255))
+    )
 
 
 # --- Secrets ----------------------------------------------------------------------------------
@@ -322,14 +337,25 @@ def secret(rng: random.Random, _split: Split) -> str:
 
 
 def password(rng: random.Random, _split: Split) -> str:
-    words = ("Tundra", "maple", "Orbit", "copper", "Falcon", "river", "Granite", "lemon")
+    words = (
+        "Tundra",
+        "maple",
+        "Orbit",
+        "copper",
+        "Falcon",
+        "river",
+        "Granite",
+        "lemon",
+    )
     if rng.random() < 0.5:
         return f"{rng.choice(words)}{rng.choice('!#$%&*')}{rng.randrange(10, 9999)}{rng.choice(words).lower()}"
     return _rand(rng, rng.randrange(14, 24), _B62 + "!#%&*^")
 
 
 def db_url(rng: random.Random, split: Split) -> str:
-    scheme, port = rng.choice((("postgres", 5432), ("postgresql", 5432), ("mysql", 3306), ("mongodb+srv", 0)))
+    scheme, port = rng.choice(
+        (("postgres", 5432), ("postgresql", 5432), ("mysql", 3306), ("mongodb+srv", 0))
+    )
     user = rng.choice(("svc_billing", "app", "admin", "reporting_ro", "etl"))
     host = f"{rng.choice(('db-prod', 'pg-main', 'analytics', 'orders'))}-{rng.randrange(1, 9)}.internal.{COMPANY_DOMAIN}"
     hostport = host if port == 0 else f"{host}:{port}"
@@ -337,7 +363,9 @@ def db_url(rng: random.Random, split: Split) -> str:
 
 
 def private_key(rng: random.Random, _split: Split) -> str:
-    kind = rng.choice(("RSA PRIVATE KEY", "OPENSSH PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY"))
+    kind = rng.choice(
+        ("RSA PRIVATE KEY", "OPENSSH PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY")
+    )
     body = "\n".join(_rand(rng, 64, _B62 + "+/") for _ in range(rng.randrange(3, 6)))
     return f"-----BEGIN {kind}-----\n{body}\n-----END {kind}-----"
 
@@ -373,7 +401,9 @@ def example_phone(rng: random.Random, _split: Split) -> str:
 
 
 def version(rng: random.Random, _split: Split) -> str:
-    return f"v{rng.randrange(1, 6)}.{rng.randrange(0, 20)}" + (f".{rng.randrange(0, 9)}" if rng.random() < 0.5 else "")
+    return f"v{rng.randrange(1, 6)}.{rng.randrange(0, 20)}" + (
+        f".{rng.randrange(0, 9)}" if rng.random() < 0.5 else ""
+    )
 
 
 def ticket(rng: random.Random, _split: Split) -> str:

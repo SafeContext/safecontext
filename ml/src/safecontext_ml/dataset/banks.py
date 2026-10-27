@@ -33,7 +33,7 @@ class Snippet:
     negative_for: tuple[str, ...] = ()
 
 
-def N(text: str, *labels: str) -> Snippet:  # noqa: N802 (short helper for readable banks)
+def N(text: str, *labels: str) -> Snippet:
     return Snippet(text, labels)
 
 
@@ -331,4 +331,8 @@ BANKS: dict[str, tuple[Snippet, ...]] = {
 
 def bank_for_split(bank: str, split: Split) -> list[tuple[str, Snippet]]:
     """(snippet id, snippet) pairs of `bank` that belong to `split`."""
-    return [(f"{bank}-{i:03d}", s) for i, s in enumerate(BANKS[bank]) if snippet_split(i) == split]
+    return [
+        (f"{bank}-{i:03d}", s)
+        for i, s in enumerate(BANKS[bank])
+        if snippet_split(i) == split
+    ]

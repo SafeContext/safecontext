@@ -15,7 +15,9 @@ def _offline(args: argparse.Namespace) -> None:
     from .offline import SOURCE, generate
     from .schema import write_jsonl
 
-    n = write_jsonl(SOURCES_DIR / f"{SOURCE}.jsonl", generate(args.docs_per_genre, args.seed))
+    n = write_jsonl(
+        SOURCES_DIR / f"{SOURCE}.jsonl", generate(args.docs_per_genre, args.seed)
+    )
     print(f"wrote {n} records to {SOURCES_DIR / f'{SOURCE}.jsonl'}")
 
 
@@ -34,7 +36,9 @@ def _llm(args: argparse.Namespace) -> None:
         workers=args.workers,
     )
     n = write_jsonl(SOURCES_DIR / f"{SOURCE}.jsonl", records)
-    print(f"wrote {n} records (cached responses only) to {SOURCES_DIR / f'{SOURCE}.jsonl'}")
+    print(
+        f"wrote {n} records (cached responses only) to {SOURCES_DIR / f'{SOURCE}.jsonl'}"
+    )
 
 
 def _public(args: argparse.Namespace) -> None:
@@ -43,7 +47,9 @@ def _public(args: argparse.Namespace) -> None:
 
     if args.action == "list":
         for s in SOURCES.values():
-            print(f"{s.name}: {s.repo_id} ({s.licence}, ~{s.download_bytes / 1e6:.0f} MB) - {s.rows}")
+            print(
+                f"{s.name}: {s.repo_id} ({s.licence}, ~{s.download_bytes / 1e6:.0f} MB) - {s.rows}"
+            )
         return
     if not args.name:
         raise SystemExit("name required")
@@ -51,7 +57,9 @@ def _public(args: argparse.Namespace) -> None:
         print(f"downloaded to {download(args.name, args.yes)}")
     else:
         out = SOURCES_DIR / f"{args.name}.jsonl"
-        print(f"wrote {write_jsonl(out, convert(args.name, args.limit))} records to {out}")
+        print(
+            f"wrote {write_jsonl(out, convert(args.name, args.limit))} records to {out}"
+        )
 
 
 def _build(args: argparse.Namespace) -> None:
@@ -59,7 +67,9 @@ def _build(args: argparse.Namespace) -> None:
 
     manifest = build(refreeze=args.refreeze)
     for split, info in manifest["splits"].items():
-        print(f"{split:5s} {info['records']:7d} records, {info['hard_negatives']:6d} hard negatives")
+        print(
+            f"{split:5s} {info['records']:7d} records, {info['hard_negatives']:6d} hard negatives"
+        )
     print(f"manifest: {SPLITS_DIR / 'manifest.json'}")
 
 
@@ -78,12 +88,16 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="python -m safecontext_ml.dataset")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    o = sub.add_parser("offline", help="generate the template-based Macrohard corpus (free)")
+    o = sub.add_parser(
+        "offline", help="generate the template-based Macrohard corpus (free)"
+    )
     o.add_argument("--docs-per-genre", type=int, default=200)
     o.add_argument("--seed", type=int, default=0)
     o.set_defaults(func=_offline)
 
-    m = sub.add_parser("llm", help="generate Macrohard documents with Claude (costs money with --yes)")
+    m = sub.add_parser(
+        "llm", help="generate Macrohard documents with Claude (costs money with --yes)"
+    )
     m.add_argument("--n-per-genre", type=int, default=100)
     m.add_argument("--model", default="claude-sonnet-5-5")
     m.add_argument("--effort", default="medium", choices=("low", "medium", "high"))
@@ -102,7 +116,9 @@ def main(argv: list[str] | None = None) -> None:
     u.set_defaults(func=_public)
 
     b = sub.add_parser("build", help="merge sources into train/dev/test")
-    b.add_argument("--refreeze", action="store_true", help="allow the test split to change")
+    b.add_argument(
+        "--refreeze", action="store_true", help="allow the test split to change"
+    )
     b.set_defaults(func=_build)
 
     s = sub.add_parser("stats", help="validate and count labels in JSONL files")

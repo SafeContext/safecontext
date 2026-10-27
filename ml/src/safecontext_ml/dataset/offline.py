@@ -102,7 +102,10 @@ GENRES: tuple[Genre, ...] = (
     ),
     Genre(
         "release-notes",
-        headers=("Release notes - {{product}} {{version}}\n\n", "What's new in {{version}}\n\n"),
+        headers=(
+            "Release notes - {{product}} {{version}}\n\n",
+            "What's new in {{version}}\n\n",
+        ),
         banks=(("release", 1.0),),
         k=(2, 5),
         prefixes=("- ",),
@@ -117,7 +120,9 @@ GENRES: tuple[Genre, ...] = (
 )
 
 
-def _pick_snippets(rng: random.Random, genre: Genre, split: Split, k: int) -> list[tuple[str, Snippet]]:
+def _pick_snippets(
+    rng: random.Random, genre: Genre, split: Split, k: int
+) -> list[tuple[str, Snippet]]:
     pools = {b: bank_for_split(b, split) for b, _ in genre.banks}
     names = [b for b, _ in genre.banks]
     weights = [w for _, w in genre.banks]
@@ -167,7 +172,11 @@ def generate_doc(genre: Genre, index: int, seed: int) -> Record:
         group=doc_id,
         genre=genre.name,
         negative_for=sorted(negative - present),
-        meta={"backend": "offline", "seed": seed, "snippets": [sid for sid, _ in snippets]},
+        meta={
+            "backend": "offline",
+            "seed": seed,
+            "snippets": [sid for sid, _ in snippets],
+        },
     )
 
 

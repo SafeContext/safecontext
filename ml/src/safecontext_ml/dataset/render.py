@@ -58,7 +58,9 @@ class DocBuilder:
             value = self.value(kind, n)
             label = SLOT_KINDS[kind].label
             if label is not None:
-                self.spans.append(Span(self._length, self._length + len(value), label, value))
+                self.spans.append(
+                    Span(self._length, self._length + len(value), label, value)
+                )
             self._append(value)
             pos = m.end()
         self._append(template[pos:])

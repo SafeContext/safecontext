@@ -96,7 +96,9 @@ document, no commentary."""
 
 
 def _types_block() -> str:
-    return "\n".join(f"- {L.BY_ID[t].id}: {L.BY_ID[t].description}" for t in L.SPAN_LABELS)
+    return "\n".join(
+        f"- {L.BY_ID[t].id}: {L.BY_ID[t].description}" for t in L.SPAN_LABELS
+    )
 
 
 @dataclass(frozen=True)
@@ -125,7 +127,9 @@ class Scenario:
                 + ". Mix in safe look-alikes too (public numbers, shipped products, placeholders)."
             )
         if self.values:
-            lines.append("Use these exact values when you need one of these types (you may skip some):")
+            lines.append(
+                "Use these exact values when you need one of these types (you may skip some):"
+            )
             for label, vals in self.values.items():
                 lines.append(f"- {label}: " + "; ".join(vals))
         lines.append(f"Safe facts you may use: shipped products {', '.join(V.PRODUCTS[:4])}; staff handles "
@@ -144,16 +148,29 @@ def plan(n_per_genre: int, seed: int = 0) -> list[Scenario]:
             vals: dict[str, list[str]] = {}
             if not hard_negative:
                 vals = {
-                    L.CUSTOMER: sorted({V.customer(rng, split) for _ in range(rng.randint(1, 3))}),
+                    L.CUSTOMER: sorted(
+                        {V.customer(rng, split) for _ in range(rng.randint(1, 3))}
+                    ),
                     L.ROADMAP: [V.codename(rng, split), V.future_date(rng, split)],
-                    L.PERSONAL: [V.person(rng, split), V.email(rng, split), V.phone(rng, split)],
+                    L.PERSONAL: [
+                        V.person(rng, split),
+                        V.email(rng, split),
+                        V.phone(rng, split),
+                    ],
                     L.SECRET: [V.secret(rng, split)],
                 }
                 if genre.name in ("code", "incident-log"):
                     vals[L.SECRET].append(V.db_url(rng, split))
                 if genre.name in ("support-ticket", "sales-notes"):
                     vals[L.PERSONAL] += [V.address(rng, split), V.card(rng, split)]
-            length = rng.choice(("about 80 words", "about 150 words", "about 250 words", "about 350 words"))
+            length = rng.choice(
+                (
+                    "about 80 words",
+                    "about 150 words",
+                    "about 250 words",
+                    "about 350 words",
+                )
+            )
             scenarios.append(Scenario(sid, genre, split, hard_negative, vals, length))
     return scenarios
 
@@ -187,7 +204,10 @@ def _call(params: dict[str, Any]) -> dict[str, Any]:
         "served_by": resp.model,
         "stop_reason": resp.stop_reason,
         "text": text,
-        "usage": {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens},
+        "usage": {
+            "input_tokens": resp.usage.input_tokens,
+            "output_tokens": resp.usage.output_tokens,
+        },
     }
 
 
@@ -220,7 +240,11 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
         group=s.id,
         genre=s.genre.name,
         negative_for=negative_for,
-        meta={"backend": "llm", "model": cached["params"]["model"], "served_by": cached["served_by"]},
+        meta={
+            "backend": "llm",
+            "model": cached["params"]["model"],
+            "served_by": cached["served_by"],
+        },
     )
     errors = validate(rec)
     return (None, "; ".join(errors)) if errors else (rec, "")
@@ -247,10 +271,18 @@ def run(
 
     if dry_run:
         for s, params in todo[:3]:
-            print(f"--- {s.id} ({s.split}) ---\n{params['messages'][0]['content']}\n", file=sys.stderr)
-        print(f"[dry run] system prompt:\n{request_params(scenarios[0], model, effort)['system']}\n", file=sys.stderr)
+            print(
+                f"--- {s.id} ({s.split}) ---\n{params['messages'][0]['content']}\n",
+                file=sys.stderr,
+            )
+        print(
+            f"[dry run] system prompt:\n{request_params(scenarios[0], model, effort)['system']}\n",
+            file=sys.stderr,
+        )
     if todo and not yes:
-        cost = len(todo) * (EST_INPUT_TOKENS * 2 + EST_OUTPUT_TOKENS * 10) / 1e6  # Sonnet 5.5 $/MTok
+        cost = (
+            len(todo) * (EST_INPUT_TOKENS * 2 + EST_OUTPUT_TOKENS * 10) / 1e6
+        )  # Sonnet 5.5 $/MTok
         print(
             f"{len(todo)} uncached requests to {model} would be sent "
             f"(rough cost ${cost:,.2f} at Sonnet 5.5 list prices). Re-run with --yes to send them. "
@@ -264,7 +296,9 @@ def run(
             out = _call(params)
             path = cache_path(params)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+            path.write_text(
+                json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8"
+            )
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for i, _ in enumerate(pool.map(work, todo), 1):

@@ -58,7 +58,10 @@ def build(
             errors.extend(f"{path.name} {rec.id}: {e}" for e in validate(rec))
             records.append(rec)
             n += 1
-        source_info[path.name] = {"records": n, "sha256": _sha256(path.read_text(encoding="utf-8"))}
+        source_info[path.name] = {
+            "records": n,
+            "sha256": _sha256(path.read_text(encoding="utf-8")),
+        }
     if errors:
         raise ValueError("invalid records:\n" + "\n".join(errors[:20]))
 
@@ -99,7 +102,9 @@ def build(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for split in SPLITS:
-        (out_dir / f"{split}.jsonl").write_text(contents[split], encoding="utf-8", newline="\n")
+        (out_dir / f"{split}.jsonl").write_text(
+            contents[split], encoding="utf-8", newline="\n"
+        )
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -107,9 +112,13 @@ def build(
         "labels": list(SPAN_LABELS),
         "sources": source_info,
         "dropped_duplicate_texts": dropped,
-        "splits": {s: {"sha256": _sha256(contents[s]), **_stats(final[s])} for s in SPLITS},
+        "splits": {
+            s: {"sha256": _sha256(contents[s]), **_stats(final[s])} for s in SPLITS
+        },
     }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
     return manifest
 
 

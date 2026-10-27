@@ -25,11 +25,18 @@ class Span:
     text: str
 
     def to_json(self) -> dict[str, Any]:
-        return {"start": self.start, "end": self.end, "label": self.label, "text": self.text}
+        return {
+            "start": self.start,
+            "end": self.end,
+            "label": self.label,
+            "text": self.text,
+        }
 
     @classmethod
     def from_json(cls, obj: dict[str, Any]) -> Span:
-        return cls(int(obj["start"]), int(obj["end"]), str(obj["label"]), str(obj["text"]))
+        return cls(
+            int(obj["start"]), int(obj["end"]), str(obj["label"]), str(obj["text"])
+        )
 
 
 @dataclass
@@ -81,10 +88,14 @@ class Record:
 
 def _check_bounds(text: str, span: Span, where: str) -> list[str]:
     if not (0 <= span.start < span.end <= len(text)):
-        return [f"{where}: offsets {span.start}..{span.end} outside text of length {len(text)}"]
+        return [
+            f"{where}: offsets {span.start}..{span.end} outside text of length {len(text)}"
+        ]
     if text[span.start : span.end] != span.text:
         got = text[span.start : span.end]
-        return [f"{where}: text[{span.start}:{span.end}] is {got!r}, span says {span.text!r}"]
+        return [
+            f"{where}: text[{span.start}:{span.end}] is {got!r}, span says {span.text!r}"
+        ]
     return []
 
 
@@ -108,7 +119,9 @@ def validate(record: Record) -> list[str]:
         if span.text != span.text.strip():
             errors.append(f"{where}: leading or trailing whitespace in {span.text!r}")
         if span.start < prev_end:
-            errors.append(f"{where}: overlaps or is out of order with the previous span")
+            errors.append(
+                f"{where}: overlaps or is out of order with the previous span"
+            )
         prev_end = max(prev_end, span.end)
 
     for i, span in enumerate(record.ignore):
