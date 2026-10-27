@@ -3,7 +3,8 @@
  * read the hook output JSON from the response.
  *
  * Every hook request goes: validate input → pick the text → classify (classifier/) →
- * decide (decide.ts) → build the hook output (hooks.ts) → validate output → respond.
+ * decide (decide.ts) → transform flagged spans (transform/) → build the hook output (hooks.ts) →
+ * validate output → respond.
  * Whatever goes wrong after the request arrives (bad input, a tier error, the time budget, a
  * bug building the output), the agent still answers 200 with the policy's fail mode
  * (SPEC.md §2a), so Claude Code's own `onFailure` never has to decide.
@@ -28,12 +29,16 @@ import { promptResponse, toolInputResponse, toolOutputResponse } from './hooks.t
 import { silentLogger, type Logger, type Outcome } from './log.ts';
 import type { PolicySource } from './policy-source.ts';
 import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
+import { createPseudonymStore, type PseudonymStore } from './transform/pseudonyms.ts';
+import { createRewriter } from './transform/rewrite.ts';
 
 export interface AppDeps {
 	policy: PolicySource;
 	classifier: Classifier;
 	logger?: Logger;
 	events?: EventSink;
+	/** Per-session pseudonyms (in memory). Default: a new store with the default bounds. */
+	pseudonyms?: PseudonymStore;
 	/** Clock in ms. Injected for tests. */
 	now?: () => number;
 }
@@ -61,6 +66,7 @@ interface Handled<O> {
 export function createApp(deps: AppDeps): Hono {
 	const { policy: policySource, classifier, logger = silentLogger, events = noopEventSink } = deps;
 	const now = deps.now ?? (() => performance.now());
+	const pseudonyms = deps.pseudonyms ?? createPseudonymStore();
 	const app = new Hono();
 
 	app.get(AGENT_API.health.path, (c) =>
@@ -72,6 +78,16 @@ export function createApp(deps: AppDeps): Hono {
 		const result = await classifier.classify(texts, policy);
 		const chars = texts.reduce((n, t) => n + t.length, 0);
 		return { result, decision: decide(result, policy), fields: texts.length, chars };
+	}
+
+	/**
+	 * Each text with its flagged spans transformed, or undefined if nothing needs transforming.
+	 * Pseudonyms are per Claude Code session.
+	 */
+	function rewrite(texts: readonly string[], decision: Decision, sessionId: string): string[] | undefined {
+		if (decision.cause !== 'policy') return undefined;
+		const rewriter = createRewriter(decision.hits, pseudonyms.session(sessionId));
+		return texts.map((text, i) => rewriter(text, decision.spans[i] ?? []));
 	}
 
 	/**
@@ -148,7 +164,7 @@ export function createApp(deps: AppDeps): Hono {
 					hookEvent: hook,
 					...(toolName !== undefined && { toolName }),
 					...countHits(decision),
-					blocked: decision.verdict === 'block',
+					blocked: wasBlocked(hook, decision),
 					latencyMs: totalMs
 				});
 			} catch {
@@ -165,7 +181,12 @@ export function createApp(deps: AppDeps): Hono {
 			'UserPromptSubmit',
 			async (input, policy) => {
 				const checked = await check([input.prompt], policy);
-				return { ...checked, output: promptResponse(checked.decision) };
+				// Only a blocked prompt needs a safe version (and only then are pseudonyms handed out).
+				const safe =
+					checked.decision.verdict === 'block'
+						? rewrite([input.prompt], checked.decision, input.session_id)
+						: undefined;
+				return { ...checked, output: promptResponse(checked.decision, safe?.[0]) };
 			},
 			(decision) => ({ decision, output: promptResponse(decision) })
 		)
@@ -190,11 +211,13 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.toolOutput,
 			'PostToolUse',
 			async (input, policy) => {
-				const checked = await check(toolOutputTexts(input.tool_name, input.tool_response), policy);
+				const texts = toolOutputTexts(input.tool_name, input.tool_response);
+				const checked = await check(texts, policy);
+				const rewritten = rewrite(texts, checked.decision, input.session_id);
 				return {
 					...checked,
 					toolName: input.tool_name,
-					output: toolOutputResponse(checked.decision, input.tool_name, input.tool_response)
+					output: toolOutputResponse(checked.decision, input.tool_name, input.tool_response, rewritten)
 				};
 			},
 			(decision, body) => {
@@ -213,6 +236,15 @@ export function createApp(deps: AppDeps): Hono {
 function outcomeOf(decision: Decision): Outcome {
 	if (decision.cause === 'fail') return decision.verdict === 'block' ? 'fail_block' : 'fail_allow';
 	return decision.verdict;
+}
+
+/**
+ * AgentEvent `blocked`: the prompt or tool call was stopped. Tool output is never stopped, only
+ * cleaned, so it counts as blocked only when it was withheld in full (fail mode).
+ */
+function wasBlocked(hook: HookEventName, decision: Decision): boolean {
+	if (decision.verdict !== 'block') return false;
+	return hook !== 'PostToolUse' || decision.cause === 'fail';
 }
 
 function toolNameOf(body: unknown): string | undefined {

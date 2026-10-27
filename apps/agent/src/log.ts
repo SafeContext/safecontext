@@ -13,13 +13,13 @@ export type LogMessage =
 	'listening' | 'check' | 'invalid_input' | 'invalid_output' | 'handler_error' | 'policy_loaded' | 'policy_fallback';
 
 /** How a check ended. `fail_*` means the policy's fail mode decided (SPEC.md §2a). */
-export type Outcome = 'allow' | 'block' | 'fail_block' | 'fail_allow';
+export type Outcome = 'allow' | 'rewrite' | 'block' | 'fail_block' | 'fail_allow';
 
 export interface LogFields {
 	hook?: HookEventName;
 	outcome?: Outcome;
 	/** Why the fail mode applied. */
-	failure?: 'error' | 'timeout' | 'unsupported_action' | 'invalid_input' | 'invalid_output';
+	failure?: 'error' | 'timeout' | 'invalid_input' | 'invalid_output';
 	/** Claude Code tool name, e.g. "Read" or "mcp__slack__post". Metadata, not text. */
 	tool?: string;
 	/** Tier ids that ran, in order, e.g. "tier0". */

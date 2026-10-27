@@ -113,20 +113,18 @@ describe('invalid input', () => {
 	});
 });
 
-describe('actions not implemented yet (issue #10)', () => {
-	const email = 'jane@northwind.example';
-
-	it('block: a pseudonymize span (email) blocks the prompt via fail mode', async () => {
-		const { post, logger } = testApp();
-		const res = await post(prompt.path, promptInput(`email ${email}`));
-		expect(prompt.response.parse(res.json).reason).toBe(messages.promptUnchecked());
-		expect(logger.records.find((r) => r.msg === 'check')).toMatchObject({ failure: 'unsupported_action' });
-	});
-
-	it('allow: a pseudonymize span passes through', async () => {
-		const { post } = testApp({ policy: policyWith({ failMode: 'allow' }) });
-		expect((await post(prompt.path, promptInput(`email ${email}`))).json).toEqual({});
-	});
+describe('transformations do not use the fail mode (issue #10)', () => {
+	it.each(['block', 'allow'] as const)(
+		'%s: an email in a prompt is a policy block with a safe version',
+		async (failMode) => {
+			const { post, logger } = testApp({ policy: policyWith({ failMode }) });
+			const res = await post(prompt.path, promptInput('email jane@northwind.example'));
+			expect(prompt.response.parse(res.json).reason).toContain('email customer_personal_data_1');
+			const check = logger.records.find((r) => r.msg === 'check');
+			expect(check).toMatchObject({ outcome: 'block' });
+			expect(check).not.toHaveProperty('failure');
+		}
+	);
 });
 
 describe('a span whose data type is not in the policy', () => {

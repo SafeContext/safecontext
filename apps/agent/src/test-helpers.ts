@@ -90,6 +90,24 @@ export function shapeOf(v: unknown): unknown {
 	return typeof v;
 }
 
+/** A tier that flags every occurrence of each term as the given data type (like an admin term list). */
+export function termTier(terms: Record<string, string>, id = 'terms'): ClassifierTier {
+	return {
+		id,
+		tier: 0,
+		detect: (texts) =>
+			texts.map((text) =>
+				Object.entries(terms).flatMap(([term, dataTypeId]) => {
+					const spans = [];
+					for (let i = text.indexOf(term); i !== -1; i = text.indexOf(term, i + term.length)) {
+						spans.push({ start: i, end: i + term.length, dataTypeId, source: 'list' as const, confidence: 1 });
+					}
+					return spans;
+				})
+			)
+	};
+}
+
 /** A tier that answers after `ms`, or throws. */
 export function fakeTier(opts: {
 	id?: string;
