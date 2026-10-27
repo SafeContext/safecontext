@@ -6,12 +6,14 @@ classifier (SPEC.md §4). Run everything from this directory with `uv run ...`.
 | Path | What |
 | --- | --- |
 | `src/safecontext_ml/dataset/` | The dataset: record format, generators, public dataset converters, splits (issue #11) |
+| `src/safecontext_ml/eval/` | The evaluation harness: scores any classifier the same way (issue #12) |
+| `results/` | Evaluation reports. Only the `.md` reports are committed |
 | `data/LICENCES.md` | Licences of the public datasets we use, and the ones we rejected |
 | `spikes/gliner/` | GLiNER ONNX spike (issue #5) |
 | `tests/` | `uv run pytest` |
 
 Never commit data, weights or exports. `data/raw/` is gitignored at the repo root;
-`data/sources/` and `data/splits/` in `ml/.gitignore`.
+`data/sources/`, `data/splits/` and everything in `results/` except `*.md` in `ml/.gitignore`.
 
 ## Dataset
 
@@ -178,6 +180,105 @@ generated at run time.
   if the markup is broken, a hard negative contains tags, or a provided sensitive value appears
   untagged. Requests go through `client.beta.messages.create` with refusal fallbacks
   (`fallbacks="default"`).
+
+## Evaluation
+
+```bash
+cd ml
+uv run python -m safecontext_ml.eval regex                    # whole test split, ~6 s
+uv run python -m safecontext_ml.eval regex --per-source 500   # quick run, every source kept
+uv run python -m safecontext_ml.eval predictions:tier0.jsonl --pred-offsets utf16
+```
+
+The command prints a markdown report and writes `results/<model>-<split>[-sample].md` and a
+`.json` file with every number in it. Only the `.md` is committed.
+
+### Models
+
+`<model>` is `name` or `name:arg`:
+
+| Model | What |
+| --- | --- |
+| `regex` | Free local baseline: generic regexes for secrets and personal contact data. A floor to beat; **not** the TypeScript tier 0 |
+| `predictions:FILE` | Scores a JSONL file of predictions made anywhere else (the TS tier 0, a GLiNER run, an outside system) |
+| `none` | Predicts nothing |
+| `gold` | Returns the gold spans, so every score should be 100%. A self-test for the harness |
+| `gliner` | Placeholder for issue #13 |
+
+**Adding a model.** Subclass `Classifier` (`eval/classifier.py`): set `name` and `labels` (the
+data type ids it can produce), load weights in `setup()` (not timed), and return
+`Prediction(start, end, label, score)` from `predict(doc)`. `doc` has only `id` and `text`, never
+the gold spans. Register a factory in `eval/adapters/__init__.py`, and import heavy libraries
+inside it so the tests never need them. `eval/adapters/gliner.py` has a sketch for #13.
+
+**Scoring another system.** Write the inputs with `--write-inputs inputs.jsonl` (`{id, text}`
+lines, with the same `--limit`/`--source` options), run the other system, and write one line
+per record:
+
+```json
+{"id": "mh-offline-code-00012", "spans": [{"start": 24, "end": 93, "label": "secrets"}], "latency_ms": 2.4}
+```
+
+`dataTypeId` is accepted in place of `label` (the field name `@safecontext/detectors` uses).
+JavaScript counts string offsets in UTF-16 units, so pass `--pred-offsets utf16` for JS output.
+With `latency_ms`, the report uses the recorded latency. A record missing from the file is an
+error unless you pass `--allow-missing`. `--save-predictions FILE` writes this format from
+any model.
+
+### Options
+
+| Option | Does |
+| --- | --- |
+| `--split test` | `train`, `dev` or `test` (the default) |
+| `--limit N` | A seeded random sample of N records |
+| `--per-source N` | At most N records from each source. Use this for quick runs: `--limit` alone mostly picks Nemotron |
+| `--source NAME` | Only this source (repeatable) |
+| `--seed 0` | Seed for the sampling and for the judge's record choice |
+| `--warmup 3` | Untimed `predict()` calls before timing starts |
+| `--no-save`, `--out-dir DIR` | Print only, or write the reports somewhere else |
+| `--judge N [--judge-model M] [--yes]` | Task-preservation score on N records. **Paid**, see below |
+
+### Metrics and the span-matching rule
+
+Every number is reported for all sources together **and for each source separately**. Public
+PII data is about 99% of the test split and only has `customer-personal-data` and `secrets`.
+The five business labels come only from Macrohard.
+
+1. **Clean the predictions.** Drop spans with bad offsets or unknown labels, and exact
+   duplicates. Drop a prediction that overlaps an `ignore` region **and no gold span**: it is
+   neither right nor wrong. A prediction that covers a gold span as well is kept.
+2. **Overlap match (the headline numbers).** A gold span is *found* if a prediction with the
+   **same label** shares at least one character with it. A prediction is *correct* if it shares
+   a character with a gold span of the same label. Precision = correct predictions /
+   predictions. Recall = found gold spans / gold spans. The match is not one-to-one: one
+   prediction over two gold spans finds both, because both values end up hidden.
+3. **Exact match** (the *Exact F1* column): (start, end, label) must equal a gold span's.
+4. **Red recall** (target ≥ 95%, SPEC §4): found red gold spans (`unreleased-roadmap`,
+   `secrets`, `customer-personal-data`) / red gold spans. *Any label* also counts a red span
+   that a prediction with a different label covers. The text is hidden, but the wrong policy
+   action may apply.
+5. **Safe text flagged** (false-positive rate): records with no gold spans that get any
+   prediction / records with no gold spans.
+6. **Hard negatives flagged**: hard-negative records with a prediction of one of their
+   `negative_for` labels / hard-negative records. Broken down per label in the label tables.
+7. **Latency p50/p95**: wall-clock time of each `predict()` call, one document at a time, on
+   this machine (named in the report). Nearest-rank percentiles.
+
+### Task preservation (LLM judge, paid)
+
+`--judge N` picks N records whose text the model changed, taking them from each source in turn.
+For each record, Claude (`claude-sonnet-5-5` by default) does a task suited to the genre
+(summarise, triage, review code...) twice: on the original text and on a cleaned copy. In the
+cleaned copy every predicted span is replaced by a placeholder such as `[customer-names 1]`;
+the same value always gets the same number. A judge call then scores the cleaned answer
+against the original one, from 1 to 5. The report shows the mean score and the share scoring
+4-5 ("preserved").
+
+That is 3 requests per record. **Nothing is sent without `--yes`.** Without it, the run prints
+how many requests it would send and a rough cost (100 records ≈ 300 requests ≈ $2.30), and
+scores only responses already in the cache. Responses are cached in
+`data/raw/judge-cache/<model>/`, so a rerun never pays twice. The placeholder cleaning stands
+in for the real transformations (generalize, pseudonymize, mask, block), which tier 2 will do.
 
 ## Tests and lint
 

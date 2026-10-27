@@ -1,3 +1,6 @@
 # Generated dataset files (never commit data). ml/data/raw/ is ignored at the repo root.
 data/sources/
 data/splits/
+# Evaluation output: commit the small markdown reports only (issue #12).
+results/*
+!results/*.md
