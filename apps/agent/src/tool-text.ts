@@ -22,6 +22,11 @@ type Shape = {
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const mapIfString = (v: unknown, fn: (text: string) => string): unknown => (typeof v === 'string' ? fn(v) : v);
+/** `{ type: "text", text }` content block → same block with `text` replaced. Other blocks unchanged. */
+const mapTextBlock = (block: unknown, fn: (text: string) => string): unknown =>
+	isObject(block) && block.type === 'text' && typeof block.text === 'string'
+		? { ...block, text: fn(block.text) }
+		: block;
 
 const SHAPES: Record<string, Shape> = {
 	// { type: "text", file: { filePath, content, numLines, startLine, totalLines } }
@@ -57,6 +62,19 @@ const SHAPES: Record<string, Shape> = {
 		matches: (r) => isObject(r) && typeof r.result === 'string',
 		map: (r, fn) => ({ ...(r as object), result: fn((r as { result: string }).result) })
 	},
+	// Subagent report (foreground run, issue #41): { status: "completed", agentId, content: [{ type: "text", text }],
+	// resolvedModel, totalTokens, totalDurationMs, totalToolUseCount, usage, ... } (2.1.302 also sends `prompt`,
+	// `agentType`, `toolStats` and more). Claude sees the `content` text.
+	// Only those blocks are replaced, so `status` and the other fields keep the values Claude Code
+	// expects (replacing every string, as the fallback does, would break the shape and be ignored).
+	// A background launch (`status: "async_launched"`, no `content`) falls back to every string.
+	Agent: {
+		matches: (r) => isObject(r) && Array.isArray(r.content),
+		map: (r, fn) => {
+			const o = r as { content: unknown[] };
+			return { ...o, content: o.content.map((block) => mapTextBlock(block, fn)) };
+		}
+	},
 	// { query, results: [ { tool_use_id, content: [{ title, url }] } | string ], durationSeconds, searchCount }
 	WebSearch: {
 		matches: (r) => isObject(r) && Array.isArray(r.results),
@@ -84,14 +102,7 @@ const SHAPES: Record<string, Shape> = {
 // Image and resource blocks are left alone (untested, see docs/hook-shapes.md).
 const MCP: Shape = {
 	matches: (r) => Array.isArray(r) || typeof r === 'string',
-	map: (r, fn) =>
-		typeof r === 'string'
-			? fn(r)
-			: (r as unknown[]).map((block) =>
-					isObject(block) && block.type === 'text' && typeof block.text === 'string'
-						? { ...block, text: fn(block.text) }
-						: block
-				)
+	map: (r, fn) => (typeof r === 'string' ? fn(r) : (r as unknown[]).map((block) => mapTextBlock(block, fn)))
 };
 
 function shapeFor(toolName: string, response: unknown): Shape | undefined {

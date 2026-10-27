@@ -104,6 +104,13 @@ describe('plugin wiring', () => {
 		expect(skill).toContain('allowed-tools: Bash(sh ${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh)');
 	});
 
+	it('checks every tool, including subagents (Agent) and tools added later (issue #41)', () => {
+		for (const event of ['PreToolUse', 'PostToolUse']) {
+			expect(hooks[event]).toHaveLength(1);
+			expect(hooks[event][0].matcher).toBe('*');
+		}
+	});
+
 	it('uses the agent API default port and health path', () => {
 		expect(scriptText).toContain(`port="\${SC_AGENT_PORT:-${AGENT_DEFAULT_PORT}}"`);
 		expect(scriptText).toContain(`http://${AGENT_HOST}:\${port}${AGENT_API.health.path}`);
