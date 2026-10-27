@@ -1,4 +1,5 @@
 import { AGENT_DEFAULT_PORT } from '@safecontext/policy';
+import { readSyncConfig, type SyncConfig } from './sync/config.ts';
 
 export interface AgentConfig {
 	port: number;
@@ -10,6 +11,8 @@ export interface AgentConfig {
 	 * UserPromptSubmit) so the agent answers, rather than Claude Code timing out (SPEC.md §2a).
 	 */
 	checkBudgetMs: number;
+	/** Dashboard sync (`SC_DASHBOARD_URL` and friends, see sync/config.ts). Unset: no sync. */
+	sync: SyncConfig | undefined;
 }
 
 /** Default check budget: room for tier 2 (~1–5 s) while staying far inside Claude Code's 30 s. */
@@ -20,7 +23,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
 	return {
 		port: int(env.SC_AGENT_PORT, AGENT_DEFAULT_PORT, 0, 65_535, 'SC_AGENT_PORT'),
 		policyFile: env.SC_POLICY_FILE?.trim() || undefined,
-		checkBudgetMs: int(env.SC_CHECK_BUDGET_MS, DEFAULT_CHECK_BUDGET_MS, 1, MAX_CHECK_BUDGET_MS, 'SC_CHECK_BUDGET_MS')
+		checkBudgetMs: int(env.SC_CHECK_BUDGET_MS, DEFAULT_CHECK_BUDGET_MS, 1, MAX_CHECK_BUDGET_MS, 'SC_CHECK_BUDGET_MS'),
+		sync: readSyncConfig(env)
 	};
 }
 
