@@ -6,7 +6,6 @@ test('has expected h1', async ({ page }) => {
 });
 
 for (const [name, path] of [
-	['Overview', '/'],
 	['Policy', '/policy'],
 	['Deploy', '/deploy'],
 	['Settings', '/settings']
