@@ -41,7 +41,7 @@ Source: https://code.claude.com/docs/en/hooks. Re-check the docs before relying 
 | `UserPromptSubmit` | Check what the user types | **Block** (`decision: "block"` + `reason` shown to the user; set `hookSpecificOutput.suppressOriginalPrompt: true` so the prompt isn't echoed back). **Cannot rewrite the prompt.** Default timeout 30 s; on timeout the prompt proceeds unless `onFailure: "block"`. |
 | `PreToolUse` | Stop secrets leaving (Bash, WebFetch, WebSearch, MCP); also the fail-closed gate for Read/Grep (see §2a) | `permissionDecision` allow/deny/ask/defer; `updatedInput` replaces the **whole** input object. |
 | `PostToolUse` | Clean what Claude reads (Read, Bash, Grep, WebFetch, WebSearch, MCP) | `updatedToolOutput` replaces what Claude sees. **Must match the tool's output shape**; for built-in tools a mismatch is **silently ignored** (raw data gets through). |
-| `SessionStart` | Health check: warn if the agent isn't running | Not implemented yet. Confirm the output fields in the docs first. |
+| `SessionStart` | Health check: warn if the agent isn't running | Only `command` and `mcp_tool` hooks (no `http`), so the plugin runs `plugin/scripts/agent-status.sh` (sh + curl). Can't block. `systemMessage` is shown to the user; plain stdout would go to Claude, so it prints nothing when healthy. |
 
 Hooks are `type: "http"`: Claude Code POSTs the hook's JSON input to the agent and reads the
 same JSON output schema from a 2xx response body. Non-2xx, connection failure or a non-JSON
