@@ -1,8 +1,8 @@
 """Export the tier 1 tagger to ONNX for the TypeScript agent (issue #13 -> #15).
 
     uv run python -m safecontext_ml.export                       # chosen model -> models/tier1-onnx/
-    uv run python -m safecontext_ml.export --model urchade/gliner_small-v2.1 --prompts fine \
-        --threshold 0.5 --out models/gliner-small-onnx
+    uv run python -m safecontext_ml.export --model urchade/gliner_small-v2.1 --prompts entity2 \
+        --threshold 0.15 --out models/gliner-small-onnx
 
 `--model` is a Hugging Face id (downloaded on first use) or a local fine-tuned checkpoint from
 `python -m safecontext_ml.tagger.finetune`. The output directory (gitignored, never commit it):
@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(
             f"{DEFAULT_MODEL} not found. Build it first (needs data/splits, ~2 h on an M3 Max):\n"
             "  uv run python -m safecontext_ml.tagger.finetune --out models/tier1-small-ft\n"
-            "or export an off-the-shelf model with --model urchade/gliner_small-v2.1 --prompts fine"
+            "or export an off-the-shelf model with --model urchade/gliner_small-v2.1 --prompts entity2"
         )
     from gliner import GLiNER
 
