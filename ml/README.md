@@ -7,6 +7,9 @@ classifier (SPEC.md §4). Run everything from this directory with `uv run ...`.
 | --- | --- |
 | `src/safecontext_ml/dataset/` | The dataset: record format, generators, public dataset converters, splits (issue #11) |
 | `src/safecontext_ml/eval/` | The evaluation harness: scores any classifier the same way (issue #12) |
+| `src/safecontext_ml/tagger/` | Tier 1 tagger: GLiNER prompts, chunking, batch prediction, threshold sweeps, fine-tuning (issue #13) |
+| `src/safecontext_ml/export.py` | ONNX export of the tier 1 model for the TypeScript agent (issue #13) |
+| `models/` | Downloaded / fine-tuned weights and ONNX exports. Gitignored |
 | `results/` | Evaluation reports. Only the `.md` reports are committed |
 | `data/LICENCES.md` | Licences of the public datasets we use, and the ones we rejected |
 | `spikes/gliner/` | GLiNER ONNX spike (issue #5) |
@@ -203,13 +206,13 @@ The command prints a markdown report and writes `results/<model>-<split>[-sample
 | `predictions:FILE` | Scores a JSONL file of predictions made anywhere else (the TS tier 0, a GLiNER run, an outside system) |
 | `none` | Predicts nothing |
 | `gold` | Returns the gold spans, so every score should be 100%. A self-test for the harness |
-| `gliner` | Placeholder for issue #13 |
+| `gliner[:MODEL[,key=value...]]` | GLiNER tier 1 tagger (issue #13). See *Tier 1 tagger* below |
 
 **Adding a model.** Subclass `Classifier` (`eval/classifier.py`): set `name` and `labels` (the
 data type ids it can produce), load weights in `setup()` (not timed), and return
 `Prediction(start, end, label, score)` from `predict(doc)`. `doc` has only `id` and `text`, never
 the gold spans. Register a factory in `eval/adapters/__init__.py`, and import heavy libraries
-inside it so the tests never need them. `eval/adapters/gliner.py` has a sketch for #13.
+inside it so the tests never need them. `eval/adapters/gliner.py` is a worked example.
 
 **Scoring another system.** Write the inputs with `--write-inputs inputs.jsonl` (`{id, text}`
 lines, with the same `--limit`/`--source` options), run the other system, and write one line
@@ -279,6 +282,48 @@ how many requests it would send and a rough cost (100 records ≈ 300 requests �
 scores only responses already in the cache. Responses are cached in
 `data/raw/judge-cache/<model>/`, so a rerun never pays twice. The placeholder cleaning stands
 in for the real transformations (generalize, pseudonymize, mask, block), which tier 2 will do.
+
+## Tier 1 tagger (GLiNER)
+
+Issue #13. Scores, the chosen model and why: [`results/tier1-gliner.md`](results/tier1-gliner.md).
+
+```bash
+cd ml
+# 1. Fine-tune GLiNER small on the train split (~1.5-2 h on an M3 Max GPU; run it in the background)
+uv run python -m safecontext_ml.tagger.finetune --out models/tier1-small-ft > ft.log 2>&1
+# 2. Export it for the TypeScript agent -> models/tier1-onnx/ (gitignored)
+uv run python -m safecontext_ml.export
+# 3. Score the export through onnxruntime, as the agent runs it
+uv run python -m safecontext_ml.eval gliner:models/tier1-onnx,device=onnx --per-source 500
+```
+
+Point the agent at the export with `SC_TIER1_MODEL_DIR=ml/models/tier1-onnx` (#15).
+
+### The export directory
+
+| File | What |
+| --- | --- |
+| `model.onnx` | fp32, opset 19, gliner's own `export_to_onnx` (the #5 spike's format: a uni-encoder span model). Inputs `input_ids`, `attention_mask`, `words_mask`, `text_lengths`, `span_idx`, `span_mask`; output `logits` `[batch, words, max_width, labels]` |
+| `tokenizer.json`, `tokenizer_config.json`, `gliner_config.json` | What the TS loader reads |
+| `labels.json` | `{"<data type id>": "<label text>"}`: the label the model was tuned with, one per data type. The agent uses these instead of its label template |
+| `tier1.json` | Threshold chosen on dev, prompt set, source model, chunking limits, sha256 of `model.onnx` |
+
+`export` reloads `model.onnx` in onnxruntime and checks it finds the same spans as PyTorch on
+50 dev records. The weights are never committed; rebuild them with the commands above.
+
+### Pieces
+
+| Module | Does |
+| --- | --- |
+| `tagger/prompts.py` | Prompt sets: label text -> data type id. `names` (display names, what the fine-tuned model uses), `entity`/`entity2` (one entity-style label per type, for off-the-shelf models), `fine` (several labels per type; zero-shot reference only, the agent takes one per type) |
+| `tagger/chunking.py` | Word split (GLiNER's regex), windows that fit 512 tokens with the prompt, overlap = `max_width` words, greedy merge. Same rule as the agent's `words.ts` |
+| `tagger/model.py` | `GlinerTagger`: PyTorch (`cpu`/`mps`) or onnxruntime (`onnx`) |
+| `tagger/predict.py` | Batch prediction to a predictions file (fast on the GPU; no latency) |
+| `tagger/sweep.py` | Scores a predictions file at many thresholds; `--write FILE --at T` writes one threshold for the harness. Greedy flat decoding makes "predict once at 0.1, filter later" exact |
+| `tagger/finetune.py` | Fine-tuning. See its docstring for how records become training examples |
+| `export.py` | ONNX export, `labels.json`, `tier1.json`, parity check |
+
+Tune thresholds and prompts on `dev` only. `test` is for the final numbers.
 
 ## Tests and lint
 
