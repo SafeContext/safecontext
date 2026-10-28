@@ -66,7 +66,10 @@ ADAPTERS: dict[str, tuple[Factory, str]] = {
         lambda arg, ctx: GoldOracle(ctx),
         "returns the gold spans (harness self-test)",
     ),
-    "gliner": (_gliner, "not implemented yet: issue #13"),
+    "gliner": (
+        _gliner,
+        "gliner[:MODEL[,threshold=,prompts=,device=]], GLiNER tier 1 tagger",
+    ),
 }
 
 

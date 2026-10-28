@@ -171,8 +171,8 @@ def test_gold_oracle_and_none():
     assert load_classifier("none", ctx).predict(Doc(r.id, r.text)) == []
     with pytest.raises(ValueError, match="unknown model"):
         load_classifier("nope", ctx)
-    with pytest.raises(NotImplementedError, match="#13"):
-        load_classifier("gliner", ctx)
+    # gliner builds without loading torch; weights load in setup()
+    assert load_classifier("gliner", ctx).name == "gliner-gliner_small-v2.1-fine-t0.5"
 
 
 def test_utf16_offsets():
