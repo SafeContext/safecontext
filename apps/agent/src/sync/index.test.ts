@@ -14,6 +14,13 @@ import { startSync, type Sync } from './index.ts';
 import { DEVICE_ID_FILE } from './state-files.ts';
 import { memoryTokenStore } from './token-store.ts';
 
+/**
+ * Waits on a condition, never a fixed time. The timeout only bounds a failing test: it is long
+ * (and the test's own timeout longer) so that a slow or busy CI runner can't fail a passing one
+ * (issue #68).
+ */
+const WAIT = { timeout: 10_000 };
+
 let dash: FakeDashboard;
 let dir: string;
 let sync: Sync | undefined;
@@ -29,7 +36,7 @@ afterEach(async () => {
 });
 
 describe('startSync with the agent app', () => {
-	it('registers, enforces the dashboard policy and uploads text-free events', async () => {
+	it('registers, enforces the dashboard policy and uploads text-free events', { timeout: 30_000 }, async () => {
 		dash.policy = policyWith({ version: 9, failMode: 'allow' });
 		const logger = memoryLogger();
 		const store = memoryTokenStore();
@@ -56,7 +63,7 @@ describe('startSync with the agent app', () => {
 		await vi.waitFor(async () => {
 			const health = await (await app.request('/health')).json();
 			expect(health.policyVersion).toBe(9);
-		});
+		}, WAIT);
 
 		const deviceId = readFileSync(join(dir, DEVICE_ID_FILE), 'utf8').trim();
 		expect(deviceId).toMatch(/^dev-[0-9a-f]{32}$/);
@@ -75,7 +82,7 @@ describe('startSync with the agent app', () => {
 		});
 		expect(res.status).toBe(200);
 
-		await vi.waitFor(() => expect(dash.batches.flat()).toHaveLength(1));
+		await vi.waitFor(() => expect(dash.batches.flat()).toHaveLength(1), WAIT);
 		const [event] = dash.batches.flat();
 		expect(event).toMatchObject({ deviceId, policyVersion: 9, hookEvent: 'UserPromptSubmit', blocked: true });
 		const everything = dash.rawEventBodies.join('') + JSON.stringify(logger.records);

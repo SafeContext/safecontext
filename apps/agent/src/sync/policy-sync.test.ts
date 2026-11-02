@@ -21,6 +21,7 @@ beforeEach(async () => {
 	dir = mkdtempSync(join(tmpdir(), 'sc-agent-sync-'));
 });
 afterEach(async () => {
+	vi.useRealTimers();
 	await dash.close();
 	rmSync(dir, { recursive: true, force: true });
 });
@@ -45,8 +46,13 @@ function source({ intervalMs = 60_000, url = dash.url } = {}) {
 		intervalMs,
 		logger: syncLogger(logger)
 	});
-	return { policy, logger };
+	// Every pull starts by asking for the token, synchronously: this counts pulls as they start.
+	const pulls = vi.spyOn(auth, 'token');
+	return { policy, logger, pulls };
 }
+
+/** Fake the sync timer, so a test decides when time passes. HTTP to the fake dashboard is real. */
+const fakeTimers = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 
 describe('syncingPolicySource', () => {
 	it('uses the fallback until the first pull, then the dashboard policy, cached to disk', async () => {
@@ -81,15 +87,23 @@ describe('syncingPolicySource', () => {
 	});
 
 	it('picks up a published change within one interval', async () => {
+		fakeTimers();
 		dash.policy = policyWith({ version: 1 });
-		const { policy } = source({ intervalMs: 25 });
+		const { policy, pulls } = source({ intervalMs: 60_000 });
 		policy.start();
 		try {
-			await vi.waitFor(() => expect(policy.current().version).toBe(1), { timeout: 2_000 });
+			vi.advanceTimersByTime(0);
+			expect(pulls).toHaveBeenCalledTimes(1); // The first pull starts at once.
+			await policy.refresh(); // Joins it.
+			expect(policy.current().version).toBe(1);
 			dash.policy = policyWith({ version: 2, failMode: 'allow' });
-			const published = Date.now();
-			await vi.waitFor(() => expect(policy.current().version).toBe(2), { timeout: 2_000, interval: 5 });
-			expect(Date.now() - published).toBeLessThan(1_000);
+			vi.advanceTimersByTime(59_999);
+			expect(pulls).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(1);
+			expect(pulls).toHaveBeenCalledTimes(2);
+			await policy.refresh(); // Joins the timer's pull rather than starting another.
+			expect(pulls).toHaveBeenCalledTimes(2);
+			expect(policy.current().version).toBe(2);
 		} finally {
 			policy.close();
 		}
@@ -153,16 +167,23 @@ describe('syncingPolicySource', () => {
 	});
 
 	it('waits at least Retry-After after a 429', async () => {
+		fakeTimers();
 		dash.policy = policyWith({ version: 1 });
-		const { policy } = source({ intervalMs: 10 });
+		const { policy, pulls } = source({ intervalMs: 10 });
 		dash.override.set('/api/policy', [
 			{ status: 429, headers: { 'retry-after': '1' }, body: { error: { code: 'rate_limited', message: 'x' } } }
 		]);
-		const started = Date.now();
 		policy.start();
 		try {
-			await vi.waitFor(() => expect(policy.current().version).toBe(1), { timeout: 3_000, interval: 10 });
-			expect(Date.now() - started).toBeGreaterThanOrEqual(950);
+			vi.advanceTimersByTime(0);
+			expect(await policy.refresh()).toBe('failed'); // Joins the first pull: 429.
+			vi.advanceTimersByTime(999); // Well past the 10 ms interval, but within Retry-After.
+			expect(pulls).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(1);
+			expect(pulls).toHaveBeenCalledTimes(2);
+			expect(await policy.refresh()).toBe('updated');
+			expect(pulls).toHaveBeenCalledTimes(2);
+			expect(policy.current().version).toBe(1);
 		} finally {
 			policy.close();
 		}

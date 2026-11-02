@@ -118,7 +118,14 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 		});
 		if (!closed) {
 			clearTimeout(retryTimer);
-			retryTimer = setTimeout(() => void uploader.flush(), delay);
+			retryTimer = setTimeout(() => {
+				// The timer is the backoff, so it ends it. Timers run on a monotonic clock and
+				// `retryAt` on the wall clock: they can disagree (by a millisecond of rounding, or
+				// by much more if the system clock is set back), and if `flush()` then saw
+				// `Date.now() < retryAt` it would skip this retry with no new one scheduled.
+				retryAt = 0;
+				void uploader.flush();
+			}, delay);
 			retryTimer.unref();
 		}
 	}

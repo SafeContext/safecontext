@@ -13,8 +13,15 @@ const DEVICE = 'dev-events-test';
 let dash: FakeDashboard;
 beforeEach(async () => {
 	dash = await startFakeDashboard();
+	// Fake the uploader's backoff timer and the clock, so a retry happens exactly when a test fires
+	// it (`retryNow` in `setup`) and never depends on how fast the machine is. HTTP to the fake
+	// dashboard is real.
+	vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
 });
-afterEach(() => dash.close());
+afterEach(async () => {
+	vi.useRealTimers();
+	await dash.close();
+});
 
 const report = (overrides: Partial<CheckReport> = {}): CheckReport => ({
 	ts: new Date().toISOString(),
@@ -48,7 +55,13 @@ function setup(opts: { batchSize?: number; maxQueue?: number; backoffBaseMs?: nu
 		backoffMaxMs: Math.max(20, opts.backoffBaseMs ?? 0),
 		random: () => 1
 	});
-	return { uploader, logger };
+	/** Let the backoff the uploader last logged run out, and wait for the retry its timer starts. */
+	async function retryNow() {
+		const backoffs = logger.records.flatMap((r) => ('retryInMs' in r ? [r.retryInMs as number] : []));
+		vi.advanceTimersByTime(backoffs.at(-1)!);
+		await uploader.flush(); // Joins the upload the timer started.
+	}
+	return { uploader, logger, retryNow };
 }
 
 const sent = () => dash.batches.flat();
@@ -57,7 +70,9 @@ describe('createEventUploader', () => {
 	it('adds the device id and uploads in batches', async () => {
 		const { uploader } = setup({ batchSize: 2 });
 		for (let i = 0; i < 5; i++) uploader.record(report({ latencyMs: i }));
-		await vi.waitFor(() => expect(sent()).toHaveLength(5));
+		// A full batch starts an upload, which keeps going until the queue is empty: join it.
+		await uploader.flush();
+		expect(sent()).toHaveLength(5);
 		expect(dash.batches.map((b) => b.length)).toEqual([2, 2, 1]);
 		expect(sent().every((e) => e.deviceId === DEVICE)).toBe(true);
 		expect(sent().map((e) => e.latencyMs)).toEqual([0, 1, 2, 3, 4]);
@@ -78,13 +93,16 @@ describe('createEventUploader', () => {
 
 	it('retries server errors with backoff, keeping order', async () => {
 		dash.override.set('/api/events', [{ status: 503 }, { status: 502 }]);
-		const { uploader, logger } = setup();
+		const { uploader, logger, retryNow } = setup();
 		uploader.record(report({ latencyMs: 1 }));
 		uploader.record(report({ latencyMs: 2 }));
 		await uploader.flush();
 		expect(sent()).toHaveLength(0);
 		expect(uploader.pending).toBe(2);
-		await vi.waitFor(() => expect(sent().map((e) => e.latencyMs)).toEqual([1, 2]));
+		await retryNow(); // 502
+		expect(sent()).toHaveLength(0);
+		await retryNow();
+		expect(sent().map((e) => e.latencyMs)).toEqual([1, 2]);
 		const failures = logger.records.filter((r) => r.msg === ('events_upload_failed' as never));
 		expect(failures.map((r) => (r as { retryInMs?: number }).retryInMs)).toEqual([5, 10]);
 	});
@@ -99,19 +117,36 @@ describe('createEventUploader', () => {
 		expect(logger.records).toContainEqual(
 			expect.objectContaining({ msg: 'events_upload_failed', reason: 'rate_limited', status: 429, retryInMs: 1000 })
 		);
+		vi.advanceTimersByTime(999);
 		await uploader.flush(); // Still waiting: nothing sent.
 		expect(dash.requests.filter((r) => r.path === '/api/events')).toHaveLength(1);
-		await vi.waitFor(() => expect(sent()).toHaveLength(1), { timeout: 3_000 });
+		vi.advanceTimersByTime(1);
+		await uploader.flush(); // Joins the retry the timer started.
+		expect(sent()).toHaveLength(1);
+	});
+
+	it('retries when its timer fires, even if the wall clock says the backoff is not over', async () => {
+		// Timers and Date.now() can disagree (rounding, or the system clock being set back). The retry
+		// used to be skipped then, with no new one scheduled, which stalled uploads (issue #68).
+		dash.override.set('/api/events', [{ status: 503 }]);
+		const { uploader, retryNow } = setup();
+		uploader.record(report());
+		await uploader.flush();
+		vi.setSystemTime(Date.now() - 60 * 60_000); // The clock goes back an hour; the timer doesn't.
+		await retryNow();
+		expect(sent()).toHaveLength(1);
 	});
 
 	it('registers again on 401 and resends', async () => {
-		const { uploader } = setup();
+		const { uploader, retryNow } = setup();
 		uploader.record(report());
 		await uploader.flush();
 		dash.tokens.clear();
 		uploader.record(report());
-		await uploader.flush();
-		await vi.waitFor(() => expect(sent()).toHaveLength(2));
+		await uploader.flush(); // 401: the token is dropped and the batch kept.
+		expect(sent()).toHaveLength(1);
+		await retryNow();
+		expect(sent()).toHaveLength(2);
 		expect(dash.registrations).toBe(2);
 	});
 
@@ -125,23 +160,26 @@ describe('createEventUploader', () => {
 		await uploader.flush();
 		expect(logger.records).toContainEqual({ level: 'warn', msg: 'events_dropped', reason: 'rejected', events: 1 });
 		for (let i = 0; i < 4; i++) uploader.record(report());
-		await vi.waitFor(() => expect(sent()).toHaveLength(4));
+		await uploader.flush();
+		expect(sent()).toHaveLength(4);
 		expect(dash.batches.map((b) => b.length)).toEqual([2, 2]);
 		// The split only applies to that batch: the next one is full size again.
 		for (let i = 0; i < 4; i++) uploader.record(report());
-		await vi.waitFor(() => expect(sent()).toHaveLength(8));
+		await uploader.flush();
+		expect(sent()).toHaveLength(8);
 		expect(dash.batches.map((b) => b.length)).toEqual([2, 2, 4]);
 	});
 
 	it('retries a 403 that is not device_mismatch (e.g. from a proxy) instead of dropping it', async () => {
 		dash.override.set('/api/events', [{ status: 403, body: '<html>Forbidden</html>' }]);
-		const { uploader, logger } = setup();
+		const { uploader, logger, retryNow } = setup();
 		uploader.record(report());
 		await uploader.flush();
 		expect(logger.records).toContainEqual(
 			expect.objectContaining({ msg: 'events_upload_failed', reason: 'forbidden', status: 403 })
 		);
-		await vi.waitFor(() => expect(sent()).toHaveLength(1));
+		await retryNow();
+		expect(sent()).toHaveLength(1);
 		expect(dash.registrations).toBe(1);
 	});
 
