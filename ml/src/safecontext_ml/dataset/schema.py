@@ -155,10 +155,17 @@ def dumps(record: Record) -> str:
 
 
 def write_jsonl(path: Path, records: Iterable[Record]) -> int:
+    """Write records atomically: `records` may be a generator that fails part-way (an API error
+    in the LLM backend, say), and then the existing file must be left as it was."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
     n = 0
-    with path.open("w", encoding="utf-8", newline="\n") as f:
-        for r in records:
-            f.write(dumps(r) + "\n")
-            n += 1
+    try:
+        with tmp.open("w", encoding="utf-8", newline="\n") as f:
+            for r in records:
+                f.write(dumps(r) + "\n")
+                n += 1
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
     return n

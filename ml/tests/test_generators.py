@@ -127,6 +127,37 @@ def test_llm_to_record_quality_gates():
     )
 
 
+def test_llm_rejects_value_tagged_with_the_wrong_label():
+    s = _scenario(False, {"customer-names": ["Bluefin Bank"]})
+    rec, why = llm.to_record(s, _cached("<secrets>Bluefin Bank</secrets> renewed."))
+    assert rec is None and why.startswith("mislabelled")
+
+
+def test_llm_cache_key_survives_prompt_rewording(monkeypatch):
+    s = _scenario(False, {})
+    before = llm.cache_path(s, "m", "medium")
+    monkeypatch.setattr(llm, "SYSTEM_PROMPT", llm.SYSTEM_PROMPT + " Reworded.")
+    assert llm.cache_path(s, "m", "medium") == before
+    monkeypatch.setattr(llm, "PROMPT_VERSION", llm.PROMPT_VERSION + 1)
+    assert llm.cache_path(s, "m", "medium") != before
+    assert llm.cache_path(s, "m", "low") != llm.cache_path(s, "m", "medium")
+
+
+def test_write_jsonl_keeps_old_file_if_records_fail(tmp_path):
+    path = tmp_path / "src.jsonl"
+    write_jsonl(path, [_rec(1, "abc old", "g")])
+    before = path.read_text()
+
+    def failing():
+        yield _rec(2, "abc new", "g")
+        raise RuntimeError("API error")
+
+    with pytest.raises(RuntimeError):
+        write_jsonl(path, failing())
+    assert path.read_text() == before
+    assert list(tmp_path.iterdir()) == [path]
+
+
 # --- public converters ---
 
 

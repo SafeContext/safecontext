@@ -36,6 +36,9 @@ SOURCE = "macrohard-llm"
 DEFAULT_MODEL = "claude-sonnet-5-5"
 DEFAULT_EFFORT = "medium"
 MAX_TOKENS = 4096
+#: Part of the cache key. Bump it only to deliberately pay for fresh responses after a prompt
+#: change that makes old ones wrong. Rewording alone doesn't invalidate the cache (see cache_path).
+PROMPT_VERSION = 1
 #: Rough per-request token use, for the cost estimate printed before a run.
 EST_INPUT_TOKENS, EST_OUTPUT_TOKENS = 1_800, 900
 
@@ -110,6 +113,7 @@ class Scenario:
     #: label -> values the model should use verbatim.
     values: dict[str, list[str]]
     length: str
+    seed: int = 0
 
     def user_prompt(self) -> str:
         lines = [f"Write {self.genre.brief}. Length: {self.length}."]
@@ -171,7 +175,9 @@ def plan(n_per_genre: int, seed: int = 0) -> list[Scenario]:
                     "about 350 words",
                 )
             )
-            scenarios.append(Scenario(sid, genre, split, hard_negative, vals, length))
+            scenarios.append(
+                Scenario(sid, genre, split, hard_negative, vals, length, seed)
+            )
     return scenarios
 
 
@@ -185,9 +191,25 @@ def request_params(s: Scenario, model: str, effort: str) -> dict[str, Any]:
     }
 
 
-def cache_path(params: dict[str, Any]) -> Path:
-    key = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()
-    return LLM_CACHE_DIR / params["model"] / f"{key}.json"
+def _sha256(obj: Any) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()
+
+
+def cache_path(s: Scenario, model: str, effort: str) -> Path:
+    """Cache file for a scenario. The key leaves out the prompt text on purpose, so rewording a
+    data type description or the system prompt doesn't throw away paid responses. Bump
+    PROMPT_VERSION to regenerate on purpose."""
+    key = _sha256(
+        {
+            "scenario": s.id,
+            "seed": s.seed,
+            "model": model,
+            "effort": effort,
+            "max_tokens": MAX_TOKENS,
+            "prompt_version": PROMPT_VERSION,
+        }
+    )
+    return LLM_CACHE_DIR / model / f"{key}.json"
 
 
 def _call(params: dict[str, Any]) -> dict[str, Any]:
@@ -201,6 +223,7 @@ def _call(params: dict[str, Any]) -> dict[str, Any]:
     text = "".join(b.text for b in resp.content if b.type == "text")
     return {
         "params": params,
+        "prompt_sha256": _sha256(params),
         "served_by": resp.model,
         "stop_reason": resp.stop_reason,
         "text": text,
@@ -223,14 +246,18 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
     negative_for = sorted(set(L.SPAN_LABELS) - present) if s.hard_negative else []
     if s.hard_negative and spans:
         return None, "hard negative contains tags"
-    # Every provided sensitive value that made it into the text must be tagged.
-    tagged = {(sp.start, sp.end) for sp in spans}
-    for vals in s.values.values():
+    # Every provided sensitive value that made it into the text must be tagged, with its own label.
+    for label, vals in s.values.items():
         for v in vals:
             start = text.find(v)
             while start != -1:
-                if not any(a <= start and start + len(v) <= b for a, b in tagged):
+                covering = [
+                    sp for sp in spans if sp.start <= start and start + len(v) <= sp.end
+                ]
+                if not covering:
                     return None, f"untagged value {v[:30]!r}"
+                if covering[0].label != label:
+                    return None, f"mislabelled value {v[:30]!r} as {covering[0].label}"
                 start = text.find(v, start + 1)
     rec = Record(
         id=s.id,
@@ -263,9 +290,8 @@ def run(
     scenarios = plan(n_per_genre, seed)
     todo = []
     for s in scenarios:
-        params = request_params(s, model, effort)
-        if not cache_path(params).exists():
-            todo.append((s, params))
+        if not cache_path(s, model, effort).exists():
+            todo.append((s, request_params(s, model, effort)))
     if max_requests is not None:
         todo = todo[:max_requests]
 
@@ -292,9 +318,9 @@ def run(
     elif todo:
 
         def work(item: tuple[Scenario, dict[str, Any]]) -> None:
-            _s, params = item
+            s, params = item
             out = _call(params)
-            path = cache_path(params)
+            path = cache_path(s, model, effort)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -306,15 +332,25 @@ def run(
                     print(f"  {i}/{len(todo)} requests done", file=sys.stderr)
 
     rejected: dict[str, int] = {}
+    stale = 0
     for s in scenarios:
-        path = cache_path(request_params(s, model, effort))
+        path = cache_path(s, model, effort)
         if not path.exists():
             continue
-        rec, reason = to_record(s, json.loads(path.read_text(encoding="utf-8")))
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if cached.get("prompt_sha256") != _sha256(request_params(s, model, effort)):
+            stale += 1
+        rec, reason = to_record(s, cached)
         if rec is None:
-            key = reason.split(":")[0].split("=")[0]
+            key = reason.split(" ")[0].split("=")[0].rstrip(":")
             rejected[key] = rejected.get(key, 0) + 1
             continue
         yield rec
+    if stale:
+        print(
+            f"{stale} cached responses were made with an older prompt; they are still used. "
+            "Bump PROMPT_VERSION to pay for fresh ones.",
+            file=sys.stderr,
+        )
     if rejected:
         print(f"rejected responses: {rejected}", file=sys.stderr)

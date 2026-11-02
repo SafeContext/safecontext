@@ -44,8 +44,11 @@ All are `uv run python -m safecontext_ml.dataset <command>`.
 | `build [--refreeze]` | Merges every `data/sources/*.jsonl` into `data/splits/{train,dev,test}.jsonl` + `manifest.json` | Free |
 | `stats FILE...` | Validates JSONL files and counts labels | Free |
 
-LLM responses are cached in `data/raw/llm-cache/<model>/<sha256 of request>.json`, so a rerun
-never pays twice and the LLM source can be rebuilt from the cache alone.
+LLM responses are cached in `data/raw/llm-cache/<model>/<key>.json`, so a rerun never pays twice
+and the LLM source can be rebuilt from the cache alone. The key is the scenario id, seed, model,
+effort and `llm.PROMPT_VERSION`, **not** the prompt text: rewording a prompt or a data type
+description keeps the paid responses (the run warns that they came from an older prompt). Bump
+`PROMPT_VERSION` only when you mean to pay for fresh ones.
 
 ### File layout
 
@@ -128,6 +131,12 @@ user names, IP and MAC addresses, device and vehicle identifiers. Mapped to `sec
 password, PIN. Everything else becomes an `ignore` region, including dates, cities, countries,
 company names, employee IDs, cookies and special-category data (ethnicity, religion, politics,
 sexuality). `convert` prints any label it has never seen.
+
+**Known mismatch (open decision for #2):** the public sets don't say whose name a name is, so
+every person name and user name in them is `customer-personal-data`, while Macrohard text leaves
+staff names and chat handles untagged. A model trained on both may over-flag names in internal
+chat. Changing the mapping (for example `name`/`user_name` → ignore) changes the frozen test
+split, so it waits for that decision and a deliberate `--refreeze`.
 
 ### Splits
 
