@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "about": "Models and datasets hosted on the private Hugging Face org, pinned to exact commits (issue #70). Fill and update with `uv run python -m safecontext_ml.artifacts push NAME --yes`; download with `pnpm models:pull`. See ml/README.md, Models and data.",
+  "artifacts": [
+    {
+      "name": "tier1-onnx",
+      "description": "Tier 1 GLiNER ONNX export as the agent loads it (SC_TIER1_MODEL_DIR), plus provenance.json",
+      "repo": "tier1-gliner",
+      "repo_type": "model",
+      "path_in_repo": "",
+      "local_dir": "models/tier1-onnx",
+      "include": [
+        "*.onnx",
+        "*.json"
+      ],
+      "repo_id": null,
+      "revision": null,
+      "files": []
+    },
+    {
+      "name": "tier1-pytorch",
+      "description": "Final fine-tuned GLiNER small (PyTorch), without the intermediate checkpoint-* dirs",
+      "repo": "tier1-gliner",
+      "repo_type": "model",
+      "path_in_repo": "pytorch",
+      "local_dir": "models/tier1-small-ft",
+      "include": [
+        "*.bin",
+        "*.safetensors",
+        "*.json"
+      ],
+      "repo_id": null,
+      "revision": null,
+      "files": []
+    },
+    {
+      "name": "data-splits",
+      "description": "Built dataset splits: train/dev/test JSONL (test is frozen) and manifest.json",
+      "repo": "safecontext-data",
+      "repo_type": "dataset",
+      "path_in_repo": "splits",
+      "local_dir": "data/splits",
+      "include": [
+        "*.jsonl",
+        "manifest.json"
+      ],
+      "repo_id": null,
+      "revision": null,
+      "files": []
+    }
+  ]
+}

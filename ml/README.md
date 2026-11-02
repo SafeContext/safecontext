@@ -9,7 +9,8 @@ classifier (SPEC.md §4). Run everything from this directory with `uv run ...`.
 | `src/safecontext_ml/eval/` | The evaluation harness: scores any classifier the same way (issue #12) |
 | `src/safecontext_ml/tagger/` | Tier 1 tagger: GLiNER prompts, chunking, batch prediction, threshold sweeps, fine-tuning (issue #13) |
 | `src/safecontext_ml/export.py` | ONNX export of the tier 1 model for the TypeScript agent (issue #13) |
-| `models/` | Downloaded / fine-tuned weights and ONNX exports. Gitignored |
+| `src/safecontext_ml/artifacts.py`, `models.lock.json` | Pull/push models and data on the private Hugging Face org, pinned by commit and sha256 (issue #70). See *Models and data* |
+| `models/` | Downloaded / fine-tuned weights and ONNX exports. Gitignored; `pnpm models:pull` fills it |
 | `results/` | Evaluation reports. Only the `.md` reports are committed |
 | `data/LICENCES.md` | Licences of the public datasets we use, and the ones we rejected |
 | `spikes/gliner/` | GLiNER ONNX spike (issue #5) |
@@ -333,6 +334,73 @@ Point the agent at the export with `SC_TIER1_MODEL_DIR=ml/models/tier1-onnx` (#1
 | `export.py` | ONNX export, `labels.json`, `tier1.json`, parity check |
 
 Tune thresholds and prompts on `dev` only. `test` is for the final numbers.
+
+## Models and data
+
+Weights, exports and built splits never go in git. They live in a **private Hugging Face
+organisation**, and [`models.lock.json`](models.lock.json) pins each one to an exact commit, with
+the sha256 and size of every file. Changing a model or the dataset is a normal PR that changes
+the lock file. Issue #70.
+
+| Artifact | Hugging Face repo | Local directory (in `ml/`) | What |
+| --- | --- | --- | --- |
+| `tier1-onnx` | model `<org>/tier1-gliner` (repo root) | `models/tier1-onnx` | The ONNX export as the agent loads it, plus `provenance.json` |
+| `tier1-pytorch` | model `<org>/tier1-gliner`, under `pytorch/` | `models/tier1-small-ft` | The final fine-tuned model (`pytorch_model.bin`, configs, tokenizer, `finetune_args.json`); not the `checkpoint-*` dirs |
+| `data-splits` | dataset `<org>/safecontext-data`, under `splits/` | `data/splits` | `train/dev/test.jsonl` and `manifest.json`. The frozen test split is the one that matters |
+
+The raw public downloads aren't hosted: `dataset public download` fetches them again.
+
+### Getting access
+
+1. Ask an org admin to invite your Hugging Face account to the org, and accept the invite.
+2. `uv run hf auth login` (in `ml/`) with a token that can **read** the org's repos (to
+   publish, it needs **write**). `uv run hf auth whoami` should list the org. Tokens stay in
+   your Hugging Face config; never put one in git.
+
+### Downloading
+
+```bash
+pnpm models:pull                                        # from the repo root: every pinned artifact
+cd ml && uv run python -m safecontext_ml.artifacts pull tier1-onnx data-splits   # some of them
+uv run python -m safecontext_ml.artifacts status        # pinned? present? checksums ok?
+```
+
+`pull` downloads the pinned commit into the local directory and checks every sha256. Files that
+are already there with the right sha256 are skipped, so rerunning it is cheap. A wrong checksum
+is an error and the bad download is deleted. A missing token or a token without access to the
+org gives an error that says so.
+
+Run the agent with tier 1 on the pulled export:
+
+```bash
+# from the repo root. A relative path is resolved from the agent's working directory
+# (apps/agent under pnpm --filter), so pass an absolute one.
+SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" pnpm --filter @safecontext/agent dev
+```
+
+### Publishing a new version
+
+```bash
+cd ml
+export SC_HF_ORG=<org>                    # or pass --org <org>
+uv run python -m safecontext_ml.artifacts push tier1-onnx      # dry run: files, sizes, target repo
+uv run python -m safecontext_ml.artifacts push tier1-onnx --yes
+```
+
+- Without `--yes`, `push` only prints what it would upload and sends nothing.
+- It uploads the artifact's local directory (or `--from DIR`), creates the repo as **private**
+  if it doesn't exist, and refuses to upload to a public one. Only the top-level files matching
+  the artifact's `include` patterns are sent.
+- It then writes the new commit and file hashes into `models.lock.json`. Commit that in a PR.
+- For `tier1-onnx`, if the export has no `provenance.json`, `push` writes one first: base model
+  id and revision (from the local Hugging Face cache), sha256 of the train/dev/test splits,
+  fine-tuning settings, threshold and prompt set, and the headline scores from
+  `results/predictions-tier1-small-ft-names-t0.6-test.md` (`--scores` for another report). It
+  reads `models/tier1-small-ft/finetune_args.json` (`--finetune-dir`) and
+  `data/splits/manifest.json`, and refuses if the report was scored on a different test split.
+
+Tier 2 (#14): if it's an off-the-shelf model, it will be pinned by name and version only; its
+weights are hosted here only if we fine-tune it.
 
 ## Tests and lint
 
