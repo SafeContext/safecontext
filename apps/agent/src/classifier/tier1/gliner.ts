@@ -6,6 +6,8 @@
  *
  * Optional `labels.json` in the same directory: `{ "<data type id>": "<label text>" }`, the label
  * prompts the model was tuned or scored with (#13). Data types not in it use `SC_TIER1_LABEL`.
+ * Optional `tier1.json` (#13's export metadata): its `threshold` is the model's default
+ * threshold (`SC_TIER1_THRESHOLD` overrides it). Its other fields are ignored here.
  *
  * onnxruntime-node and the tokenizer are imported lazily, so nothing native loads unless a
  * model is configured (and tests can use a fake `TaggerModel`).
@@ -30,6 +32,8 @@ export interface TaggerModel {
 	readonly maxTokens: number;
 	/** Label text per data type id, from the model's `labels.json`. Overrides the label template. */
 	readonly labels?: Readonly<Record<string, string>>;
+	/** Default threshold for this model, from its `tier1.json`. */
+	readonly threshold?: number;
 	/** Subword ids for one word or label. */
 	tokenize(text: string): number[];
 	/** Token ids of the label prompt (`<<ENT>> label ... <<SEP>>`). */
@@ -65,11 +69,12 @@ export async function loadGliner(
 ): Promise<TaggerModel> {
 	const readJson = async (name: string): Promise<Record<string, unknown>> =>
 		JSON.parse(await readFile(join(dir, name), 'utf8')) as Record<string, unknown>;
-	const [tokenizerJson, tokenizerConfig, config, labels] = await Promise.all([
+	const [tokenizerJson, tokenizerConfig, config, labels, threshold] = await Promise.all([
 		readJson('tokenizer.json'),
 		readJson('tokenizer_config.json'),
 		readJson('gliner_config.json') as Promise<unknown> as Promise<GlinerConfig>,
-		readLabels(join(dir, 'labels.json'))
+		readLabels(join(dir, 'labels.json')),
+		readThreshold(join(dir, 'tier1.json'))
 	]);
 	for (const key of ['max_width', 'max_len', 'ent_token', 'sep_token'] as const) {
 		if (config[key] === undefined) throw new Error(`gliner_config.json has no ${key}`);
@@ -97,6 +102,7 @@ export async function loadGliner(
 		maxWords: config.max_len,
 		maxTokens: MAX_TOKENS,
 		...(labels && { labels }),
+		...(threshold !== undefined && { threshold }),
 		tokenize: ids,
 		promptIds: (labels) => [...labels.flatMap((l) => [...entIds, ...l.ids]), ...sepIds],
 
@@ -143,15 +149,32 @@ export async function loadGliner(
 	};
 }
 
-/** `labels.json`, if there is one. */
-async function readLabels(path: string): Promise<Record<string, string> | undefined> {
-	let raw: string;
+/** The file's contents, or undefined if it doesn't exist. */
+async function readOptional(path: string): Promise<string | undefined> {
 	try {
-		raw = await readFile(path, 'utf8');
+		return await readFile(path, 'utf8');
 	} catch (err) {
 		if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
 		throw err;
 	}
+}
+
+/** The `threshold` in `tier1.json`, if there is one. */
+export async function readThreshold(path: string): Promise<number | undefined> {
+	const raw = await readOptional(path);
+	if (raw === undefined) return undefined;
+	const { threshold } = JSON.parse(raw) as { threshold?: unknown };
+	if (threshold === undefined) return undefined;
+	if (typeof threshold !== 'number' || !(threshold > 0 && threshold < 1)) {
+		throw new Error('tier1.json threshold must be a number between 0 and 1');
+	}
+	return threshold;
+}
+
+/** `labels.json`, if there is one. */
+async function readLabels(path: string): Promise<Record<string, string> | undefined> {
+	const raw = await readOptional(path);
+	if (raw === undefined) return undefined;
 	const labels = JSON.parse(raw) as unknown;
 	if (
 		!labels ||

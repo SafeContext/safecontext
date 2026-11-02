@@ -19,8 +19,11 @@ export interface Tier1Config {
 	modelDir: string;
 	/** ONNX file in that directory (`SC_TIER1_MODEL_FILE`, default `model.onnx`). */
 	modelFile: string;
-	/** Lowest model score that counts as a match (`SC_TIER1_THRESHOLD`, 0..1, default 0.5). */
-	threshold: number;
+	/**
+	 * Lowest model score that counts as a match (`SC_TIER1_THRESHOLD`, 0..1). Unset: the
+	 * model's `tier1.json` threshold, else 0.5.
+	 */
+	threshold: number | undefined;
 	/** onnxruntime intra-op threads (`SC_TIER1_THREADS`, default 0: all cores). */
 	threads: number;
 	/**
@@ -46,8 +49,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
 function readTier1Config(env: NodeJS.ProcessEnv): Tier1Config | undefined {
 	const modelDir = env.SC_TIER1_MODEL_DIR?.trim();
 	if (!modelDir) return undefined;
-	const threshold = env.SC_TIER1_THRESHOLD?.trim() ? Number(env.SC_TIER1_THRESHOLD) : 0.5;
-	if (!(threshold > 0 && threshold < 1)) throw new Error('SC_TIER1_THRESHOLD must be a number between 0 and 1');
+	const threshold = env.SC_TIER1_THRESHOLD?.trim() ? Number(env.SC_TIER1_THRESHOLD) : undefined;
+	if (threshold !== undefined && !(threshold > 0 && threshold < 1)) {
+		throw new Error('SC_TIER1_THRESHOLD must be a number between 0 and 1');
+	}
 	const labelTemplate = env.SC_TIER1_LABEL?.trim() || '{name}';
 	if (!/\{(name|description)\}/.test(labelTemplate)) {
 		throw new Error('SC_TIER1_LABEL must contain {name} or {description}');

@@ -10,7 +10,10 @@ import { decode, splitWords, windows } from './words.ts';
 export interface Tier1Options {
 	/** The span model, or a promise of it while it loads. A rejected promise makes tier 1 fail. */
 	model: TaggerModel | Promise<TaggerModel>;
-	/** Lowest model score that counts as a match, 0..1. Default 0.5 (gliner's default). */
+	/**
+	 * Lowest model score that counts as a match, 0..1. Default: the model's own threshold
+	 * (`tier1.json`), else 0.5 (gliner's default).
+	 */
 	threshold?: number;
 	/**
 	 * The label text the model sees for a data type, unless the model's `labels.json` has one.
@@ -51,7 +54,7 @@ interface Labels {
  * the model can take; it checks the abort signal between windows, and windows from concurrent
  * checks take turns on the model rather than all running at once.
  */
-export function createTier1({ model, threshold = 0.5, label = labelTemplate('{name}') }: Tier1Options): Tier1 {
+export function createTier1({ model, threshold, label = labelTemplate('{name}') }: Tier1Options): Tier1 {
 	const ready = Promise.resolve(model);
 	ready.catch(() => {}); // reported by the caller; each check then fails (fail mode applies)
 
@@ -59,16 +62,24 @@ export function createTier1({ model, threshold = 0.5, label = labelTemplate('{na
 	const labelsFor = (policy: Policy, m: TaggerModel): Labels => {
 		let labels = labelCache.get(policy);
 		if (!labels) {
-			const seen = new Set<string>();
+			// Names aren't unique, so two data types can share a label text. The model can't tell
+			// them apart, so a match is tagged as the most severe of them.
+			const byText = new Map<string, number>();
 			const encoded: Encoded[] = [];
-			const dataTypeIds: string[] = [];
+			const dataTypes: DataType[] = [];
 			for (const dt of policy.dataTypes) {
 				const text = (m.labels?.[dt.id] ?? label(dt)).trim();
-				if (dt.action === 'allow' || text === '' || seen.has(text)) continue;
-				seen.add(text);
-				encoded.push({ text, ids: m.tokenize(text) });
-				dataTypeIds.push(dt.id);
+				if (dt.action === 'allow' || text === '') continue;
+				const i = byText.get(text);
+				if (i === undefined) {
+					byText.set(text, dataTypes.length);
+					encoded.push({ text, ids: m.tokenize(text) });
+					dataTypes.push(dt);
+				} else if (severity(dt) > severity(dataTypes[i]!)) {
+					dataTypes[i] = dt;
+				}
 			}
+			const dataTypeIds = dataTypes.map((dt) => dt.id);
 			labels = { dataTypeIds, promptIds: encoded.length ? m.promptIds(encoded) : [] };
 			labelCache.set(policy, labels);
 		}
@@ -95,6 +106,7 @@ export function createTier1({ model, threshold = 0.5, label = labelTemplate('{na
 
 		async detect(texts, { policy, signal }) {
 			const m = await abortable(ready, signal);
+			const minScore = threshold ?? m.threshold ?? 0.5;
 			const { dataTypeIds, promptIds } = labelsFor(policy, m);
 			if (dataTypeIds.length === 0) return texts.map(() => []);
 			const maxTokens = m.maxTokens - 2 - promptIds.length; // [CLS] and [SEP]
@@ -119,7 +131,7 @@ export function createTier1({ model, threshold = 0.5, label = labelTemplate('{na
 					limits
 				)) {
 					const logits = await queued(signal, () => m.score(promptIds, dataTypeIds.length, encoded.slice(a, b)));
-					for (const s of decode(logits, words.slice(a, b), dataTypeIds.length, m.maxWidth, threshold)) {
+					for (const s of decode(logits, words.slice(a, b), dataTypeIds.length, m.maxWidth, minScore)) {
 						spans.push({
 							start: s.start,
 							end: s.end,
@@ -173,6 +185,14 @@ export function needsTier1({ policy, texts, spans, hook }: ClassifyState): boole
 		return !summarize(spans.flat(), policy).some((hit) => hit.action !== 'allow' && stopsPromptsAndToolCalls(hit));
 	}
 	return true;
+}
+
+const TIER_RANK = { green: 0, yellow: 1, red: 2 } as const;
+const ACTION_RANK = { allow: 0, generalize: 1, pseudonymize: 2, mask: 3, block: 4 } as const;
+
+/** Higher is more severe: data that stops prompts first, then tier, then action. */
+function severity(dt: DataType): number {
+	return (stopsPromptsAndToolCalls(dt) ? 100 : 0) + TIER_RANK[dt.tier] * 10 + ACTION_RANK[dt.action];
 }
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

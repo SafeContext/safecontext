@@ -1,4 +1,7 @@
 import { AGENT_API, defaultPolicy, type DataType } from '@safecontext/policy';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { readConfig } from '../../config.ts';
 import { memoryLogger } from '../../log.ts';
@@ -6,7 +9,7 @@ import { policyWith, promptInput, SECRET, testApp, toolInput, toolOutput } from 
 import { createClassifier } from '../classifier.ts';
 import { createTier0 } from '../tier0.ts';
 import type { ClassifyState } from '../types.ts';
-import type { Encoded, TaggerModel } from './gliner.ts';
+import { readThreshold, type Encoded, type TaggerModel } from './gliner.ts';
 import { createTier1, labelTemplate, needsTier1, tier1FromConfig } from './tier1.ts';
 
 const SEP = -1;
@@ -18,7 +21,13 @@ const SEP = -1;
  */
 function fakeModel(
 	entities: Record<string, string>,
-	opts: { maxWords?: number; maxTokens?: number; ms?: number; labels?: Record<string, string> } = {}
+	opts: {
+		maxWords?: number;
+		maxTokens?: number;
+		ms?: number;
+		labels?: Record<string, string>;
+		threshold?: number;
+	} = {}
 ) {
 	const calls: { labels: string[]; words: string[] }[] = [];
 	let inFlight = 0;
@@ -28,6 +37,7 @@ function fakeModel(
 		maxWords: opts.maxWords ?? 384,
 		maxTokens: opts.maxTokens ?? 512,
 		...(opts.labels && { labels: opts.labels }),
+		...(opts.threshold !== undefined && { threshold: opts.threshold }),
 		tokenize: (text) => [...text].map((c) => c.charCodeAt(0)),
 		promptIds: (labels: readonly Encoded[]) => labels.flatMap((l) => [SEP, ...l.ids]),
 		async score(promptIds, labelCount, words) {
@@ -108,6 +118,43 @@ describe('tier 1 labels', () => {
 	it('respects the threshold', async () => {
 		const { model } = fakeModel({ Northwind: 'Customer names' }); // scores ≈ 0.993
 		expect((await createTier1({ model, threshold: 0.999 }).detect(['Northwind'], ctx()))[0]).toEqual([]);
+	});
+
+	it('uses the model’s own threshold (tier1.json) unless one is set', async () => {
+		const { model } = fakeModel({ Northwind: 'Customer names' }, { threshold: 0.999 });
+		expect((await createTier1({ model }).detect(['Northwind'], ctx()))[0]).toEqual([]);
+		expect((await createTier1({ model, threshold: 0.5 }).detect(['Northwind'], ctx()))[0]).toHaveLength(1);
+	});
+
+	it('tags a match as the most severe of the data types that share its label text', async () => {
+		const shared = (id: string, tier: 'yellow' | 'red', action: 'pseudonymize' | 'block'): DataType => ({
+			id,
+			name: 'Customer data',
+			description: id,
+			examples: [],
+			tier,
+			action
+		});
+		const both = [
+			shared('customer-data-yellow', 'yellow', 'pseudonymize'),
+			shared('customer-data-red', 'red', 'block')
+		];
+		for (const dataTypes of [both, [...both].reverse()]) {
+			const policy = policyWith({ dataTypes: [...defaultPolicy().dataTypes, ...dataTypes] });
+			const { model, calls } = fakeModel({ Contoso: 'Customer data' });
+			const [spans] = await createTier1({ model }).detect(['Contoso'], ctx(policy));
+			expect(calls[0]!.labels.filter((l) => l === 'Customer data')).toHaveLength(1);
+			expect(spans!.map((s) => s.dataTypeId)).toEqual(['customer-data-red']);
+		}
+	});
+
+	it('does the same when labels.json maps two data types to one label', async () => {
+		const { model } = fakeModel(
+			{ Northwind: 'organisation' },
+			{ labels: { 'customer-names': 'organisation', 'unreleased-roadmap': 'organisation' } }
+		);
+		const [spans] = await createTier1({ model }).detect(['Northwind'], ctx());
+		expect(spans!.map((s) => s.dataTypeId)).toEqual(['unreleased-roadmap']);
 	});
 
 	it('errors when the label prompt leaves no room for text', async () => {
@@ -264,7 +311,7 @@ describe('tier 1 config', () => {
 		expect(readConfig({ SC_TIER1_MODEL_DIR: '/models/x' }).tier1).toEqual({
 			modelDir: '/models/x',
 			modelFile: 'model.onnx',
-			threshold: 0.5,
+			threshold: undefined,
 			threads: 0,
 			labelTemplate: '{name}'
 		});
@@ -300,5 +347,24 @@ describe('tier 1 config', () => {
 		expect(result).toMatchObject({ ok: false, failure: 'error' });
 		expect(logger.records.map((r) => r.msg)).toEqual(['tier1_failed']);
 		await tier1.close();
+	});
+});
+
+describe('tier1.json', () => {
+	const write = (content: string) => {
+		const dir = mkdtempSync(join(tmpdir(), 'tier1-'));
+		writeFileSync(join(dir, 'tier1.json'), content);
+		return join(dir, 'tier1.json');
+	};
+
+	it('gives the model’s threshold, if any', async () => {
+		expect(await readThreshold(write(JSON.stringify({ threshold: 0.6, prompts: 'names', sha256: 'x' })))).toBe(0.6);
+		expect(await readThreshold(write('{}'))).toBeUndefined();
+		expect(await readThreshold(join(tmpdir(), 'no-such-dir', 'tier1.json'))).toBeUndefined();
+	});
+
+	it('rejects a bad threshold', async () => {
+		await expect(readThreshold(write('{"threshold": 2}'))).rejects.toThrow(/threshold/);
+		await expect(readThreshold(write('{"threshold": "0.6"}'))).rejects.toThrow(/threshold/);
 	});
 });
