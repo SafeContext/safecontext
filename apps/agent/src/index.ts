@@ -1,9 +1,22 @@
-import { serve } from '@hono/node-server';
-import { AGENT_DEFAULT_PORT, AGENT_HOST } from '@safecontext/policy';
-import { app } from './app.ts';
+import { createApp } from './app.ts';
+import { createClassifier } from './classifier/classifier.ts';
+import { createTier0 } from './classifier/tier0.ts';
+import { readConfig } from './config.ts';
+import { jsonLogger } from './log.ts';
+import { filePolicySource } from './policy-source.ts';
+import { startServer } from './server.ts';
 
-const port = Number(process.env.SC_AGENT_PORT ?? AGENT_DEFAULT_PORT);
+const config = readConfig();
+const logger = jsonLogger();
+const policy = filePolicySource(config.policyFile, logger);
+// Tiers 1 (#15) and 2 (#16) are added to this list.
+const classifier = createClassifier({ tiers: [createTier0()], budgetMs: config.checkBudgetMs });
 
-serve({ fetch: app.fetch, hostname: AGENT_HOST, port }, (info) => {
-	console.log(`safecontext agent listening on http://${AGENT_HOST}:${info.port}`);
-});
+const server = await startServer(createApp({ policy, classifier, logger }), config.port);
+logger.log('info', 'listening', { port: server.port });
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+	process.once(signal, () => {
+		void Promise.all([server.close(), policy.close?.()]).finally(() => process.exit(0));
+	});
+}

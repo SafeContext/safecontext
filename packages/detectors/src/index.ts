@@ -24,11 +24,13 @@ export {
 	phoneDetector
 } from './personal-data.ts';
 export { mergeSpans, ruleSpan } from './spans.ts';
+export { createTermListDetector } from './term-list.ts';
 
 /**
  * The built-in rule detectors, in precedence order: when two overlap with different data types
- * and equal confidence, the earlier one wins. Term lists (issue #8) add their own
- * detector: `detectAll(text, [...defaultDetectors, termListDetector])`.
+ * and equal confidence, the earlier one wins. Term lists come from the policy, so build their
+ * detector once per policy and add it:
+ * `detectAll(text, [...defaultDetectors, createTermListDetector(policy.lists)])`.
  */
 export const defaultDetectors: readonly Detector[] = [
 	secretsDetector,
