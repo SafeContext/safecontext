@@ -5,5 +5,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["scripts"]
+  "include": ["scripts", "e2e"]
 }
