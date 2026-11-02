@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "about": "Models and datasets hosted on the private Hugging Face org, pinned to exact commits (issue #70). Fill and update with `uv run python -m safecontext_ml.artifacts push NAME --yes`; download with `pnpm models:pull`. See ml/README.md, Models and data.",
+  "artifacts": [
+    {
+      "name": "tier1-onnx",
+      "description": "Tier 1 GLiNER ONNX export as the agent loads it (SC_TIER1_MODEL_DIR), plus provenance.json",
+      "repo": "tier1-gliner",
+      "repo_type": "model",
+      "path_in_repo": "",
+      "local_dir": "models/tier1-onnx",
+      "include": [
+        "*.onnx",
+        "*.json"
+      ],
+      "repo_id": "SafeContext/tier1-gliner",
+      "revision": "94ee033651490e377d55a759206c97ee4ed43fa4",
+      "files": [
+        {
+          "path": "gliner_config.json",
+          "size": 2373,
+          "sha256": "99313f83620973ffa66421978494cc72a3f50068360775e1ae7dfcebd95c8bc9"
+        },
+        {
+          "path": "labels.json",
+          "size": 281,
+          "sha256": "8090e65990afc0e47011fae75808e9cc470545da57604ecf985327e29ce4ce40"
+        },
+        {
+          "path": "model.onnx",
+          "size": 611284699,
+          "sha256": "5e10717985e95d93c555df5c2f9dacf8a9a2d9b6845e5b1bc3c1f265725fa64a"
+        },
+        {
+          "path": "provenance.json",
+          "size": 944,
+          "sha256": "f02d8e80e48a6cd92aa7010452dac964a77ee24b3fb24ce92f2efe2a89677cbe"
+        },
+        {
+          "path": "tier1.json",
+          "size": 471,
+          "sha256": "69bd66255927679fadfa7c7b51dd007e54007d6247269e7a55b368b9d7145284"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 8340684,
+          "sha256": "1731c431e5e851a4a73487b5bbfbef265b29ab64de190c402b4e6df9ce2cb0ab"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 642,
+          "sha256": "a6a8588818c94ce2fab2aabfbad8e70dee726d7d277818e83bc47a11470f3643"
+        }
+      ]
+    },
+    {
+      "name": "tier1-pytorch",
+      "description": "Final fine-tuned GLiNER small (PyTorch), without the intermediate checkpoint-* dirs",
+      "repo": "tier1-gliner",
+      "repo_type": "model",
+      "path_in_repo": "pytorch",
+      "local_dir": "models/tier1-small-ft",
+      "include": [
+        "*.bin",
+        "*.safetensors",
+        "*.json"
+      ],
+      "repo_id": "SafeContext/tier1-gliner",
+      "revision": "fde1507802cf7278d6fe596b548bcca2acc1218b",
+      "files": [
+        {
+          "path": "finetune_args.json",
+          "size": 288,
+          "sha256": "8be7138f21ce8ac25bd6aaf74ead8aa6f350c95350a84b8fb38d168341348d5f"
+        },
+        {
+          "path": "gliner_config.json",
+          "size": 2395,
+          "sha256": "24529bb53fe418337d41cfd3ec5ca34a1d7143f47a7f395996c44008176fa2b1"
+        },
+        {
+          "path": "pytorch_model.bin",
+          "size": 610640099,
+          "sha256": "097de232ac3fb2caaf1af01ca35b6b42323cb0f269a60768307e461a797bb5f9"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 8340684,
+          "sha256": "1731c431e5e851a4a73487b5bbfbef265b29ab64de190c402b4e6df9ce2cb0ab"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 538,
+          "sha256": "0dbe41323167ba5f2e1e876ccd05068318dd2378b922bdfd924a389dba3bcc7a"
+        }
+      ]
+    },
+    {
+      "name": "data-splits",
+      "description": "Built dataset splits: train/dev/test JSONL (test is frozen) and manifest.json",
+      "repo": "safecontext-data",
+      "repo_type": "dataset",
+      "path_in_repo": "splits",
+      "local_dir": "data/splits",
+      "include": [
+        "*.jsonl",
+        "manifest.json"
+      ],
+      "repo_id": "SafeContext/safecontext-data",
+      "revision": "abff9f7176ec44ce80d522ecde0d87fdc1d61c7f",
+      "files": [
+        {
+          "path": "dev.jsonl",
+          "size": 50144530,
+          "sha256": "d04b5205a970c4d0ad6b7cce1b8f5512c09b7ad3ebb023f654463fee5933403e"
+        },
+        {
+          "path": "manifest.json",
+          "size": 3836,
+          "sha256": "7ac3beb94bcdc7ba277e239f67127665e3684eb587d2d91534705538d20444e9"
+        },
+        {
+          "path": "test.jsonl",
+          "size": 49998784,
+          "sha256": "1aec53bb6700782dd05b3e934af4e5f3a98a81ca15f9440c2163178ae1628f9c"
+        },
+        {
+          "path": "train.jsonl",
+          "size": 401983970,
+          "sha256": "f8e8ffb9a45e9ca357194f8cc889150e9beaf1eb45ff336b79969d402a714a14"
+        }
+      ]
+    }
+  ]
+}
