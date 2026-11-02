@@ -5,6 +5,7 @@ import {
 	eventResult,
 	FeedEvent,
 	mergeFeed,
+	parseFeedMessage,
 	timeAgo,
 	toolLabel
 } from './feed.ts';
@@ -45,6 +46,19 @@ describe('eventResult', () => {
 describe('FeedEvent', () => {
 	it('rejects any extra field, so no text can ride along', () => {
 		expect(() => FeedEvent.parse({ ...feedEvent(1), prompt: 'secret roadmap' })).toThrow();
+	});
+});
+
+describe('parseFeedMessage', () => {
+	it('reads a valid message', () => {
+		expect(parseFeedMessage(JSON.stringify(feedEvent(1)))).toEqual(feedEvent(1));
+	});
+
+	it('ignores malformed JSON and invalid events instead of throwing', () => {
+		for (const data of ['', '{', 'not json', 'null', '{"id":"x"}']) {
+			expect(parseFeedMessage(data)).toBeNull();
+		}
+		expect(parseFeedMessage(JSON.stringify({ ...feedEvent(1), prompt: 'secret' }))).toBeNull();
 	});
 });
 

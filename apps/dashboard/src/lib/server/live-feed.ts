@@ -73,6 +73,13 @@ export async function liveFeedResponse(
 		});
 	}
 
+	// The browser may have gone while we were subscribing. `abort` has then already fired and won't
+	// fire again, so clean up now instead of keeping the subscriber and keepalive alive.
+	if (signal?.aborted) {
+		unsubscribe();
+		return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+	}
+
 	const keepalive = setInterval(() => send(': keepalive\n\n'), KEEPALIVE_MS);
 	stop = () => {
 		clearInterval(keepalive);

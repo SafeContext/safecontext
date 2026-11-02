@@ -38,6 +38,16 @@ export const FeedEvent = z.strictObject({
 });
 export type FeedEvent = z.infer<typeof FeedEvent>;
 
+/** Reads one live-feed message. Anything that isn't valid JSON or a valid `FeedEvent` gives null. */
+export function parseFeedMessage(data: string): FeedEvent | null {
+	try {
+		const parsed = FeedEvent.safeParse(JSON.parse(data));
+		return parsed.success ? parsed.data : null;
+	} catch {
+		return null;
+	}
+}
+
 export type OverviewStats = { checked: number } & Record<EventResult, number>;
 
 export const emptyStats = (): OverviewStats => ({ checked: 0, safe: 0, vague: 0, blocked: 0 });

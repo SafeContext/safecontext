@@ -66,6 +66,9 @@ export async function subscribe(subscriber: Subscriber): Promise<() => void> {
 	};
 }
 
+/** How many subscribers are attached (for tests). */
+export const subscriberCount = (): number => subscribers.size;
+
 /** Closes the shared connection (for tests). Subscribers get `onClose`. */
 export async function closeListener(): Promise<void> {
 	const client = await connection?.catch(() => null);

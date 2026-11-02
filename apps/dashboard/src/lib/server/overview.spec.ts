@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FeedEvent } from '#lib/feed.ts';
 import type { AuthedDevice } from '#lib/server/agent-api/auth.ts';
 import { storeEvents } from '#lib/server/agent-api/events.ts';
-import { closeListener } from '#lib/server/event-listener.ts';
+import { closeListener, subscriberCount } from '#lib/server/event-listener.ts';
 import { liveFeedResponse } from '#lib/server/live-feed.ts';
 import { recentEvents, statsSince } from '#lib/server/overview.ts';
 import { prisma } from '#lib/server/prisma.ts';
@@ -140,5 +140,25 @@ describe('live feed', () => {
 			abort.abort();
 			await reader.cancel().catch(() => {});
 		}
+	});
+
+	it('stops listening when the browser disconnects', async () => {
+		const before = subscriberCount();
+		const abort = new AbortController();
+		const res = await liveFeedResponse(mine.organizationId, abort.signal);
+		expect(subscriberCount()).toBe(before + 1);
+		abort.abort();
+		expect(subscriberCount()).toBe(before);
+		await res.body?.cancel();
+	});
+
+	it('does not keep listening if the browser left while it was subscribing', async () => {
+		const before = subscriberCount();
+		const abort = new AbortController();
+		const pending = liveFeedResponse(mine.organizationId, abort.signal);
+		abort.abort(); // before `subscribe` has resolved
+		const res = await pending;
+		expect(res.status).toBe(204);
+		expect(subscriberCount()).toBe(before);
 	});
 });

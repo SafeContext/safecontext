@@ -7,7 +7,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FeedList from '#lib/components/FeedList.svelte';
 	import StatCard from '#lib/components/StatCard.svelte';
-	import { addToStats, FeedEvent, mergeFeed } from '#lib/feed.ts';
+	import { addToStats, mergeFeed, parseFeedMessage, type FeedEvent } from '#lib/feed.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -47,9 +47,9 @@
 				void resync();
 			};
 			source.onmessage = (message) => {
-				const parsed = FeedEvent.safeParse(JSON.parse(message.data));
-				if (!parsed.success) return;
-				live = [...live.filter((e) => e.id !== parsed.data.id), parsed.data];
+				const event = parseFeedMessage(message.data);
+				if (!event) return;
+				live = [...live.filter((e) => e.id !== event.id), event];
 				if (live.length > LIVE_MAX) void resync();
 			};
 			source.onerror = () => {
