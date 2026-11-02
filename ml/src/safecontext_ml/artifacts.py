@@ -436,13 +436,26 @@ def build_provenance(
         raise ArtifactError(
             "can't write provenance.json, missing:\n  " + "\n  ".join(missing)
         )
-    tier1 = json.loads((export_dir / "tier1.json").read_text())
-    args = json.loads((finetune_dir / "finetune_args.json").read_text())
-    splits = json.loads(splits_manifest.read_text())["splits"]
+    try:
+        tier1 = json.loads((export_dir / "tier1.json").read_text())
+        args = json.loads((finetune_dir / "finetune_args.json").read_text())
+        splits = json.loads(splits_manifest.read_text())["splits"]
+        shas = {s: splits[s]["sha256"] for s in ("train", "dev", "test")}
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        raise ArtifactError(
+            f"can't write provenance.json: a source file is malformed or too old ({e!r}). "
+            "Check tier1.json, finetune_args.json and the splits manifest."
+        ) from e
     scores = headline_scores(scores_report)
-    test_sha = splits["test"]["sha256"]
+    test_sha = shas["test"]
     prefix = scores.pop("test_sha256_prefix", None)
-    if prefix and not test_sha.startswith(prefix):
+    if not prefix:
+        raise ArtifactError(
+            f"{scores_report} doesn't say which test split it was scored on (no `sha256 ...` "
+            "line), so its scores can't be tied to this model. Pass a report made by the "
+            "evaluation harness."
+        )
+    if not test_sha.startswith(prefix):
         raise ArtifactError(
             f"{scores_report} was scored on test sha256 {prefix}..., but the splits manifest "
             f"has {test_sha}. Re-run the evaluation or pass the matching --scores report."
@@ -461,7 +474,7 @@ def build_provenance(
             for k, v in args.items()
             if k not in ("base", "out", "resume", "device")
         },
-        "data": {f"{s}_sha256": splits[s]["sha256"] for s in ("train", "dev", "test")},
+        "data": {f"{s}_sha256": sha for s, sha in shas.items()},
         "test_scores": scores,
     }
 

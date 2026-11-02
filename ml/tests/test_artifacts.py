@@ -134,10 +134,13 @@ def remote_for(path_in_repo="", files=FILES):
 # --- manifest --------------------------------------------------------------------------------
 
 
-def test_committed_lock_loads_unpinned():
+def test_committed_lock_is_fully_pinned():
     arts = A.load_lock()
     assert list(arts) == ["tier1-onnx", "tier1-pytorch", "data-splits"]
-    assert all(not a.pinned and a.files == [] for a in arts.values())
+    for a in arts.values():
+        assert a.pinned and a.repo_id.startswith("SafeContext/")
+        assert len(a.revision) == 40 and a.files
+        assert all(len(f.sha256) == 64 for f in a.files)
     assert arts["data-splits"].repo_type == "dataset"
     assert arts["tier1-onnx"].local_dir == "models/tier1-onnx"
 
@@ -477,6 +480,25 @@ def test_build_provenance(tmp_path):
 def test_build_provenance_rejects_scores_from_another_test_split(tmp_path):
     export, ft, splits, report, cache = provenance_inputs(tmp_path, prefix="deadbeef")
     with pytest.raises(A.ArtifactError, match="test sha256 deadbeef"):
+        A.build_provenance(export, ft, splits, report, cache)
+
+
+def test_build_provenance_rejects_a_report_without_a_test_split(tmp_path):
+    export, ft, splits, report, cache = provenance_inputs(tmp_path)
+    report.write_text(
+        "\n".join(l for l in report.read_text().splitlines() if "sha256" not in l)
+    )
+    with pytest.raises(A.ArtifactError, match="doesn't say which test split"):
+        A.build_provenance(export, ft, splits, report, cache)
+
+
+def test_build_provenance_malformed_manifest_is_a_clear_error(tmp_path):
+    export, ft, splits, report, cache = provenance_inputs(tmp_path)
+    splits.write_text(json.dumps({"splits": {"train": {}, "dev": {}}}))
+    with pytest.raises(A.ArtifactError, match="malformed or too old"):
+        A.build_provenance(export, ft, splits, report, cache)
+    splits.write_text("{not json")
+    with pytest.raises(A.ArtifactError, match="malformed or too old"):
         A.build_provenance(export, ft, splits, report, cache)
 
 
