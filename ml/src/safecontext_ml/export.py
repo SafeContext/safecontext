@@ -34,7 +34,7 @@ from pathlib import Path
 
 from .dataset.paths import ML_ROOT
 from .tagger import GlinerTagger, TaggerConfig, prompt_set
-from .tagger.model import MAX_TOKENS, SAFETY
+from .tagger.model import MAX_TOKENS, prompt_token_count, token_budget
 from .tagger.prompts import one_per_type
 
 #: The chosen tier 1 model (see results/tier1-gliner.md). A local fine-tuned checkpoint.
@@ -99,23 +99,22 @@ def main(argv: list[str] | None = None) -> None:
             "  uv run python -m safecontext_ml.tagger.finetune --out models/tier1-small-ft\n"
             "or export an off-the-shelf model with --model urchade/gliner_small-v2.1 --prompts entity2"
         )
+    # Check the prompt set before any heavy work: a multi-prompt set such as `fine` can't be
+    # written as the agent's labels.json, and must not leave a half-written export behind.
+    prompt_map = prompt_set(args.prompts)
+    labels = one_per_type(prompt_map)
+
     from gliner import GLiNER
 
     model = GLiNER.from_pretrained(args.model)
     paths = model.export_to_onnx(args.out)
     print(paths, file=sys.stderr)
 
-    prompt_map = prompt_set(args.prompts)
-    labels = one_per_type(
-        prompt_map
-    )  # fails early for multi-prompt sets such as `fine`
     tok = model.data_processor.transformer_tokenizer
     cfg = model.config
-    prompt_tokens = sum(
-        len(tok(x, add_special_tokens=False)["input_ids"])
-        for lab in prompt_map
-        for x in (cfg.ent_token, lab)
-    ) + len(tok(cfg.sep_token, add_special_tokens=False)["input_ids"])
+    prompt_tokens = prompt_token_count(
+        tok, list(prompt_map), cfg.ent_token, cfg.sep_token
+    )
     meta = {
         "schema_version": 1,
         "source_model": args.model,
@@ -126,7 +125,7 @@ def main(argv: list[str] | None = None) -> None:
             "word_regex": r"\w+(?:[-_]\w+)*|\S",
             "max_tokens": MAX_TOKENS,
             "prompt_tokens": prompt_tokens,
-            "token_budget": MAX_TOKENS - 2 - prompt_tokens - SAFETY,
+            "token_budget": token_budget(prompt_tokens),
             "max_words": int(cfg.max_len),
             "overlap_words": int(cfg.max_width),
         },

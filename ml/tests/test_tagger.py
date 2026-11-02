@@ -193,3 +193,39 @@ def test_sweep_filter_file(tmp_path):
     filter_file(src, tmp_path / "q.jsonl", 0.5)
     row = json.loads((tmp_path / "q.jsonl").read_text())
     assert [s["start"] for s in row["spans"]] == [2]
+
+
+def test_budget_rule_is_shared():
+    from safecontext_ml.tagger.model import (
+        MAX_TOKENS,
+        SAFETY,
+        prompt_token_count,
+        token_budget,
+    )
+
+    # FakeTokenizer: one token per 4 characters
+    assert (
+        prompt_token_count(FakeTokenizer(), ["ab", "abcdefgh"], "<<ENT>>", "<<SEP>>")
+        == 2 + 1 + 2 + 2 + 2
+    )
+    assert token_budget(9) == MAX_TOKENS - 2 - 9 - SAFETY
+
+
+def test_export_rejects_multi_prompt_set_before_loading(monkeypatch, tmp_path):
+    """`--prompts fine` must fail before the model is loaded or anything is written."""
+    import sys
+    import types
+
+    from safecontext_ml import export
+
+    fake = types.ModuleType("gliner")
+
+    def boom(*a, **k):
+        raise AssertionError("model loaded before the prompt set was checked")
+
+    fake.GLiNER = types.SimpleNamespace(from_pretrained=boom)
+    monkeypatch.setitem(sys.modules, "gliner", fake)
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match="several prompts"):
+        export.main(["--model", "some/model", "--prompts", "fine", "--out", str(out)])
+    assert not out.exists()

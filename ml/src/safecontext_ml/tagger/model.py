@@ -17,6 +17,19 @@ from .prompts import prompt_set
 MAX_TOKENS = 512
 #: Head-room for special tokens and tokenizer quirks.
 SAFETY = 8
+#: Below this many text tokens per window, the label prompt is too long to be useful.
+MIN_BUDGET = 64
+
+
+def prompt_token_count(tokenizer: Any, prompts: list[str], ent: str, sep: str) -> int:
+    """Subword tokens the label prompt takes: `<<ENT>> label ... <<SEP>>`."""
+    pieces = [t for p in prompts for t in (ent, p)] + [sep]
+    return sum(len(tokenizer(x, add_special_tokens=False)["input_ids"]) for x in pieces)
+
+
+def token_budget(prompt_tokens: int) -> int:
+    """Text tokens per window: the single rule shared by inference, fine-tuning and export."""
+    return MAX_TOKENS - 2 - prompt_tokens - SAFETY  # 2: [CLS] and [SEP]
 
 
 @dataclass
@@ -58,15 +71,12 @@ class GlinerTagger:
             self.model.eval()
         self.tokenizer = self.model.data_processor.transformer_tokenizer
         self.max_words = int(getattr(self.model.config, "max_len", 384) or 384)
-        prompt_tokens = 0
-        ent = self.model.config.ent_token
-        sep = self.model.config.sep_token
-        for piece in [t for p in self.prompts for t in (ent, p)] + [sep]:
-            prompt_tokens += len(
-                self.tokenizer(piece, add_special_tokens=False)["input_ids"]
-            )
-        self.budget = MAX_TOKENS - 2 - prompt_tokens - SAFETY
-        if self.budget < 64:
+        cfg = self.model.config
+        prompt_tokens = prompt_token_count(
+            self.tokenizer, self.prompts, cfg.ent_token, cfg.sep_token
+        )
+        self.budget = token_budget(prompt_tokens)
+        if self.budget < MIN_BUDGET:
             raise ValueError(f"label prompt is too long ({prompt_tokens} tokens)")
         return self
 

@@ -35,6 +35,7 @@ from ..dataset.build import load_split
 from ..dataset.paths import ML_ROOT
 from ..dataset.schema import Record
 from . import chunking
+from .model import prompt_token_count, token_budget
 from .prompts import NAMES
 
 COMPANY_IGNORE = {"company", "company_name"}
@@ -148,12 +149,9 @@ def main(argv: list[str] | None = None) -> None:
     model = GLiNER.from_pretrained(args.base)
     tok = model.data_processor.transformer_tokenizer
     cfg = model.config
-    prompt_tokens = sum(
-        len(tok(x, add_special_tokens=False)["input_ids"])
-        for lab in NAMES.values()
-        for x in (cfg.ent_token, lab)
-    ) + len(tok(cfg.sep_token, add_special_tokens=False)["input_ids"])
-    budget = 512 - 2 - prompt_tokens - 8
+    budget = token_budget(
+        prompt_token_count(tok, list(NAMES.values()), cfg.ent_token, cfg.sep_token)
+    )
     max_width = int(cfg.max_width)
 
     train = build(
