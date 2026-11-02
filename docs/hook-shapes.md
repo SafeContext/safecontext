@@ -9,6 +9,11 @@ taken from the docs. Fixtures with the real (scrubbed) payloads are in
 - **Test data:** made-up "Macrohard" text in a temp folder. WebFetch fetched `https://example.com`
   and WebSearch ran one real search, so those two fixtures contain public web text.
 
+> **Status (2 Nov 2026):** the agent rewrites tool output with these shapes in
+> `apps/agent/src/tool-text.ts` (issue #10, PR #52). Since PR #62 (issue #41) the plugin sends
+> **every** tool through the hooks (matcher `*`), and the agent also knows the `Agent` (subagent)
+> result shape, below. Tools with no known shape get every string in the result checked.
+
 ## Verdict per tool
 
 "Applied" means Claude saw the replacement text, checked in the `tool_result` that the run's
@@ -22,6 +27,7 @@ taken from the docs. Fixtures with the real (scrubbed) payloads are in
 | WebFetch | `result` | **Applied** with the object shape. Plain string **ignored**. |
 | WebSearch | the string items in `results`, plus each `results[].content[].title` | **Applied** with the object shape. Plain string **ignored**. |
 | MCP (`mcp__<server>__<tool>`) | `[].text` (array of content blocks) | **Applied**, both with the array shape and with a plain string (no shape validation for MCP). |
+| Agent (subagent report, added in PR #62) | `content[].text` (blocks of `type: "text"`) | **Applied** with the object shape, in the end-to-end test for a foreground subagent. A background launch (`status: "async_launched"`) has no report; see issue #61. |
 
 Rule of thumb: copy the original `tool_response`, change only the text fields, and send the
 whole object back. A value of the wrong shape is dropped without any error, and the raw text
@@ -86,6 +92,12 @@ Every `PostToolUse` input also has `session_id`, `transcript_path`, `cwd`, `scra
 - `updatedToolOutput` is not validated for MCP, so any value is accepted. Keep the array shape
   anyway so Claude sees the same structure it normally would.
 
+### Agent (added in PR #62, Claude Code 2.1.302)
+
+- `tool_response` (foreground run): `{ "status": "completed", "agentId", "content": [{ "type": "text", "text" }], "resolvedModel", "totalTokens", "totalDurationMs", "totalToolUseCount", "usage", ... }`.
+- Claude sees the `content` text. Only those blocks are replaced, so `status` and the other
+  fields keep the values Claude Code expects. Replacing every string would break the shape.
+
 ## Hook round-trip latency (`http` hook, localhost)
 
 Measured from Claude Code's debug log, between "HTTP hook POST" and "response", for 24 hook
@@ -107,7 +119,8 @@ is on top. The transport is no obstacle to the 300 ms target for tiers 0 and 1.
    `PostToolUse`. Claude Code fires `PostToolUseFailure` instead, which can't rewrite the error text
    (per the docs). Tracked in issue [#44](https://github.com/SafeContext/safecontext/issues/44).
 3. **`ToolSearch` is a tool too.** In one run Claude called `ToolSearch` to load deferred tools, and
-   both hooks fired for it. The matcher should not assume only the six tools.
+   both hooks fired for it. The matcher should not assume only the six tools. (Done: the matcher
+   is `*` since PR #62.)
 4. **Line numbers on Read** are added by Claude Code after our replacement (see Read above).
 5. **Extra fields** such as `transcript_path`, `scratchpad_dir`, `prompt_id` and `effort` exist in
    every input. They contain local paths, so the agent must never log or send them to the dashboard.
@@ -121,7 +134,8 @@ was needed. The one gap is that there is no type for `PostToolUseFailure` (issue
 ## Not tested (to keep token use low)
 
 - Grep modes other than `content`; Read of images, PDFs and notebooks; very large outputs.
-- Subagent tool calls and `@file` mentions (issues #4 and #38).
+- Subagent tool calls and `@file` mentions (issues #4 and #38). Subagents were tested later, in
+  PR #62.
 - Edit, Write and the other built-in tools.
 - Whether the session transcript on disk keeps the original text (the docs say telemetry does).
 

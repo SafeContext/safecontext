@@ -7,20 +7,25 @@ Context hooks (SPEC.md §2 and §6.2)?
 - **Model for the runs:** `haiku`, except where noted
 - **Docs checked:** https://code.claude.com/docs/en/hooks
 
+> **Status (2 Nov 2026):** the findings below are from the 18 Oct spike. Since then the plugin's
+> tool hooks match **every** tool (`*`, issue #41, PR #62), and subagent reports are cleaned.
+> The "Now" column shows the current state; the sections below keep the original findings.
+
 ## Summary
 
-| Case | Result | Follow-up |
-| --- | --- | --- |
-| `@file` mentions | **Not covered** (by default). Possible fix tested | #38 |
-| CLAUDE.md, rules and imported memory files | **Not covered** (observe-only hook exists) | #39 |
-| Images and PDFs read by Claude | **Hooks fire, but nothing to check.** Partly covered | #40 |
-| Subagent tool calls | **Covered.** The result passed back to Claude is not | #41 |
-| Pasted content | **Covered** (tested in `-p` mode only; interactive paste not tested) | none |
-| Slash commands and skills | **Not covered** | #42 |
-| Other tools outside our matcher | **Not covered** | #41 |
+| Case | Spike result (18 Oct) | Now | Follow-up |
+| --- | --- | --- | --- |
+| `@file` mentions | **Not covered** (by default). Possible fix tested | Unchanged | #38 |
+| CLAUDE.md, rules and imported memory files | **Not covered** (observe-only hook exists) | Unchanged | #39 |
+| Images and PDFs read by Claude | **Hooks fire, but nothing to check.** Partly covered | Unchanged. The result isn't Read's text shape, so the agent checks every string in it, base64 included | #40 |
+| Subagent tool calls | **Covered.** The result passed back to Claude is not | **Covered**, and the foreground report (the `Agent` tool result) is cleaned (PR #62). A background report arrives through `UserPromptSubmit`, so it can be blocked but not cleaned | #61 |
+| Pasted content | **Covered** (tested in `-p` mode only; interactive paste not tested) | Unchanged | none |
+| Slash commands and skills | **Not covered** | Unchanged. The `Skill` tool is now in the matcher, but its result holds no text | #42 |
+| Other tools outside our matcher | **Not covered** | **Covered** (matcher `*`, PR #62). Tools with no known shape get every string checked. `PowerShell`, `Workflow`, `Monitor`, `LSP` are untested | none |
+| Failed tool calls (found in #3) | – | **Not covered.** `PostToolUseFailure` can't replace the error text | #44 |
 
 "Covered" means the hook fired and its input contained the data. It does not mean cleaning
-works: that depends on the output shapes in issue #3.
+works: that depends on the output shapes in issue #3 (`docs/hook-shapes.md`).
 
 ## How it was tested
 
@@ -35,8 +40,8 @@ works: that depends on the output shapes in issue #3.
   Claude actually received the data, the prompt asked it to report the markers it could see. A
   marker in Claude's reply but in no hook payload means the data got past the hooks.
 - The logger also denied any `Read` of a file named `deny-*`, to prove hooks can block inside subagents.
-- The tool hooks were set with no matcher, so every tool call was logged. "Our matcher" below means the one in `plugin/hooks/hooks.json`:
-  `Read|Bash|Grep|WebFetch|WebSearch|mcp__.*`.
+- The tool hooks were set with no matcher, so every tool call was logged. "Our matcher" below means the one in `plugin/hooks/hooks.json`
+  at the time: `Read|Bash|Grep|WebFetch|WebSearch|mcp__.*`. Since PR #62 it is `*`.
 
 Side effect: Claude Code loads the user-level `~/.claude/CLAUDE.md` of the Mac running the test into
 every run (it showed up as one `InstructionsLoaded` event with `memory_type: "User"`). The logger
@@ -101,6 +106,13 @@ Prompt asked an `Explore` subagent to read two fake files, one named `deny-me.tx
 
 See #41.
 
+**Status (PR #62):** fixed for the cases tested. The tool hooks match `*`, so `Agent` is checked and
+its report text (`content` blocks) is cleaned. The end-to-end test proves a Read inside a subagent
+is cleaned, and a foreground subagent's own report is cleaned before the main Claude sees it.
+Subagents run in the background by default; their report then comes back as a completion notice
+through `UserPromptSubmit`, which can only block. That gap, and `SubagentHandback` in auto mode,
+are #61.
+
 ### Pasted content: covered (limited test)
 
 `-p` mode has no real paste, so a multi-line prompt with a marker on line 2 was used instead.
@@ -136,11 +148,18 @@ One run with `Glob`, `Edit`, `Write`:
 
 See #41.
 
+**Status (PR #62):** all tools now go through the hooks (matcher `*`). `Glob` needed no special
+rule. `Edit` and `Write` input is now checked too, so writing red data to a file is refused, as it
+already was for `echo … > file` in Bash. Tools without a recorded shape use the "check every
+string" fallback. In fail mode that fallback can break enum fields, which makes Claude Code ignore
+the replacement; harmless for tools whose result is only a status message.
+
 ## What was not tested
 
 - Real pasting in an interactive session, including pasted images.
-- `updatedToolOutput` inside subagents, and for images and PDFs.
+- `updatedToolOutput` for images and PDFs. (Inside subagents it was tested later, in PR #62.)
 - Whether a plugin can set `CLAUDE_CODE_DISABLE_FILE_MENTIONS`.
 - MCP prompts and `@server:resource` mentions.
 - Background subagents and scheduled tasks (the docs say `UserPromptSubmit` also fires for them).
+  Background subagents were tested later, in PR #62: see #61. Scheduled tasks are still untested.
 - Other models, platforms and Claude Code versions.
