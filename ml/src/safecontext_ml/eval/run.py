@@ -111,6 +111,7 @@ def predict_all(
     clf.setup()
     for r in records[:warmup]:
         clf.predict(Doc(r.id, r.text))
+    clf.reset_stats()
     preds: dict[str, list[Prediction]] = {}
     latency: dict[str, float | None] = {}
     for i, r in enumerate(records, 1):

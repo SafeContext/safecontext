@@ -34,6 +34,7 @@ from typing import Any
 from ..dataset.paths import RAW_DIR
 from ..dataset.schema import Record
 from .classifier import Prediction
+from .metrics import clean_predictions
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
 ANSWER_EFFORT = "low"
@@ -149,7 +150,8 @@ def select(
     """Pick up to n records whose text the classifier changed, round-robin across sources."""
     by_source: dict[str, list[JudgeItem]] = {}
     for r in records:
-        preds = preds_by_id.get(r.id, ())
+        # The same predictions the scorer counts: invalid offsets and ignore-only hits dropped.
+        preds = clean_predictions(r, preds_by_id.get(r.id, ()))[0]
         if not preds:
             continue
         cleaned = clean_text(r.text, preds)
@@ -332,6 +334,16 @@ class JudgeSummary:
         }
 
 
+def _judge_one_safe(item: JudgeItem, model: str, send: bool) -> JudgeResult:
+    """One failed request (network, auth, a bad parameter) must not lose the whole report."""
+    try:
+        return _judge_one(item, model, send)
+    except Exception as e:  # noqa: BLE001
+        res = JudgeResult(item.record_id, item.source, item.genre)
+        res.error = f"request failed: {type(e).__name__}"
+        return res
+
+
 def _judge_one(item: JudgeItem, model: str, send: bool) -> JudgeResult:
     res = JudgeResult(item.record_id, item.source, item.genre)
     ref = _fetch(answer_params(item.task, item.original, model), send)
@@ -385,5 +397,5 @@ def run(
             file=sys.stderr,
         )
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        summary.results = list(pool.map(lambda it: _judge_one(it, model, yes), items))
+        summary.results = list(pool.map(lambda it: _judge_one_safe(it, model, yes), items))
     return summary

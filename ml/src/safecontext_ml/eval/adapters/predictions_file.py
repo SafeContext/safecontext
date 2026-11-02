@@ -105,6 +105,10 @@ class PredictionsFile(Classifier):
             )
         return preds
 
+    def reset_stats(self) -> None:
+        self.unknown_labels = {}
+        self.missing = 0
+
     def latency_ms(self, doc: Doc) -> float | None:
         row = self.rows.get(doc.id)
         if row is None or row.get("latency_ms") is None:

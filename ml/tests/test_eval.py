@@ -384,3 +384,39 @@ def test_cli_judge_estimate_only(splits, tmp_path, judge_env, capsys):
     out = capsys.readouterr()
     assert judge_env == []
     assert "**Not sent:**" in out.out and "uncached requests" in out.err
+
+
+# --- review fixes (#60) ---
+
+
+def test_warmup_does_not_double_count_predictions_file_stats(tmp_path):
+    from safecontext_ml.eval.adapters.predictions_file import PredictionsFile
+    from safecontext_ml.eval.run import predict_all
+
+    recs = [rec(f"text {i}", id=f"r{i}") for i in range(5)]
+    f = tmp_path / "p.jsonl"
+    f.write_text(
+        json.dumps({"id": "r0", "spans": [{"start": 0, "end": 4, "label": "custom-type"}]})
+        + "\n"
+    )
+    clf = PredictionsFile(f, allow_missing=True)
+    predict_all(clf, recs, warmup=3)
+    assert clf.missing == 4  # r1..r4, each once
+    assert clf.unknown_labels == {"custom-type": 1}
+
+
+def test_judge_select_uses_the_scored_predictions():
+    r = rec("Ann paid", [("Ann", "customer-personal-data")], id="r0")
+    # Invalid offsets only: the scorer drops them, so the judge must see unchanged text.
+    preds = {"r0": [Prediction(-2, 3, "customer-personal-data")]}
+    assert J.select([r], preds, n=5) == []
+
+
+def test_judge_run_survives_a_failed_request(judge_env, monkeypatch):
+    def boom(params):
+        raise ConnectionError("network down")
+
+    monkeypatch.setattr(J, "_call", boom)
+    summary = J.run(_items(), yes=True)
+    assert len(summary.results) == 3
+    assert all(r.error == "request failed: ConnectionError" for r in summary.results)

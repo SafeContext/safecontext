@@ -60,6 +60,10 @@ class Classifier:
         """Only used when `reports_own_latency` is True: the recorded latency for this doc."""
         return None
 
+    def reset_stats(self) -> None:
+        """Clear any counters `predict()` keeps. Called after the warm-up calls, so they don't
+        count twice."""
+
 
 @dataclass
 class AdapterContext:
