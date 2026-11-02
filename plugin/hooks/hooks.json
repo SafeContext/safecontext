@@ -29,7 +29,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^(Read|Bash|Grep|WebFetch|WebSearch|mcp__.*)$",
+        "matcher": "*",
         "hooks": [
           {
             "type": "http",
@@ -41,7 +41,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(Read|Bash|Grep|WebFetch|WebSearch|mcp__.*)$",
+        "matcher": "*",
         "hooks": [
           {
             "type": "http",
