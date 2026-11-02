@@ -5,8 +5,9 @@
  *   no text fields and rejects unknown ones. An event that fails is dropped, never sent.
  * - Queues in memory (bounded: the oldest events are dropped first when it's full) and sends one
  *   batch at a time, every `flushIntervalMs` or as soon as a full batch is waiting.
- * - Retries network errors, 5xx, 401/403 (after registering again) and 429 with exponential
- *   backoff and jitter, never sooner than `Retry-After`. Batches the dashboard refuses as invalid
+ * - Retries network errors, 5xx, 401 and 403 `device_mismatch` (after registering again), any
+ *   other 403 (e.g. from a proxy) and 429 with exponential backoff and jitter, never sooner
+ *   than `Retry-After`. Batches the dashboard refuses as invalid
  *   are dropped, since resending them can't succeed.
  *
  * The API has no idempotency key, so a batch whose response was lost may be stored twice.
@@ -62,7 +63,9 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 	const baseMs = opts.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS;
 	const maxMs = opts.backoffMaxMs ?? DEFAULT_BACKOFF_MAX_MS;
 	const random = opts.random ?? Math.random;
-	let batchSize = Math.max(1, Math.min(MAX_BATCH_EVENTS, opts.batchSize));
+	const batchSize = Math.max(1, Math.min(MAX_BATCH_EVENTS, opts.batchSize));
+	/** After a 413: the size for the next batch only (the split batch's retry), then back to `batchSize`. */
+	let splitSize: number | undefined;
 
 	const queue: AgentEvent[] = [];
 	let dropped: Partial<Record<SyncReason, number>> = {};
@@ -95,7 +98,8 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 	}
 
 	function takeBatch(): AgentEvent[] {
-		let n = Math.min(batchSize, queue.length);
+		let n = Math.min(splitSize ?? batchSize, queue.length);
+		splitSize = undefined;
 		while (n > 1 && Buffer.byteLength(JSON.stringify({ events: queue.slice(0, n) })) > MAX_BATCH_BYTES) {
 			n = Math.ceil(n / 2);
 		}
@@ -137,7 +141,7 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 					continue;
 				case 'too_large':
 					if (batch.length > 1) {
-						batchSize = Math.ceil(batch.length / 2);
+						splitSize = Math.ceil(batch.length / 2);
 						queue.unshift(...batch);
 					} else {
 						drop('too_large', 1);
@@ -151,6 +155,7 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 				case 'device_mismatch':
 					auth.rejected(token);
 					break;
+				// 'forbidden' (a 403 outside the contract, e.g. a proxy) and the rest: keep the batch and retry.
 			}
 			queue.unshift(...batch);
 			trim();
@@ -199,6 +204,8 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 			clearInterval(interval);
 			clearTimeout(retryTimer);
 			await inFlight;
+			// One last attempt even while backing off. Bounded by the request timeout.
+			retryAt = 0;
 			await uploader.flush();
 			if (queue.length > 0) {
 				drop('shutdown', queue.length);

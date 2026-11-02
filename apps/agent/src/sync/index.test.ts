@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -83,5 +83,23 @@ describe('startSync with the agent app', () => {
 		expect(everything).not.toContain(SECRET);
 		expect(everything).not.toContain(store.value!);
 		expect(everything).not.toContain(ENROLLMENT_KEY);
+	});
+});
+
+describe('startSync with an unusable state folder', () => {
+	it('keeps running with a device id for this run instead of crashing', () => {
+		const notADir = join(dir, 'file');
+		writeFileSync(notADir, 'x');
+		const logger = memoryLogger();
+		const config = readSyncConfig({ SC_DASHBOARD_URL: dash.url, SC_STATE_DIR: join(notADir, 'state') })!;
+		expect(() => {
+			sync = startSync(config, {
+				logger,
+				fallback: staticPolicySource(policyWith({ version: 0 }), 'default'),
+				tokenStore: memoryTokenStore()
+			});
+		}).not.toThrow();
+		expect(sync!.policy.current().version).toBe(0);
+		expect(logger.records).toContainEqual({ level: 'error', msg: 'state_dir_failed', reason: 'state_dir' });
 	});
 });

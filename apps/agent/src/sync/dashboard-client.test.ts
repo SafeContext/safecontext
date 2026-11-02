@@ -101,6 +101,12 @@ describe('postEvents', () => {
 		expect(dash.batches).toHaveLength(1);
 	});
 
+	it('reports a 403 outside the contract as forbidden, so it is retried', async () => {
+		const token = dash.issueToken(DEVICE);
+		dash.override.set('/api/events', [{ status: 403, body: { error: { code: 'unauthorized', message: 'x' } } }]);
+		expect(await client.postEvents(token, [event()])).toEqual({ ok: false, reason: 'forbidden', status: 403 });
+	});
+
 	it('reports device_mismatch and refuses invalid batches before sending', async () => {
 		const token = dash.issueToken(DEVICE);
 		expect(await client.postEvents(token, [event({ deviceId: 'dev-other' })])).toEqual({

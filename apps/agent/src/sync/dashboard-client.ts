@@ -25,6 +25,11 @@ export type Failure =
 	| { ok: false; reason: 'unauthorized'; status: 401 }
 	/** 403: an event's deviceId isn't the token's device. */
 	| { ok: false; reason: 'device_mismatch'; status: 403 }
+	/**
+	 * Any other 403. The contract only defines `device_mismatch`, so this comes from something in
+	 * between (a proxy or firewall) and may clear up: retry it rather than drop data.
+	 */
+	| { ok: false; reason: 'forbidden'; status: 403 }
 	/** 429. `retryAfterMs` from the `Retry-After` header, if any. */
 	| { ok: false; reason: 'rate_limited'; status: 429; retryAfterMs?: number }
 	/** 413: body too large. */
@@ -170,7 +175,8 @@ async function failure(res: Response): Promise<Failure> {
 	const error = ApiError.safeParse(await json(res));
 	const code = error.success ? error.data.error.code : undefined;
 	if (status === 401) return { ok: false, reason: 'unauthorized', status: 401 };
-	if (status === 403 && code === 'device_mismatch') return { ok: false, reason: 'device_mismatch', status: 403 };
+	if (status === 403)
+		return { ok: false, reason: code === 'device_mismatch' ? 'device_mismatch' : 'forbidden', status: 403 };
 	if (status === 413) return { ok: false, reason: 'too_large', status: 413 };
 	if (status === 429) {
 		const retryAfterMs = parseRetryAfter(res.headers.get('retry-after'));

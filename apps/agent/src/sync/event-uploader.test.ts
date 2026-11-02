@@ -28,7 +28,7 @@ const report = (overrides: Partial<CheckReport> = {}): CheckReport => ({
 	...overrides
 });
 
-function setup(opts: { batchSize?: number; maxQueue?: number } = {}) {
+function setup(opts: { batchSize?: number; maxQueue?: number; backoffBaseMs?: number } = {}) {
 	const logger = memoryLogger();
 	const auth = createDeviceAuth({
 		client: createDashboardClient({ baseUrl: dash.url, timeoutMs: 2_000 }),
@@ -44,8 +44,8 @@ function setup(opts: { batchSize?: number; maxQueue?: number } = {}) {
 		batchSize: opts.batchSize ?? 100,
 		flushIntervalMs: 60_000,
 		maxQueue: opts.maxQueue ?? 1_000,
-		backoffBaseMs: 5,
-		backoffMaxMs: 20,
+		backoffBaseMs: opts.backoffBaseMs ?? 5,
+		backoffMaxMs: Math.max(20, opts.backoffBaseMs ?? 0),
 		random: () => 1
 	});
 	return { uploader, logger };
@@ -127,6 +127,33 @@ describe('createEventUploader', () => {
 		for (let i = 0; i < 4; i++) uploader.record(report());
 		await vi.waitFor(() => expect(sent()).toHaveLength(4));
 		expect(dash.batches.map((b) => b.length)).toEqual([2, 2]);
+		// The split only applies to that batch: the next one is full size again.
+		for (let i = 0; i < 4; i++) uploader.record(report());
+		await vi.waitFor(() => expect(sent()).toHaveLength(8));
+		expect(dash.batches.map((b) => b.length)).toEqual([2, 2, 4]);
+	});
+
+	it('retries a 403 that is not device_mismatch (e.g. from a proxy) instead of dropping it', async () => {
+		dash.override.set('/api/events', [{ status: 403, body: '<html>Forbidden</html>' }]);
+		const { uploader, logger } = setup();
+		uploader.record(report());
+		await uploader.flush();
+		expect(logger.records).toContainEqual(
+			expect.objectContaining({ msg: 'events_upload_failed', reason: 'forbidden', status: 403 })
+		);
+		await vi.waitFor(() => expect(sent()).toHaveLength(1));
+		expect(dash.registrations).toBe(1);
+	});
+
+	it('tries one last send on close even while backing off', async () => {
+		dash.override.set('/api/events', [{ status: 503 }]);
+		const { uploader } = setup({ backoffBaseMs: 60_000 });
+		uploader.record(report());
+		await uploader.flush();
+		expect(uploader.pending).toBe(1);
+		await uploader.close();
+		expect(sent()).toHaveLength(1);
+		expect(uploader.pending).toBe(0);
 	});
 
 	it('drops the oldest events when the queue is full', async () => {
