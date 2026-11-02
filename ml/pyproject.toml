@@ -7,6 +7,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "anthropic>=2.3.0",
     "datasets>=5.1.0",
     "gliner>=0.2.29",
     "mlx-lm>=0.32.2",
@@ -26,6 +27,11 @@ build-backend = "uv_build"
 [tool.uv]
 # Mac-only for now (Apple Silicon). Widen when Linux/Windows support is needed.
 environments = ["sys_platform == 'darwin' and platform_machine == 'arm64'"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import from src/ directly, so `uv sync --only-dev` (no torch etc.) is enough to run the tests.
+pythonpath = ["src"]
 
 [dependency-groups]
 dev = [
