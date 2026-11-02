@@ -251,6 +251,17 @@ describe('POST /api/events', () => {
 		expect(await prisma.event.count({ where: { organizationId } })).toBe(before);
 	});
 
+	it('rejects numbers the database cannot hold with a 422, not a 500', async () => {
+		for (const bad of [
+			agentEvent('dev-events', { counts: { secrets: 3_000_000_000 } }),
+			agentEvent('dev-events', { policyVersion: 3_000_000_000 })
+		]) {
+			const res = await post({ events: [bad] });
+			expect(res.status).toBe(422);
+			expect(ApiError.parse(await res.json()).error.code).toBe('invalid_body');
+		}
+	});
+
 	it('rejects events for another device', async () => {
 		const res = await post({ events: [agentEvent('dev-events'), agentEvent('dev-someone-else')] });
 		expect(res.status).toBe(403);

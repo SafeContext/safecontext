@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEvent, AgentEventBatch } from './events.ts';
+import { AgentEvent, AgentEventBatch, MAX_EVENT_INT } from './events.ts';
 
 const event = () => ({
 	ts: '2026-10-17T12:00:00.000Z',
@@ -31,6 +31,13 @@ describe('AgentEvent', () => {
 	it('rejects unknown actions and negative counts', () => {
 		expect(AgentEvent.safeParse({ ...event(), actions: { delete: 1 } }).success).toBe(false);
 		expect(AgentEvent.safeParse({ ...event(), counts: { secrets: -1 } }).success).toBe(false);
+	});
+
+	it('rejects numbers too large for the dashboard database (Postgres integer)', () => {
+		expect(AgentEvent.safeParse({ ...event(), counts: { secrets: MAX_EVENT_INT } }).success).toBe(true);
+		expect(AgentEvent.safeParse({ ...event(), counts: { secrets: MAX_EVENT_INT + 1 } }).success).toBe(false);
+		expect(AgentEvent.safeParse({ ...event(), actions: { block: 3_000_000_000 } }).success).toBe(false);
+		expect(AgentEvent.safeParse({ ...event(), policyVersion: 3_000_000_000 }).success).toBe(false);
 	});
 
 	it('allows a prompt event without a tool name', () => {
