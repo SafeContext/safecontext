@@ -50,13 +50,17 @@ enum HookEventName {
 // ---------------------------------------------------------------------------
 
 model Organization {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  name      String
-  slug      String   @unique
+  id                     String    @id @default(uuid(7)) @db.Uuid
+  name                   String
+  slug                   String    @unique
   /// Draft setting. Copied into each PolicyVersion when published.
-  failMode  FailMode @default(block)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  failMode               FailMode  @default(block)
+  /// SHA-256 (hex) of the enrollment key a device presents to `POST /api/devices` to join this
+  /// organisation. The key itself is never stored. Null = devices can't register.
+  enrollmentKeyHash      String?   @unique @db.Char(64)
+  enrollmentKeyCreatedAt DateTime? @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
 
   members        Member[]
   dataTypes      DataType[]
@@ -151,6 +155,10 @@ model Device {
   lastSeenAt        DateTime  @default(now()) @db.Timestamptz(3)
   /// Policy version from the device's latest event; shows whether it has picked up a publish.
   lastPolicyVersion Int?
+  /// SHA-256 (hex) of the device's API token (the token itself is never stored). Null = no token
+  /// (e.g. seeded demo devices) or revoked. Registering again replaces it.
+  tokenHash         String?   @unique @db.Char(64)
+  tokenIssuedAt     DateTime? @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events       Event[]
@@ -163,24 +171,24 @@ model Device {
 /// One check the agent made (`AgentEvent`). Counts are typed columns plus `EventCount` rows;
 /// there is deliberately no Json or free-text column.
 model Event {
-  id             String        @id @default(uuid(7)) @db.Uuid
-  organizationId String        @db.Uuid
-  deviceId       String        @db.Uuid
+  id                 String        @id @default(uuid(7)) @db.Uuid
+  organizationId     String        @db.Uuid
+  deviceId           String        @db.Uuid
   /// When the agent made the check (`AgentEvent.ts`).
-  ts             DateTime      @db.Timestamptz(3)
-  receivedAt     DateTime      @default(now()) @db.Timestamptz(3)
-  policyVersion  Int
-  hookEvent      HookEventName
+  ts                 DateTime      @db.Timestamptz(3)
+  receivedAt         DateTime      @default(now()) @db.Timestamptz(3)
+  policyVersion      Int
+  hookEvent          HookEventName
   /// Claude Code tool name, e.g. "Read" or "mcp__slack__post". Null for UserPromptSubmit.
-  toolName       String?       @db.VarChar(128)
-  blocked        Boolean
-  latencyMs      Float
+  toolName           String?       @db.VarChar(128)
+  blocked            Boolean
+  latencyMs          Float
   /// Spans handled, per action (`AgentEvent.actions`).
-  actionAllow        Int @default(0)
-  actionGeneralize   Int @default(0)
-  actionPseudonymize Int @default(0)
-  actionMask         Int @default(0)
-  actionBlock        Int @default(0)
+  actionAllow        Int           @default(0)
+  actionGeneralize   Int           @default(0)
+  actionPseudonymize Int           @default(0)
+  actionMask         Int           @default(0)
+  actionBlock        Int           @default(0)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   device       Device       @relation(fields: [organizationId, deviceId], references: [organizationId, id], onDelete: Cascade)

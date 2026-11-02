@@ -4,7 +4,10 @@ import { Action, Id } from './policy.ts';
 export const HookEventName = z.enum(['UserPromptSubmit', 'PreToolUse', 'PostToolUse']);
 export type HookEventName = z.infer<typeof HookEventName>;
 
-const Count = z.number().int().nonnegative();
+/** Largest value the dashboard can store (Postgres `integer`). Larger numbers are rejected, not truncated. */
+export const MAX_EVENT_INT = 2_147_483_647;
+
+const Count = z.number().int().nonnegative().max(MAX_EVENT_INT);
 
 /**
  * One check the agent made, sent to the dashboard. METADATA ONLY.
@@ -14,7 +17,7 @@ export const AgentEvent = z.strictObject({
 	ts: z.iso.datetime(),
 	/** Anonymised, stable per device. */
 	deviceId: Id,
-	policyVersion: z.number().int().nonnegative(),
+	policyVersion: z.number().int().nonnegative().max(MAX_EVENT_INT),
 	hookEvent: HookEventName,
 	/** Claude Code tool name, e.g. "Read" or "mcp__slack__post". Absent for UserPromptSubmit. */
 	toolName: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
