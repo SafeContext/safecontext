@@ -10,7 +10,17 @@ import type { HookEventName } from '@safecontext/policy';
 export type LogLevel = 'info' | 'warn' | 'error';
 
 export type LogMessage =
-	'listening' | 'check' | 'invalid_input' | 'invalid_output' | 'handler_error' | 'policy_loaded' | 'policy_fallback';
+	| 'listening'
+	| 'check'
+	| 'invalid_input'
+	| 'invalid_output'
+	| 'handler_error'
+	| 'policy_loaded'
+	| 'policy_fallback'
+	/** Tier 1 model: loaded (`totalMs` = load time), failed to load, or not configured. */
+	| 'tier1_ready'
+	| 'tier1_failed'
+	| 'tier1_off';
 
 /** How a check ended. `fail_*` means the policy's fail mode decided (SPEC.md §2a). */
 export type Outcome = 'allow' | 'rewrite' | 'block' | 'fail_block' | 'fail_allow';
