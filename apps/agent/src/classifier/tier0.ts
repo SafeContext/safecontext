@@ -1,4 +1,4 @@
-import { defaultDetectors, detectAll, type Detector } from '@safecontext/detectors';
+import { createTermListDetector, defaultDetectors, detectAll, type Detector } from '@safecontext/detectors';
 import type { Policy } from '@safecontext/policy';
 import type { ClassifierTier } from './types.ts';
 
@@ -12,6 +12,12 @@ export interface Tier0Options {
 	/** Built-in rule detectors. Defaults to `defaultDetectors` from @safecontext/detectors. */
 	detectors?: readonly Detector[];
 }
+
+/**
+ * The admin term lists in the policy (issue #8), as one tier 0 detector. Each match is tagged
+ * with its list's data type. Pass as `createTier0({ policyDetectors: termListDetectors })`.
+ */
+export const termListDetectors = (policy: Policy): readonly Detector[] => [createTermListDetector(policy.lists)];
 
 /** Tier 0: deterministic rules + admin term lists (SPEC.md §4, target < 10 ms). */
 export function createTier0({ policyDetectors, detectors = defaultDetectors }: Tier0Options = {}): ClassifierTier {
