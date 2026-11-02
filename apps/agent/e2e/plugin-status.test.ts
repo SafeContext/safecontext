@@ -30,6 +30,8 @@ async function status(port: number | string, ...args: string[]) {
 let agent: RunningServer;
 let notAgent: Server;
 let notAgentPort: number;
+let unhealthy: Server;
+let unhealthyPort: number;
 beforeAll(async () => {
 	const app = createApp({
 		policy: staticPolicySource(policyWith({ version: 7 })),
@@ -40,10 +42,15 @@ beforeAll(async () => {
 	notAgent = createServer((_req, res) => res.end('<html>hello</html>'));
 	await new Promise<void>((resolve) => notAgent.listen(0, AGENT_HOST, resolve));
 	notAgentPort = (notAgent.address() as AddressInfo).port;
+	// The agent's health JSON, but reporting a problem. Today's agent always says ok: true.
+	unhealthy = createServer((_req, res) => res.end('{"ok":false,"policyVersion":7}'));
+	await new Promise<void>((resolve) => unhealthy.listen(0, AGENT_HOST, resolve));
+	unhealthyPort = (unhealthy.address() as AddressInfo).port;
 });
 afterAll(async () => {
 	await agent.close();
 	await new Promise((resolve) => notAgent.close(resolve));
+	await new Promise((resolve) => unhealthy.close(resolve));
 });
 
 describe('agent-status.sh (/safe-context:status)', () => {
@@ -63,6 +70,12 @@ describe('agent-status.sh (/safe-context:status)', () => {
 		expect(await status(notAgentPort)).toContain("answered, but it isn't the Safe Context agent");
 	});
 
+	it('reports an agent that answers but is unhealthy', async () => {
+		const out = await status(unhealthyPort);
+		expect(out).toContain(`the agent on 127.0.0.1:${unhealthyPort} reports a problem`);
+		expect(out).toContain('How to fix: Start the Safe Context agent');
+	});
+
 	it('rejects a port that is not a number', async () => {
 		expect(await status('4747; echo hi')).toContain('SC_AGENT_PORT must be a port number');
 	});
@@ -80,7 +93,7 @@ describe('agent-status.sh --session-start (SessionStart hook)', () => {
 	});
 
 	it('prints valid JSON for every problem', async () => {
-		for (const port of [notAgentPort, 'nope']) {
+		for (const port of [notAgentPort, unhealthyPort, 'nope']) {
 			expect(JSON.parse(await status(port, '--session-start')).systemMessage).toMatch(/^Safe Context: /);
 		}
 	});
@@ -100,8 +113,9 @@ describe('plugin wiring', () => {
 
 	it('the status skill runs the same script', () => {
 		const skill = readFileSync(join(pluginDir, 'skills/status/SKILL.md'), 'utf8');
-		expect(skill).toContain('!`sh ${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh`');
-		expect(skill).toContain('allowed-tools: Bash(sh ${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh)');
+		// Quoted, so a plugin path with a space still works.
+		expect(skill).toContain('!`sh "${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh"`');
+		expect(skill).toContain('allowed-tools: Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh")');
 	});
 
 	it('uses the agent API default port and health path', () => {
