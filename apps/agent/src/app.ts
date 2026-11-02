@@ -74,8 +74,8 @@ export function createApp(deps: AppDeps): Hono {
 	);
 
 	/** Classify `texts` and decide. Never throws (the classifier doesn't). */
-	async function check(texts: string[], policy: Policy) {
-		const result = await classifier.classify(texts, policy);
+	async function check(texts: string[], policy: Policy, hook: HookEventName) {
+		const result = await classifier.classify(texts, policy, { hook });
 		const chars = texts.reduce((n, t) => n + t.length, 0);
 		return { result, decision: decide(result, policy), fields: texts.length, chars };
 	}
@@ -180,7 +180,7 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.prompt,
 			'UserPromptSubmit',
 			async (input, policy) => {
-				const checked = await check([input.prompt], policy);
+				const checked = await check([input.prompt], policy, 'UserPromptSubmit');
 				// Only a blocked prompt needs a safe version (and only then are pseudonyms handed out).
 				const safe =
 					checked.decision.verdict === 'block'
@@ -198,7 +198,7 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.toolInput,
 			'PreToolUse',
 			async (input, policy) => {
-				const checked = await check(toolInputTexts(input.tool_input), policy);
+				const checked = await check(toolInputTexts(input.tool_input), policy, 'PreToolUse');
 				return { ...checked, toolName: input.tool_name, output: toolInputResponse(checked.decision) };
 			},
 			(decision, body) => ({ decision, toolName: toolNameOf(body), output: toolInputResponse(decision) })
@@ -212,7 +212,7 @@ export function createApp(deps: AppDeps): Hono {
 			'PostToolUse',
 			async (input, policy) => {
 				const texts = toolOutputTexts(input.tool_name, input.tool_response);
-				const checked = await check(texts, policy);
+				const checked = await check(texts, policy, 'PostToolUse');
 				const rewritten = rewrite(texts, checked.decision, input.session_id);
 				return {
 					...checked,
