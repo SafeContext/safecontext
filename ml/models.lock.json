@@ -142,9 +142,20 @@
         "*.jsonl",
         "manifest.json"
       ],
-      "repo_id": null,
-      "revision": null,
-      "files": []
+      "repo_id": "SafeContext/safecontext-data",
+      "revision": "ac3f87dfab450973dbc9dedecb9151c070c28ec0",
+      "files": [
+        {
+          "path": "llm-test.jsonl",
+          "size": 221574,
+          "sha256": "f525da3f4b92dc49a172bb4de85ecfb2a165a517dd6b4d3be7331ba569ea7627"
+        },
+        {
+          "path": "manifest.json",
+          "size": 1424,
+          "sha256": "fc7065b9c141ca8f97cc51efb7e15457d67897ec177801985a85f8cea78073f2"
+        }
+      ]
     }
   ],
   "external": [
