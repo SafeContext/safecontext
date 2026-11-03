@@ -1,5 +1,6 @@
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import type { Policy } from '@safecontext/policy';
+import { strictness } from '../decide.ts';
 import type { Classifier, ClassifierTier, ClassifyOptions, ClassifyResult, TierTiming } from './types.ts';
 
 export interface ClassifierOptions {
@@ -14,7 +15,8 @@ export interface ClassifierOptions {
 class Timeout extends Error {}
 
 /**
- * Runs the tiers in order within one time budget and merges their spans per text.
+ * Runs the tiers in order within one time budget and merges their spans per text. Where spans
+ * of two data types overlap, the stricter data type in the policy wins (`strictness`).
  * Any tier error, or running out of budget, returns `ok: false`. The caller then follows the
  * policy's fail mode. It never throws.
  */
@@ -32,6 +34,7 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 			const protectedSpans: Span[][] = texts.map(() => []);
 			let cleared = 0;
 			const controller = new AbortController();
+			const rank = strictness(policy);
 
 			try {
 				for (const tier of tiers) {
@@ -54,7 +57,7 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 							for (const s of f) if (s.source === 'rule' || s.source === 'list') protectedSpans[i]!.push(s);
 						}
 						spans = spans.map((existing, i) =>
-							found[i]!.length === 0 ? existing : mergeSpans([...existing, ...found[i]!])
+							found[i]!.length === 0 ? existing : mergeSpans([...existing, ...found[i]!], rank)
 						);
 						if (tier.clear) {
 							const left = deadline - now();

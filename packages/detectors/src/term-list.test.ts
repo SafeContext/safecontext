@@ -141,6 +141,21 @@ describe('createTermListDetector', () => {
 			]);
 		});
 
+		it('uses the stricter list when given a strictness (a staff name that is also a customer)', () => {
+			const lists = [
+				{ dataTypeId: 'staff-names', terms: ['Jordan Lee', 'Jordan'] },
+				{ dataTypeId: CUSTOMERS, terms: ['Jordan'] }
+			];
+			const strictness = (id: string) => (id === 'staff-names' ? 0 : 1);
+			expect(createTermListDetector(lists, strictness).detect('Jordan')).toEqual([
+				{ start: 0, end: 6, dataTypeId: CUSTOMERS, source: 'list', confidence: 1 }
+			]);
+			// Even over a longer match of the less strict list.
+			expect(createTermListDetector(lists, strictness).detect('Jordan Lee')).toEqual([
+				{ start: 0, end: 10, dataTypeId: CUSTOMERS, source: 'list', confidence: 1 }
+			]);
+		});
+
 		it('finds a term whose prefix is another term (failure links)', () => {
 			const d = createTermListDetector([{ dataTypeId: CODENAMES, terms: ['abcd', 'bc'] }]);
 			expect(found('x abc y bc z', d)).toEqual(['bc']);

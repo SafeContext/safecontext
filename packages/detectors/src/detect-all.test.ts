@@ -41,6 +41,14 @@ describe('mergeSpans', () => {
 		expect(merged).toEqual([span(0, 15, 'second', 0.9)]);
 	});
 
+	it('lets the stricter data type win over confidence and order, when given a strictness', () => {
+		const strictness = (id: string) => ({ 'staff-names': 0, 'customer-personal-data': 2 })[id] ?? 1;
+		const input = [span(0, 10, 'staff-names', 1), span(5, 15, 'customer-personal-data', 0.6)];
+		expect(mergeSpans(input, strictness)).toEqual([span(0, 15, 'customer-personal-data', 0.6)]);
+		expect(mergeSpans([...input].reverse(), strictness)).toEqual([span(0, 15, 'customer-personal-data', 0.6)]);
+		expect(mergeSpans(input)).toEqual([span(0, 15, 'staff-names', 1)]); // without: confidence decides
+	});
+
 	it('does not change its input', () => {
 		const input = [span(0, 10), span(5, 15)];
 		mergeSpans(input);

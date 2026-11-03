@@ -10,8 +10,8 @@
  * | rewrite | pass                          | pass       | flagged spans transformed           |
  * | block   | blocked, reason has safe text | denied     | flagged spans transformed / removed |
  */
-import type { Span } from '@safecontext/detectors';
-import type { Action, FailMode, Policy, Tier } from '@safecontext/policy';
+import type { Span, Strictness } from '@safecontext/detectors';
+import type { Action, DataType, FailMode, Policy, Tier } from '@safecontext/policy';
 import type { ClassifyResult } from './classifier/types.ts';
 
 /** A data type found in the text. Names are admin-written labels, safe to show; never span text. */
@@ -86,4 +86,32 @@ export function summarize(spans: readonly Span[], policy: Policy): Hit[] {
 		return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 	};
 	return [...byId.values()].sort((a, b) => order(a.dataTypeId) - order(b.dataTypeId));
+}
+
+const TIER_RANK = { green: 0, yellow: 1, red: 2 } as const;
+const ACTION_RANK = { allow: 0, generalize: 1, pseudonymize: 2, mask: 3, block: 4 } as const;
+/** A data type that isn't in the policy is treated as red with action `block` (see `summarize`). */
+const UNKNOWN_SEVERITY = 100 + TIER_RANK.red * 10 + ACTION_RANK.block;
+
+/** Higher is more severe: data that stops prompts first, then tier, then action. */
+export function severity(dt: Pick<DataType, 'tier' | 'action'>): number {
+	return (stopsPromptsAndToolCalls(dt) ? 100 : 0) + TIER_RANK[dt.tier] * 10 + ACTION_RANK[dt.action];
+}
+
+const strictnessCache = new WeakMap<Policy, Strictness>();
+
+/**
+ * The policy's `severity` per data type id, for `mergeSpans`: when spans of two data types
+ * overlap, the stricter one wins, whichever detector found it and however confident it was.
+ * So a name that is both a staff name (green by default) and customer personal data (red) is
+ * treated as customer personal data (issue #78). Unknown data types rank as red + block.
+ */
+export function strictness(policy: Policy): Strictness {
+	let rank = strictnessCache.get(policy);
+	if (!rank) {
+		const byId = new Map(policy.dataTypes.map((dt) => [dt.id, severity(dt)]));
+		rank = (id) => byId.get(id) ?? UNKNOWN_SEVERITY;
+		strictnessCache.set(policy, rank);
+	}
+	return rank;
 }

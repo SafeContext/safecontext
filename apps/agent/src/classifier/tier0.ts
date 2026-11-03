@@ -1,5 +1,6 @@
 import { createTermListDetector, defaultDetectors, detectAll, type Detector } from '@safecontext/detectors';
 import type { Policy } from '@safecontext/policy';
+import { strictness } from '../decide.ts';
 import type { ClassifierTier } from './types.ts';
 
 export interface Tier0Options {
@@ -15,9 +16,13 @@ export interface Tier0Options {
 
 /**
  * The admin term lists in the policy (issue #8), as one tier 0 detector. Each match is tagged
- * with its list's data type. Pass as `createTier0({ policyDetectors: termListDetectors })`.
+ * with its list's data type; a term in two lists counts as the stricter one (a staff directory
+ * entry that is also a listed customer is the customer). Pass as
+ * `createTier0({ policyDetectors: termListDetectors })`.
  */
-export const termListDetectors = (policy: Policy): readonly Detector[] => [createTermListDetector(policy.lists)];
+export const termListDetectors = (policy: Policy): readonly Detector[] => [
+	createTermListDetector(policy.lists, strictness(policy))
+];
 
 /** Tier 0: deterministic rules + admin term lists (SPEC.md §4, target < 10 ms). */
 export function createTier0({ policyDetectors, detectors = defaultDetectors }: Tier0Options = {}): ClassifierTier {
@@ -37,7 +42,8 @@ export function createTier0({ policyDetectors, detectors = defaultDetectors }: T
 		tier: 0,
 		detect(texts, { policy }) {
 			const all = detectorsFor(policy);
-			return texts.map((text) => (text.length === 0 ? [] : detectAll(text, all)));
+			const rank = strictness(policy);
+			return texts.map((text) => (text.length === 0 ? [] : detectAll(text, all, rank)));
 		}
 	};
 }

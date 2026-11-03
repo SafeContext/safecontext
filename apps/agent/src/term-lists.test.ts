@@ -81,3 +81,47 @@ describe('latency with 10k admin terms', () => {
 		expect(p95).toBeLessThan(10);
 	});
 });
+
+// Issue #78: IT can upload a staff directory as a term list for the `staff-names` data type.
+describe('a staff directory as a term list', () => {
+	const directory = { dataTypeId: 'staff-names', terms: ['Priya Raman', 'priya', 'dan.k'] };
+	const withStaff = (tier: 'green' | 'yellow' | 'red', action: 'allow' | 'pseudonymize' | 'block') =>
+		policyWith({
+			dataTypes: policyWith().dataTypes.map((d) => (d.id === 'staff-names' ? { ...d, tier, action } : d)),
+			lists: [directory, { dataTypeId: 'customer-names', terms: ['Northwind'] }]
+		});
+
+	it('finds listed staff but lets them through while staff names are green (the default)', async () => {
+		const { post, reports } = testApp({ policy: withStaff('green', 'allow'), tiers: [tier0()] });
+		const stdout = 'Priya Raman and dan.k fixed it; ping priya.';
+		expect((await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }))).json).toEqual({});
+		expect(reports[0]).toMatchObject({ counts: { 'staff-names': 3 }, actions: { allow: 3 } });
+	});
+
+	it('pseudonymizes listed staff in tool output once IT moves staff names to yellow', async () => {
+		const { post } = testApp({ policy: withStaff('yellow', 'pseudonymize'), tiers: [tier0()] });
+		const stdout = 'PRIYA RAMAN asked dan.k to call Northwind.';
+		const res = await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }));
+		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
+			stdout: 'staff_name_1 asked staff_name_2 to call customer_name_1.',
+			stderr: ''
+		});
+	});
+
+	it('blocks a prompt naming listed staff once IT moves staff names to red + block', async () => {
+		const { post } = testApp({ policy: withStaff('red', 'block'), tiers: [tier0()] });
+		const out = prompt.response.parse((await post(prompt.path, promptInput('What did priya say?'))).json);
+		expect(out.decision).toBe('block');
+		expect(out.reason).toContain('Staff names');
+		expect(out.reason?.toLowerCase()).not.toContain('priya');
+	});
+
+	it('loses to a stricter list when a term is in both (the stricter data type wins)', async () => {
+		const policy = policyWith({
+			lists: [directory, { dataTypeId: 'unreleased-roadmap', terms: ['priya'] }]
+		});
+		const classifier = createClassifier({ tiers: [tier0()], budgetMs: 1_000 });
+		const result = await classifier.classify(['ask priya'], policy);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['unreleased-roadmap']);
+	});
+});

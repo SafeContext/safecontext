@@ -1,6 +1,6 @@
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import type { DataType, Policy } from '@safecontext/policy';
-import { stopsPromptsAndToolCalls, summarize } from '../../decide.ts';
+import { severity, stopsPromptsAndToolCalls, strictness, summarize } from '../../decide.ts';
 import type { Tier1Config } from '../../config.ts';
 import type { Logger } from '../../log.ts';
 import type { ClassifierTier, ClassifyState } from '../types.ts';
@@ -43,12 +43,21 @@ export function labelTemplate(template: string): (dataType: DataType) => string 
 interface Labels {
 	dataTypeIds: string[];
 	promptIds: number[];
+	/** Label indexes of `allow` data types: given to the model, but their spans are dropped. */
+	dropped: Set<number>;
 }
 
 /**
  * Tier 1 (SPEC.md §4): a GLiNER label tagger for the admin's own data types. The labels are
  * the policy's data types, except those whose action is `allow` (tagging them can't change the
  * result, and a green label winning an overlap could hide a red one).
+ *
+ * One exception: an `allow` type that the model was trained on (it is in the model's
+ * `labels.json`, like `staff-names`, issue #78) is still given to the model, because the model
+ * learnt to tell it apart from the other labels: without "staff names" to choose, it calls a
+ * colleague's chat handle customer personal data. Its spans are dropped after decoding. Where
+ * the model scores a word higher as a staff name than as personal data, that word is let
+ * through: the policy said staff names are fine to share.
  *
  * Runs only when tier 0 isn't conclusive (see `shouldRun`). Long texts are cut into windows
  * the model can take; it checks the abort signal between windows, and windows from concurrent
@@ -68,8 +77,9 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 			const encoded: Encoded[] = [];
 			const dataTypes: DataType[] = [];
 			for (const dt of policy.dataTypes) {
-				const text = (m.labels?.[dt.id] ?? label(dt)).trim();
-				if (dt.action === 'allow' || text === '') continue;
+				const trained = m.labels?.[dt.id];
+				const text = (trained ?? label(dt)).trim();
+				if ((dt.action === 'allow' && trained === undefined) || text === '') continue;
 				const i = byText.get(text);
 				if (i === undefined) {
 					byText.set(text, dataTypes.length);
@@ -80,7 +90,13 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 				}
 			}
 			const dataTypeIds = dataTypes.map((dt) => dt.id);
-			labels = { dataTypeIds, promptIds: encoded.length ? m.promptIds(encoded) : [] };
+			const dropped = new Set(dataTypes.flatMap((dt, i) => (dt.action === 'allow' ? [i] : [])));
+			// Only allow labels: nothing tier 1 finds could change the result.
+			if (dropped.size === dataTypes.length) {
+				labels = { dataTypeIds: [], promptIds: [], dropped: new Set() };
+			} else {
+				labels = { dataTypeIds, promptIds: encoded.length ? m.promptIds(encoded) : [], dropped };
+			}
 			labelCache.set(policy, labels);
 		}
 		return labels;
@@ -107,7 +123,7 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 		async detect(texts, { policy, signal }) {
 			const m = await abortable(ready, signal);
 			const minScore = threshold ?? m.threshold ?? 0.5;
-			const { dataTypeIds, promptIds } = labelsFor(policy, m);
+			const { dataTypeIds, promptIds, dropped } = labelsFor(policy, m);
 			if (dataTypeIds.length === 0) return texts.map(() => []);
 			const maxTokens = m.maxTokens - 2 - promptIds.length; // [CLS] and [SEP]
 			if (maxTokens < MIN_TEXT_TOKENS) throw new Error('tier 1 label prompt is too long for the model');
@@ -132,6 +148,7 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 				)) {
 					const logits = await queued(signal, () => m.score(promptIds, dataTypeIds.length, encoded.slice(a, b)));
 					for (const s of decode(logits, words.slice(a, b), dataTypeIds.length, m.maxWidth, minScore)) {
+						if (dropped.has(s.label)) continue;
 						spans.push({
 							start: s.start,
 							end: s.end,
@@ -141,7 +158,7 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 						});
 					}
 				}
-				out.push(spans.length > 1 ? mergeSpans(spans) : spans);
+				out.push(spans.length > 1 ? mergeSpans(spans, strictness(policy)) : spans);
 			}
 			return out;
 		},
@@ -185,14 +202,6 @@ export function needsTier1({ policy, texts, spans, hook }: ClassifyState): boole
 		return !summarize(spans.flat(), policy).some((hit) => hit.action !== 'allow' && stopsPromptsAndToolCalls(hit));
 	}
 	return true;
-}
-
-const TIER_RANK = { green: 0, yellow: 1, red: 2 } as const;
-const ACTION_RANK = { allow: 0, generalize: 1, pseudonymize: 2, mask: 3, block: 4 } as const;
-
-/** Higher is more severe: data that stops prompts first, then tier, then action. */
-function severity(dt: DataType): number {
-	return (stopsPromptsAndToolCalls(dt) ? 100 : 0) + TIER_RANK[dt.tier] * 10 + ACTION_RANK[dt.action];
 }
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

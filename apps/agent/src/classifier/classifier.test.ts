@@ -2,7 +2,7 @@ import type { Detector } from '@safecontext/detectors';
 import { describe, expect, it, vi } from 'vitest';
 import { fakeTier, policyWith, SECRET } from '../test-helpers.ts';
 import { createClassifier } from './classifier.ts';
-import { createTier0 } from './tier0.ts';
+import { createTier0, termListDetectors } from './tier0.ts';
 import type { ClassifierTier } from './types.ts';
 
 const policy = policyWith();
@@ -27,6 +27,37 @@ describe('createClassifier', () => {
 		const c = createClassifier({ tiers: [createTier0(), tier1], budgetMs: 1_000 });
 		const result = await c.classify([`Abc ${SECRET}`], policy);
 		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['customer-names', 'secrets']);
+	});
+
+	// Issue #78: a name that is both a staff name and customer data is customer data.
+	it('lets the stricter data type win an overlap, whatever the confidence or tier order', async () => {
+		const staffList = policyWith({ lists: [{ dataTypeId: 'staff-names', terms: ['Jane Doe'] }] });
+		const tagger = (dataTypeId: string, confidence: number) =>
+			fakeTier({
+				id: 'tier1',
+				spans: (texts) => texts.map(() => [{ start: 4, end: 12, dataTypeId, source: 'tagger', confidence }])
+			});
+		const text = 'Ask Jane Doe today';
+		for (const tiers of [
+			[createTier0({ policyDetectors: termListDetectors }), tagger('customer-personal-data', 0.7)],
+			[tagger('customer-personal-data', 0.7), createTier0({ policyDetectors: termListDetectors })]
+		]) {
+			const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], staffList);
+			expect(result.ok && result.spans[0]).toEqual([
+				{ start: 4, end: 12, dataTypeId: 'customer-personal-data', source: 'tagger', confidence: 0.7 }
+			]);
+		}
+		// Customer names (yellow) lose to customer personal data (red) the same way.
+		const yellowFirst = [
+			fakeTier({
+				id: 'tier0',
+				spans: (texts) =>
+					texts.map(() => [{ start: 4, end: 12, dataTypeId: 'customer-names', source: 'list', confidence: 1 }])
+			}),
+			tagger('customer-personal-data', 0.6)
+		];
+		const result = await createClassifier({ tiers: yellowFirst, budgetMs: 1_000 }).classify([text], policy);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['customer-personal-data']);
 	});
 
 	it('skips a tier when shouldRun says no, and passes it the spans so far', async () => {

@@ -115,6 +115,48 @@ describe('tier 1 labels', () => {
 		expect(spans!.map((s) => s.dataTypeId)).toEqual(['customer-names']);
 	});
 
+	// Issue #78: the model was trained with "staff names" next to "customer personal data", so it
+	// needs that choice even while staff names are green; their spans are then dropped.
+	describe('an allow data type the model was trained on (staff names)', () => {
+		const trained = { 'staff-names': 'staff names', 'customer-personal-data': 'customer personal data' };
+		const entities = { priya: 'staff names', 'Jane Doe': 'customer personal data' };
+
+		it('is given to the model, but its spans are dropped while it is allowed', async () => {
+			const { model, calls } = fakeModel(entities, { labels: trained });
+			const [spans] = await createTier1({ model }).detect(['priya: email Jane Doe'], ctx());
+			expect(calls[0]!.labels).toContain('staff names');
+			expect(calls[0]!.labels).not.toContain('Public docs'); // allow, and not in labels.json
+			expect(spans!.map((s) => s.dataTypeId)).toEqual(['customer-personal-data']);
+		});
+
+		it('keeps its spans once IT moves it off green', async () => {
+			const policy = policyWith({
+				dataTypes: defaultPolicy().dataTypes.map((d) =>
+					d.id === 'staff-names' ? { ...d, tier: 'red' as const, action: 'pseudonymize' as const } : d
+				)
+			});
+			const { model } = fakeModel(entities, { labels: trained });
+			const [spans] = await createTier1({ model }).detect(['priya: email Jane Doe'], ctx(policy));
+			expect(spans!.map((s) => s.dataTypeId)).toEqual(['staff-names', 'customer-personal-data']);
+		});
+
+		it('is left out for a model that was not trained on it', async () => {
+			const { model, calls } = fakeModel(entities);
+			await createTier1({ model }).detect(['priya'], ctx());
+			expect(calls[0]!.labels).not.toContain('Staff names');
+			expect(calls[0]!.labels).toEqual(names());
+		});
+
+		it('never calls the model when only allow data types are left to tag', async () => {
+			const policy = policyWith({
+				dataTypes: defaultPolicy().dataTypes.map((d) => ({ ...d, tier: 'green' as const, action: 'allow' as const }))
+			});
+			const { model, calls } = fakeModel(entities, { labels: trained });
+			expect(await createTier1({ model }).detect(['priya'], ctx(policy))).toEqual([[]]);
+			expect(calls).toHaveLength(0);
+		});
+	});
+
 	it('respects the threshold', async () => {
 		const { model } = fakeModel({ Northwind: 'Customer names' }); // scores ≈ 0.993
 		expect((await createTier1({ model, threshold: 0.999 }).detect(['Northwind'], ctx()))[0]).toEqual([]);
