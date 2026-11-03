@@ -163,7 +163,7 @@ Each tier runs only if the previous one isn't sure.
 | --- | --- | --- | --- | --- |
 | 0. Rules + lists | Secrets/API keys, emails, card numbers (Luhn), phone numbers, IP addresses, admin term lists (codenames, customers) | Regex rules (a subset of the Gitleaks rule set) + a single Aho-Corasick pass for term lists (whole words, any case) | < 10 ms | Built (#7, #8, wired in #63). 10k terms over 5 KB: ~0.2 ms (PR #47). |
 | 1. Label tagger | Spans for the admin's own data types ("Revenue figures", "Customer names") | GLiNER ONNX export run with `onnxruntime-node` in the agent's own process (no Python sidecar) | ~50–200 ms | Built (#13 model, #15 agent). Off unless `SC_TIER1_MODEL_DIR` is set. |
-| 2. Small LLM | Context-dependent judgements (roadmap vs press release) and rewriting ("$4.2M, up 18%" → "mid-teens growth") | Small open model behind an OpenAI-compatible local API, default Ollama ([decided in #14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437)). Compare current Qwen / Gemma / Llama / Phi releases, small (up to ~4B) and medium (up to ~8B); prefer Apache-2.0 licences | ~1–5 s | In progress: model #14, agent #16. |
+| 2. Small LLM | Context-dependent judgements (roadmap vs press release) and rewriting ("$4.2M, up 18%" → "mid-teens growth") | Small open model behind an OpenAI-compatible local API, default Ollama ([decided in #14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437)). Compare current Qwen / Gemma / Llama / Phi releases, small (up to ~4B) and medium (up to ~8B); prefer Apache-2.0 licences | ~1–5 s | Built (#14 model and prompts, #16 agent). Off unless `SC_TIER2_MODEL` or `SC_TIER2_BASE_URL` is set. |
 
 **Tier 1 as built (#13, #15).**
 - **Model:** `urchade/gliner_small-v2.1` (Apache-2.0), fine-tuned on our train split. Chosen in
@@ -183,9 +183,41 @@ Each tier runs only if the previous one isn't sure.
   Long text is split into overlapping windows; the check budget (§2a) still applies.
 - **Hosting:** the export lives in a private Hugging Face org (§4a).
 
+**Tier 2 as built (#14, #16).**
+- **Model:** Gemma 4 E4B instruct, `gemma4:e4b-it-q4_K_M` on Ollama with `OLLAMA_CONTEXT_LENGTH=8192`,
+  pinned with its digest in `ml/models.lock.json` (`external`, `tier2-llm`). Scores and the
+  comparison with other models: `ml/results/tier2-llm.md`.
+- **API:** OpenAI-compatible `POST <base>/chat/completions` (`SC_TIER2_BASE_URL`, default
+  `http://127.0.0.1:11434/v1`). Non-streaming, `temperature: 0`, `seed: 0`, `reasoning_effort:
+  "none"`, the task's JSON Schema as `response_format`. The answer is still checked on the way
+  back. An optional `SC_TIER2_API_KEY` is sent as a Bearer header, so a company-hosted server (#75)
+  is a setting. The base URL must be https unless it is loopback.
+- **Prompts:** the agent loads `ml/prompts/tier2/` (`SC_TIER2_PROMPTS_DIR`), the files the
+  evaluation scored. `apps/agent/src/classifier/tier2/prompts.ts` ports the Python rendering
+  exactly; a fixture written by the Python reference checks it.
+- **Context judgement** (the last classifier tier): tier 1 spans of the labels in `tier2.json`
+  (`unreleased-roadmap`, `revenue-figures`, `internal-metrics`, `deal-sizes`) go to the model,
+  which says whether each is sensitive *in this document*. Spans it says aren't are removed. The
+  classifier only lets tier 2 remove tagger spans of those labels. It never removes a tier 0 rule
+  or term-list match, or a span overlapping one. For a prompt or tool input, tier 2 runs only
+  if it could change the verdict.
+- **Fail safe:** each call is capped at 6 s and at the time left in the check. No call starts with
+  less than 1.5 s left (`tier2.json` `timeouts`); tier 2 is then skipped, not failed. A timeout,
+  connection error, bad JSON, or a missing or repeated id keeps that call's spans flagged. Tier 2
+  never fails a check by itself.
+- **Startup:** on Ollama, `GET /api/tags` checks the model and digest, then one warm-up call.
+  Logs `tier2_ready` or `tier2_unavailable` with a reason. The agent never pulls a model.
+- **Latency** (M3 Max, tiers 0+1+2, per check that needs tier 2): p50 ~0.5 s, p95 ~0.85 s with
+  the GPU free; 3–5 s when another app was using the GPU. Not yet measured on a base Mac.
+
 **Transformations** (built in #10, `apps/agent/src/transform/`):
-- **generalize** (vague but true). Until tier 2 lands, the value is replaced by its data type's
-  name in brackets, e.g. `$4.2M` → `[Revenue figures]` (#16 replaces this).
+- **generalize** (vague but true, #16). A span that is one number gets a deterministic rewrite
+  (`transform/numbers.ts`, a port of `ml/.../tier2/numbers.py`): `$4.2M` → `over $4M`, `18%` →
+  `high teens`. It is true by construction and scored 100% clean in #14. Other values (names,
+  codenames, dates) go to tier 2's generalize prompt ("an upcoming project"). Every rewrite must
+  pass a leak check: it can't repeat the value, a distinctive word of it, or another flagged
+  value in the text, and it must be short and plain. Otherwise, or without tier 2, the value
+  becomes its data type's name in brackets, e.g. `[Revenue figures]`.
 - **pseudonymize**: a stand-in named after the data type id, e.g. `customer_name_1` or
   `customer_personal_data_1`, consistent within a Claude Code session so Claude can still tell
   items apart. Stand-ins are not mapped back in tool input (#50).
@@ -228,7 +260,7 @@ only; weights are hosted only if we fine-tune.
 | --- | --- | --- |
 | Plugin + hooks | An automated run (`claude -p --output-format stream-json`) shows raw data reaching Claude without the plugin, and with the plugin: unsafe prompts blocked; Read/Bash/Grep/WebFetch output cleaned. `claude plugin validate ./plugin` passes. | Mostly met. `pnpm test:e2e` (#17, #41) shows the block and cleaned Read and Bash output, including inside subagents. Grep, WebFetch, WebSearch and MCP are covered by unit tests on real payloads, not the e2e run (WebFetch can't fetch a local page). CI runs `claude plugin validate`. |
 | Agent | Every endpoint returns valid hook JSON (validated against `packages/policy`). Tiers 0+1 p95 < 300 ms on a Mac. Fail-mode behaviour covered by tests. | Endpoints and fail mode built and tested (#9). Tier 1 inside the target on an M3 Max (PR #67, measured on a busy machine); large tool output is slower (~100 ms per KB). Base M-series Mac not measured. |
-| Classifier | Meets the evaluation targets above on the held-out set. | Tier 1 meets red recall ≥ 95% (97.8%). Task preservation not run yet. Tier 2 open (#14). |
+| Classifier | Meets the evaluation targets above on the held-out set. | Tier 1 meets red recall ≥ 95% (97.8%). Task preservation not run yet. Tier 2 (#14, #16) clears tier 1's roadmap-vs-press-release false positives (52% → 0% on test) without losing a true span. |
 | Installer | On a clean Mac, one command + `/plugin install` gives a working setup. The SessionStart check tells the user how to fix a missing agent. | SessionStart check built (#17). Installer not started (#26). |
 | Dashboard | Moving a data type between columns updates the policy; the agent picks it up within N seconds. Live feed shows events and contains no text. | Live feed built (#24). Agent pulls the policy every 30 s (#22). Policy editor not built (#23). |
 
@@ -267,16 +299,18 @@ Each item says where it was decided, or which issue holds the open question.
    comment's three questions are recorded in #2. More taxonomy questions from the dataset (staff
    names, special-category data, public reference customers) are in PR #54.
 4. **Laptop vs central server** for the model (start on the laptop; keep the agent API identical).
-   **Open**, no issue. Everything built so far runs on the laptop.
+   **Open:** #75 (later; Gemma on every Mac for now). Everything built so far runs on the laptop;
+   tier 2's endpoint is already a setting (`SC_TIER2_BASE_URL`, `SC_TIER2_API_KEY`).
 5. **Agent distribution**: Homebrew formula + launchd; how to package Node + models (and Ollama, if
    used). **Open:** #26. Model hosting is decided (item 8).
 6. **Minimum Claude Code version** (≥ 2.1.295 if we rely on `onFailure`). **Open.** #38 would raise it
    to 2.1.299 for `CLAUDE_CODE_DISABLE_FILE_MENTIONS`.
-7. **Tier 2 model and runtime.** **Runtime decided** in
-   [#14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437): the agent
-   talks to an OpenAI-compatible local API, default Ollama (benchmark against MLX). Compare small
-   (up to ~4B) and medium (up to ~8B) models and recommend one. No more than $5 paid API spend in
-   total. #16 starts after #14 picks the model. **Model still open:** #14.
+7. ~~Tier 2 model and runtime~~: **decided** in
+   [#14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437) (runtime:
+   OpenAI-compatible API, default Ollama) and PR #74 (model: Gemma 4 E4B). Built in #16. See §4.
+   Still **open** in #14: what to do on 16 GB Macs (the model holds ~7 GB while loaded). Also open:
+   whether to keep it loaded all the time (`OLLAMA_KEEP_ALIVE`). Where tier 2 runs, each Mac or a
+   company server, is **open** in #75 (item 4).
 8. ~~Model and dataset hosting~~: **decided** in #70, a private Hugging Face org. See §4a.
 9. ~~Tier 1 model~~: **decided** in
    [#13](https://github.com/SafeContext/safecontext/issues/13#issuecomment-6461207888), GLiNER

@@ -38,7 +38,7 @@ import {
 } from './prompts.ts';
 
 /** Finish this long before the check's deadline, so the classifier never times out waiting. */
-const MARGIN_MS = 100;
+const MARGIN_MS = 250;
 /** The warm-up call may load the model from disk (~6 s cold, #14). */
 const WARMUP_TIMEOUT_MS = 120_000;
 const TAGS_TIMEOUT_MS = 3_000;
