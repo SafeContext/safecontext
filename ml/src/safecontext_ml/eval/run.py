@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..dataset.paths import ML_ROOT, SPLITS_DIR
+from ..dataset.paths import ML_ROOT, SPLITS_DIR, split_path
 from ..dataset.schema import Record, read_jsonl
 from . import judge as J
 from .adapters import load_classifier
@@ -151,7 +151,7 @@ def write_inputs(path: Path, records: list[Record]) -> None:
 
 
 def load(opts: Options) -> tuple[list[Record], list[Record], Path, str]:
-    path = opts.splits_dir / f"{opts.split}.jsonl"
+    path = split_path(opts.split, opts.splits_dir)
     if not path.exists():
         raise FileNotFoundError(
             f"{path} not found. Build the dataset first: python -m safecontext_ml.dataset build"
@@ -183,7 +183,7 @@ def run(opts: Options) -> tuple[str, dict[str, Any]]:
             items, opts.judge_model, yes=opts.yes, backend=opts.judge_backend
         )
 
-    manifest = opts.splits_dir / "manifest.json"
+    manifest = path.parent / "manifest.json"
     manifest_sha = None
     if manifest.exists():
         manifest_sha = (

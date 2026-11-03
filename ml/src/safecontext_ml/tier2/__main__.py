@@ -7,6 +7,7 @@ import shlex
 import sys
 from pathlib import Path
 
+from ..dataset.paths import SET_NAMES
 from ..eval import judge as J
 from .generalize_eval import DEFAULT_LABELS, RESULTS_DIR
 
@@ -23,7 +24,7 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument(
         "model", help="RUNTIME:MODEL (ollama:qwen3.5:4b-q4_K_M, mlx:REPO) or `rules`"
     )
-    g.add_argument("--split", default="test", choices=("train", "dev", "test"))
+    g.add_argument("--split", default="test", choices=SET_NAMES)
     g.add_argument(
         "--labels",
         default="+".join(DEFAULT_LABELS),

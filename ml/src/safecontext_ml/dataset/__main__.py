@@ -25,6 +25,8 @@ def _llm(args: argparse.Namespace) -> None:
     from .llm import SOURCE, run
     from .schema import write_jsonl
 
+    out = args.out or SOURCES_DIR / f"{SOURCE}.jsonl"
+    stats: dict = {}
     records = run(
         args.n_per_genre,
         model=args.model,
@@ -35,11 +37,16 @@ def _llm(args: argparse.Namespace) -> None:
         max_requests=args.max_requests,
         workers=args.workers,
         backend=args.backend,
+        stats=stats,
     )
-    n = write_jsonl(SOURCES_DIR / f"{SOURCE}.jsonl", records)
-    print(
-        f"wrote {n} records (cached responses only) to {SOURCES_DIR / f'{SOURCE}.jsonl'}"
-    )
+    n = write_jsonl(out, records)
+    print(f"wrote {n} records (cached responses only) to {out}")
+    if args.out:
+        from .build import write_set_manifest
+
+        keys = ("n_per_genre", "model", "effort", "seed", "backend")
+        settings = {k: getattr(args, k) for k in keys}
+        print(f"manifest: {write_set_manifest(out, {'generation': settings, **stats})}")
 
 
 def _public(args: argparse.Namespace) -> None:
@@ -114,6 +121,12 @@ def main(argv: list[str] | None = None) -> None:
         help="api (Anthropic API, PAID) or claude-cli (local `claude -p`, no API spend)",
     )
     m.add_argument("--yes", action="store_true", help="actually send the requests")
+    m.add_argument(
+        "--out",
+        type=Path,
+        help="write here (plus manifest.json next to it) instead of data/sources/, so `build` "
+        "leaves the records out: e.g. data/llm-test/llm-test.jsonl, the scored set of issue #76",
+    )
     m.set_defaults(func=_llm)
 
     u = sub.add_parser("public", help="public PII datasets")

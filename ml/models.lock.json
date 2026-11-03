@@ -130,6 +130,21 @@
           "sha256": "f8e8ffb9a45e9ca357194f8cc889150e9beaf1eb45ff336b79969d402a714a14"
         }
       ]
+    },
+    {
+      "name": "data-llm",
+      "description": "llm-test: realistic Claude-written Macrohard documents, a scored set kept out of the splits (issue #76). llm-test.jsonl and manifest.json",
+      "repo": "safecontext-data",
+      "repo_type": "dataset",
+      "path_in_repo": "llm-test",
+      "local_dir": "data/llm-test",
+      "include": [
+        "*.jsonl",
+        "manifest.json"
+      ],
+      "repo_id": null,
+      "revision": null,
+      "files": []
     }
   ],
   "external": [

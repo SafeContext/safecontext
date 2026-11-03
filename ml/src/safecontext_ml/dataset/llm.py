@@ -285,6 +285,9 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
             "backend": "llm",
             "model": cached["params"]["model"],
             "served_by": cached["served_by"],
+            # The split whose entity pools the values came from (train pools: the tier 1 model
+            # may have seen those names in training; dev/test pools: it hasn't).
+            "pools": s.split,
         },
     )
     errors = validate(rec)
@@ -301,7 +304,10 @@ def run(
     max_requests: int | None = None,
     workers: int = 4,
     backend: str = "api",
+    stats: dict[str, Any] | None = None,
 ) -> Iterator[Record]:
+    """Send the uncached requests (only with `yes`), then yield a record per usable cached
+    response. `stats`, if given, is filled at the end: responses, kept, rejected reasons."""
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, not {backend!r}")
     scenarios = plan(n_per_genre, seed)
@@ -354,7 +360,8 @@ def run(
                     print(f"  {i}/{len(todo)} requests done", file=sys.stderr)
 
     rejected: dict[str, int] = {}
-    stale = 0
+    rejections: list[dict[str, str]] = []
+    stale = kept = 0
     for s in scenarios:
         path = cache_path(s, model, effort, backend)
         if not path.exists():
@@ -366,7 +373,9 @@ def run(
         if rec is None:
             key = reason.split(" ")[0].split("=")[0].rstrip(":")
             rejected[key] = rejected.get(key, 0) + 1
+            rejections.append({"id": s.id, "reason": reason})
             continue
+        kept += 1
         yield rec
     if stale:
         print(
@@ -376,3 +385,11 @@ def run(
         )
     if rejected:
         print(f"rejected responses: {rejected}", file=sys.stderr)
+    if stats is not None:
+        stats.update(
+            responses=kept + len(rejections),
+            kept=kept,
+            rejected=dict(sorted(rejected.items())),
+            rejections=rejections,
+            stale_prompt=stale,
+        )

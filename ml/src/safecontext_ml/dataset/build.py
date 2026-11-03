@@ -122,6 +122,25 @@ def build(
     return manifest
 
 
+def write_set_manifest(path: Path, extra: dict[str, Any] | None = None) -> Path:
+    """`manifest.json` next to a scored set that `build` doesn't make (`llm-test`): counts and
+    sha256 under `splits.<name>`, the same place the harness reads them from in the splits
+    manifest, plus `extra` (how it was generated)."""
+    name = path.stem
+    records = list(read_jsonl(path))
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "labels": list(SPAN_LABELS),
+        **(extra or {}),
+        "splits": {
+            name: {"sha256": _sha256(path.read_text(encoding="utf-8")), **_stats(records)}
+        },
+    }
+    out = path.parent / "manifest.json"
+    out.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
 def load_split(split: Split, splits_dir: Path = SPLITS_DIR) -> list[Record]:
     """Load one split. The entry point for the evaluation harness (#12) and training (#13)."""
     return list(read_jsonl(splits_dir / f"{split}.jsonl"))
