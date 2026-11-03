@@ -9,6 +9,10 @@ micro F1 **97.7%**, and flags **8.1%** of safe records. The best off-the-shelf m
 large, ~3x the compute, with 20 hand-picked labels the agent can't use) reached 85.1% red recall
 and flagged 55.6% of safe records, so fine-tuning was needed.
 
+**On realistic Claude-written documents** (`llm-test`, issue #76), the Macrohard scores are
+much lower: red recall 73.2%, and 83% of safe documents flagged, mostly because staff names get
+flagged. See [`llm-test.md`](llm-test.md).
+
 Everything below was tuned on `dev` only (thresholds, prompts, checkpoint). `test` was used once
 per variant for the numbers in this file. Test sha256 `1aec53bb6700782d…` (see the per-run reports).
 

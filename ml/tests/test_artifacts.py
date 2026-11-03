@@ -136,13 +136,16 @@ def remote_for(path_in_repo="", files=FILES):
 
 def test_committed_lock_is_fully_pinned():
     arts = A.load_lock()
-    assert list(arts) == ["tier1-onnx", "tier1-pytorch", "data-splits"]
+    assert list(arts) == ["tier1-onnx", "tier1-pytorch", "data-splits", "data-llm"]
     for a in arts.values():
         assert a.pinned and a.repo_id.startswith("SafeContext/")
         assert len(a.revision) == 40 and a.files
         assert all(len(f.sha256) == 64 for f in a.files)
     assert arts["data-splits"].repo_type == "dataset"
     assert arts["tier1-onnx"].local_dir == "models/tier1-onnx"
+    # the llm-test set lives next to the splits, never inside them (build would merge it)
+    assert arts["data-llm"].local_dir == "data/llm-test"
+    assert arts["data-llm"].path_in_repo != arts["data-splits"].path_in_repo
 
 
 def test_lock_round_trip_keeps_other_keys(tmp_path):

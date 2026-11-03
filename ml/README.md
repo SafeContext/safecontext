@@ -45,7 +45,7 @@ All are `uv run python -m safecontext_ml.dataset <command>`.
 | Command | Does | Cost |
 | --- | --- | --- |
 | `offline [--docs-per-genre 200] [--seed 0]` | Writes `data/sources/macrohard-offline.jsonl` from templates. Deterministic. | Free, no network |
-| `llm [--n-per-genre 100] [--model claude-sonnet-5-5] [--effort medium] [--backend api\|claude-cli] [--dry-run] [--yes] [--max-requests N]` | Writes `data/sources/macrohard-llm.jsonl`. Without `--yes`, sends nothing: it says how many requests it would send and roughly what they'd cost, and builds from cached responses only. `--dry-run` prints sample prompts. `--n-per-genre 10` is 100 requests. | `api`: **paid** (Anthropic API, `ANTHROPIC_API_KEY`). `claude-cli`: the local `claude -p` on your Claude Code login, no API spend |
+| `llm [--n-per-genre 100] [--model claude-sonnet-5-5] [--effort medium] [--backend api\|claude-cli] [--dry-run] [--yes] [--max-requests N] [--repair-untagged] [--out FILE]` | Writes `data/sources/macrohard-llm.jsonl`, or `FILE` plus a `manifest.json` next to it (`--out`: kept out of `build`; see *Realistic test set*). Without `--yes`, sends nothing: it says how many requests it would send and roughly what they'd cost, and builds from cached responses only. `--dry-run` prints sample prompts. `--n-per-genre 10` is 100 requests. `--repair-untagged` tags values Claude was given but left untagged, instead of rejecting the response. | `api`: **paid** (Anthropic API, `ANTHROPIC_API_KEY`). `claude-cli`: the local `claude -p` on your Claude Code login, no API spend |
 | `public list` | Lists the public datasets, licences and sizes | Free |
 | `public download NAME --yes` | Downloads a pinned commit into `data/raw/public/NAME/` | Download |
 | `public convert NAME [--limit N]` | Writes `data/sources/NAME.jsonl` | Free |
@@ -70,6 +70,8 @@ ml/data/
   splits/                     gitignored
     train.jsonl dev.jsonl test.jsonl
     manifest.json             counts per split / label / source / genre, sha256 of each split
+  llm-test/                   gitignored; realistic scored set, never merged by build (#76)
+    llm-test.jsonl manifest.json
 ```
 
 Sources: `macrohard-offline`, `macrohard-llm`, `nemotron-pii`, `gretel-pii-finance`, `gretel-pii-en`.
@@ -196,6 +198,25 @@ generated at run time.
   untagged. Requests go through `client.beta.messages.create` with refusal fallbacks
   (`fallbacks="default"`).
 
+### Realistic test set (`llm-test`)
+
+99 Macrohard documents written by Claude (`claude-sonnet-5-5` through `claude -p`, one approved
+run of 100 calls, issue #76), stored apart from the splits so the frozen test split never
+changes. They score tiers 1 and 2 on realistic text; the template data is an upper bound.
+Results: [`results/llm-test.md`](results/llm-test.md).
+
+```bash
+cd ml
+uv run python -m safecontext_ml.artifacts pull data-llm      # -> data/llm-test/ (or pnpm models:pull)
+uv run python -m safecontext_ml.eval gliner:models/tier1-onnx,device=onnx --split llm-test
+uv run python -m safecontext_ml.tier2 generalize rules --split llm-test
+```
+
+It was built from the cached responses with `dataset llm --n-per-genre 10 --backend claude-cli
+--repair-untagged --out data/llm-test/llm-test.jsonl`; that makes no calls once the cache is
+full. `meta.pools` says which split's entity pools a record's values came from: 74 records use
+train-pool names, which the tier 1 model may have seen in training.
+
 ## Evaluation
 
 ```bash
@@ -244,7 +265,7 @@ any model.
 
 | Option | Does |
 | --- | --- |
-| `--split test` | `train`, `dev` or `test` (the default) |
+| `--split test` | `train`, `dev`, `test` (the default), or `llm-test` (the realistic set, `data/llm-test/`). `tier2 generalize` takes the same |
 | `--limit N` | A seeded random sample of N records |
 | `--per-source N` | At most N records from each source. Use this for quick runs: `--limit` alone mostly picks Nemotron |
 | `--source NAME` | Only this source (repeatable) |
@@ -422,8 +443,9 @@ the lock file. Issue #70.
 | `tier1-onnx` | model `SafeContext/tier1-gliner` (repo root) | `models/tier1-onnx` | The ONNX export as the agent loads it, plus `provenance.json` |
 | `tier1-pytorch` | model `SafeContext/tier1-gliner`, under `pytorch/` | `models/tier1-small-ft` | The final fine-tuned model (`pytorch_model.bin`, configs, tokenizer, `finetune_args.json`); not the `checkpoint-*` dirs |
 | `data-splits` | dataset `SafeContext/safecontext-data`, under `splits/` | `data/splits` | `train/dev/test.jsonl` and `manifest.json`. The frozen test split is the one that matters |
+| `data-llm` | dataset `SafeContext/safecontext-data`, under `llm-test/` | `data/llm-test` | The realistic scored set: `llm-test.jsonl` and `manifest.json` (see *Realistic test set*) |
 
-All three are pinned in `models.lock.json`. The raw public downloads aren't hosted: `dataset
+All four are pinned in `models.lock.json`. The raw public downloads aren't hosted: `dataset
 public download` fetches them again. The tier 2 LLM is off the shelf, so it isn't hosted either:
 it is pinned under `external` (see *Tier 2 small LLM*).
 
