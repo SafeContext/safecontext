@@ -1,0 +1,295 @@
+{
+ "about": "Written by apps/agent/scripts/tier2-render-fixture.py from the Python reference. Don't edit.",
+ "data_types": {
+  "unreleased-roadmap": {
+   "name": "Unreleased roadmap",
+   "description": "Plans, launch dates and codenames for products or features that are not public yet."
+  },
+  "revenue-figures": {
+   "name": "Revenue figures",
+   "description": "Non-public revenue, bookings, margins or growth numbers."
+  },
+  "deal-sizes": {
+   "name": "Deal sizes",
+   "description": ""
+  }
+ },
+ "cases": [
+  {
+   "task": "context",
+   "text": "Project Heron launches March 3.",
+   "spans": [
+    {
+     "start": 0,
+     "end": 13,
+     "data_type": "unreleased-roadmap"
+    },
+    {
+     "start": 23,
+     "end": 30,
+     "data_type": "unreleased-roadmap"
+    }
+   ],
+   "requests": [
+    {
+     "ids": [
+      "s1",
+      "s2"
+     ],
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are the context checker in a data-protection tool. A fast detector has flagged spans in a document as possibly sensitive company data. The detector only sees words, not context, so it also flags things that are already public. For each flagged span, decide whether it is really sensitive, as the data type describes it, in this document.\n\nA span is sensitive when the document treats it as non-public company information:\n- an unreleased product, feature, codename or planned launch date\n- non-public revenue, bookings, margin or growth figures\n- non-public usage, adoption, churn, performance or incident metrics\n- the value of a specific customer's contract or deal\n- or anything else that matches the data type's description and is not public\n\nA span is NOT sensitive when the document shows it is already public or not real:\n- it is in a press release, public announcement, release notes, public docs or a marketing page\n- the product or feature has already shipped, launched, been released or is generally available\n- the date or number was announced publicly, is on the pricing page, is a published SLA, or comes from a public survey or marketing claim\n- it is a placeholder, an example value or a made-up sample\n\nJudge each span by what the document says about that span, not by how it looks. The same codename is sensitive in a launch plan and not sensitive in a press release about its launch. Internal chat can mention public facts (\"shipped publicly last year\", \"it's on the pricing page\"), and public-looking text can contain internal facts (\"internal only\", \"confidential\", \"planned\", \"target date\", \"don't share\").\n\nCompany documents are private by default. Answer sensitive: false only when the document itself gives a clear sign that the span is public or not real. A company's own revenue, bookings, growth, metrics, deal values and plans with no sign either way are sensitive. If you are not sure, answer sensitive: true. Missing real sensitive data is much worse than flagging public data.\n\nAnswer with JSON only: one entry per flagged span, in the order given, with the span's id, a reason of at most 12 words, and sensitive true or false."
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nOrbitly announces Orbitly Sync\n\nFollowing its June 2025 launch, <s1>Project Marigold</s1> is now available on every plan. Teams using it close their books <s2>40%</s2> faster, according to a public customer survey.\n</document>\n\nFlagged spans:\n- s1: \"Project Marigold\" (unreleased-roadmap)\n- s2: \"40%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"press release; the product already launched\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"public marketing claim from a published survey\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nLaunch plan - <s1>Sundial</s1> (target <s2>19 May</s2>)\n\n- Beta churn is <s3>4.1%</s3>, keep this internal\n- Pricing stays as on the public pricing page: <s4>$12</s4> per seat\n</document>\n\nFlagged spans:\n- s1: \"Sundial\" (unreleased-roadmap)\n- s2: \"19 May\" (unreleased-roadmap)\n- s3: \"4.1%\" (internal-metrics)\n- s4: \"$12\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"codename of a launch that is still planned\", \"sensitive\": true}, {\"id\": \"s2\", \"reason\": \"target date of an unreleased launch\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"beta churn, marked internal\", \"sensitive\": true}, {\"id\": \"s4\", \"reason\": \"public price from the pricing page\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nana: <s1>Albatross</s1> shipped publicly in March, docs are live\nraj: nice. Q3 bookings came in at <s2>£2.3M</s2>, board deck only\nana: our SLA is <s3>99.9%</s3>, it's on the website\n</document>\n\nFlagged spans:\n- s1: \"Albatross\" (unreleased-roadmap)\n- s2: \"£2.3M\" (revenue-figures)\n- s3: \"99.9%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"says it shipped publicly in March\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"internal bookings figure for the board\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"published SLA on the website\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\n<s1>Project Heron</s1> launches <s2>March 3</s2>.\n</document>\n\nFlagged spans:\n- s1: \"Project Heron\" (unreleased-roadmap)\n- s2: \"March 3\" (unreleased-roadmap)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "task": "context",
+   "text": "Notes: {{spans}} and {{data_types}} stay literal.\n\"Quill\" ships\tnext week; revenue $4.2M.",
+   "spans": [
+    {
+     "start": 50,
+     "end": 63,
+     "data_type": "unreleased-roadmap"
+    },
+    {
+     "start": 83,
+     "end": 88,
+     "data_type": "revenue-figures"
+    }
+   ],
+   "requests": [
+    {
+     "ids": [
+      "s1",
+      "s2"
+     ],
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are the context checker in a data-protection tool. A fast detector has flagged spans in a document as possibly sensitive company data. The detector only sees words, not context, so it also flags things that are already public. For each flagged span, decide whether it is really sensitive, as the data type describes it, in this document.\n\nA span is sensitive when the document treats it as non-public company information:\n- an unreleased product, feature, codename or planned launch date\n- non-public revenue, bookings, margin or growth figures\n- non-public usage, adoption, churn, performance or incident metrics\n- the value of a specific customer's contract or deal\n- or anything else that matches the data type's description and is not public\n\nA span is NOT sensitive when the document shows it is already public or not real:\n- it is in a press release, public announcement, release notes, public docs or a marketing page\n- the product or feature has already shipped, launched, been released or is generally available\n- the date or number was announced publicly, is on the pricing page, is a published SLA, or comes from a public survey or marketing claim\n- it is a placeholder, an example value or a made-up sample\n\nJudge each span by what the document says about that span, not by how it looks. The same codename is sensitive in a launch plan and not sensitive in a press release about its launch. Internal chat can mention public facts (\"shipped publicly last year\", \"it's on the pricing page\"), and public-looking text can contain internal facts (\"internal only\", \"confidential\", \"planned\", \"target date\", \"don't share\").\n\nCompany documents are private by default. Answer sensitive: false only when the document itself gives a clear sign that the span is public or not real. A company's own revenue, bookings, growth, metrics, deal values and plans with no sign either way are sensitive. If you are not sure, answer sensitive: true. Missing real sensitive data is much worse than flagging public data.\n\nAnswer with JSON only: one entry per flagged span, in the order given, with the span's id, a reason of at most 12 words, and sensitive true or false."
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nOrbitly announces Orbitly Sync\n\nFollowing its June 2025 launch, <s1>Project Marigold</s1> is now available on every plan. Teams using it close their books <s2>40%</s2> faster, according to a public customer survey.\n</document>\n\nFlagged spans:\n- s1: \"Project Marigold\" (unreleased-roadmap)\n- s2: \"40%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"press release; the product already launched\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"public marketing claim from a published survey\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nLaunch plan - <s1>Sundial</s1> (target <s2>19 May</s2>)\n\n- Beta churn is <s3>4.1%</s3>, keep this internal\n- Pricing stays as on the public pricing page: <s4>$12</s4> per seat\n</document>\n\nFlagged spans:\n- s1: \"Sundial\" (unreleased-roadmap)\n- s2: \"19 May\" (unreleased-roadmap)\n- s3: \"4.1%\" (internal-metrics)\n- s4: \"$12\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"codename of a launch that is still planned\", \"sensitive\": true}, {\"id\": \"s2\", \"reason\": \"target date of an unreleased launch\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"beta churn, marked internal\", \"sensitive\": true}, {\"id\": \"s4\", \"reason\": \"public price from the pricing page\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nana: <s1>Albatross</s1> shipped publicly in March, docs are live\nraj: nice. Q3 bookings came in at <s2>£2.3M</s2>, board deck only\nana: our SLA is <s3>99.9%</s3>, it's on the website\n</document>\n\nFlagged spans:\n- s1: \"Albatross\" (unreleased-roadmap)\n- s2: \"£2.3M\" (revenue-figures)\n- s3: \"99.9%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"says it shipped publicly in March\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"internal bookings figure for the board\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"published SLA on the website\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nNotes: {{spans}} and {{data_types}} stay literal.\n<s1>\"Quill\" ships</s1>\tnext week; revenue <s2>$4.2M</s2>.\n</document>\n\nFlagged spans:\n- s1: \"\\\"Quill\\\" ships\" (unreleased-roadmap)\n- s2: \"$4.2M\" (revenue-figures)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "task": "generalize",
+   "text": "Q3 revenue was $4.2M, up 18%. Pellham renewed at €865k 🚀 with Bluefin Logistics.",
+   "spans": [
+    {
+     "start": 15,
+     "end": 20,
+     "data_type": "revenue-figures"
+    },
+    {
+     "start": 49,
+     "end": 54,
+     "data_type": "deal-sizes"
+    },
+    {
+     "start": 63,
+     "end": 80,
+     "data_type": "customer-names"
+    }
+   ],
+   "requests": [
+    {
+     "ids": [
+      "g1",
+      "g2",
+      "g3"
+     ],
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are the rewriter in a data-protection tool. Some values in a document are sensitive company data. Replace each marked value with a vague but true version, so the reader still gets the gist without learning the value.\n\nYour rewrite replaces exactly the marked text, and the words around it stay as they are. It must read naturally in the sentence.\n\nRules:\n1. Never repeat the value, and never give it so precisely that it could be recovered. Use at most one significant digit, or words. \"$4.2M\" can become \"about $4M\" or \"a few million dollars\", never \"$4.2 million\" or \"4,200,000\".\n2. It must stay true: the real value must fall inside what you say. Work out the size first, then pick the words:\n   - a percentage's tens digit gives its decade: 18% is in the teens (\"high teens\"), 34.8% in the thirties (\"mid-thirties\"), 75.7% in the seventies (\"mid-seventies\"), 6.4% in the single digits, 0.9% is \"under 1%\"\n   - an amount's number of digits gives its size: $134k = $134,000 has six figures (\"low six figures\", \"over $100k\"); $3.6M = $3,600,000 has seven figures (\"a few million dollars\"); $48.1M is \"tens of millions\" or \"about $50M\"\n3. Keep the unit and kind of value: a percentage stays a percentage, money stays money (the currency may stay), a count stays a count, a duration stays a duration.\n4. Keep it short: at most 6 words. No quotes, brackets, notes or explanations.\n5. Never put another sensitive value in the rewrite: no customer, person, product or codename, and no other number from the document.\n6. For a value that is not a number (a name, codename or date), use a generic description: \"a logistics customer\", \"an upcoming project\", \"a date next quarter\".\n\nUseful patterns:\n- percentages: \"single digits\", \"low teens\", \"mid-teens\", \"high teens\", \"around a third\", \"over half\", \"about 70%\"\n- money: \"under $1M\", \"low six figures\", \"about $40M\", \"a few million euros\", \"tens of millions of dollars\"\n- counts: \"a few hundred\", \"thousands of\", \"about 200,000\", \"over a million\"\n- durations: \"under a second\", \"a few hundred ms\"\n\nAnswer with JSON only: one entry per marked value, in the order given, with the value's id and its rewrite."
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (values to rewrite are marked <gN>...</gN>):\n<document>\nQ3 update: revenue was <g1>$4.2M</g1>, up <g2>18%</g2> on Q2. Gross margin hit <g3>71%</g3>.\n</document>\n\nValues to rewrite:\n- g1: \"$4.2M\" (revenue-figures)\n- g2: \"18%\" (revenue-figures)\n- g3: \"71%\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"rewrites\": [{\"id\": \"g1\", \"text\": \"about $4M\"}, {\"id\": \"g2\", \"text\": \"high teens\"}, {\"id\": \"g3\", \"text\": \"about 70%\"}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- deal-sizes (Deal sizes): Contract values, renewals and pricing agreed with specific customers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (values to rewrite are marked <gN>...</gN>):\n<document>\nPellham Freight renewed at <g1>€865k</g1> a year. Weekly active seats reached <g2>23,418</g2> and p95 latency is <g3>340 ms</g3>; churn fell to <g4>0.8%</g4>.\n</document>\n\nValues to rewrite:\n- g1: \"€865k\" (deal-sizes)\n- g2: \"23,418\" (internal-metrics)\n- g3: \"340 ms\" (internal-metrics)\n- g4: \"0.8%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"rewrites\": [{\"id\": \"g1\", \"text\": \"high six figures in euros\"}, {\"id\": \"g2\", \"text\": \"over 20,000\"}, {\"id\": \"g3\", \"text\": \"a few hundred ms\"}, {\"id\": \"g4\", \"text\": \"under 1%\"}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- deal-sizes (Deal sizes): Contract values, renewals and pricing agreed with specific customers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (values to rewrite are marked <gN>...</gN>):\n<document>\nClosed-won: Dunmore Agri, <g1>$2.7M</g1> over two years. Adoption hit <g2>43.6%</g2> and the error rate peaked at <g3>87%</g3>. Bookings were <g4>$61.2M</g4>, up <g5>6.4%</g5>.\n</document>\n\nValues to rewrite:\n- g1: \"$2.7M\" (deal-sizes)\n- g2: \"43.6%\" (internal-metrics)\n- g3: \"87%\" (internal-metrics)\n- g4: \"$61.2M\" (revenue-figures)\n- g5: \"6.4%\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"rewrites\": [{\"id\": \"g1\", \"text\": \"a few million dollars\"}, {\"id\": \"g2\", \"text\": \"low forties\"}, {\"id\": \"g3\", \"text\": \"high eighties\"}, {\"id\": \"g4\", \"text\": \"about $60M\"}, {\"id\": \"g5\", \"text\": \"mid single digits\"}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n- deal-sizes (Deal sizes)\n- customer-names (customer-names)\n\nDocument (values to rewrite are marked <gN>...</gN>):\n<document>\nQ3 revenue was <g1>$4.2M</g1>, up 18%. Pellham renewed at <g2>€865k</g2> 🚀 with <g3>Bluefin Logistics</g3>.\n</document>\n\nValues to rewrite:\n- g1: \"$4.2M\" (revenue-figures)\n- g2: \"€865k\" (deal-sizes)\n- g3: \"Bluefin Logistics\" (customer-names)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "task": "context",
+   "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Heron ships in May. bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Quill is planned. cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+   "spans": [
+    {
+     "start": 2001,
+     "end": 2006,
+     "data_type": "unreleased-roadmap"
+    },
+    {
+     "start": 5022,
+     "end": 5027,
+     "data_type": "unreleased-roadmap"
+    }
+   ],
+   "requests": [
+    {
+     "ids": [
+      "s1"
+     ],
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are the context checker in a data-protection tool. A fast detector has flagged spans in a document as possibly sensitive company data. The detector only sees words, not context, so it also flags things that are already public. For each flagged span, decide whether it is really sensitive, as the data type describes it, in this document.\n\nA span is sensitive when the document treats it as non-public company information:\n- an unreleased product, feature, codename or planned launch date\n- non-public revenue, bookings, margin or growth figures\n- non-public usage, adoption, churn, performance or incident metrics\n- the value of a specific customer's contract or deal\n- or anything else that matches the data type's description and is not public\n\nA span is NOT sensitive when the document shows it is already public or not real:\n- it is in a press release, public announcement, release notes, public docs or a marketing page\n- the product or feature has already shipped, launched, been released or is generally available\n- the date or number was announced publicly, is on the pricing page, is a published SLA, or comes from a public survey or marketing claim\n- it is a placeholder, an example value or a made-up sample\n\nJudge each span by what the document says about that span, not by how it looks. The same codename is sensitive in a launch plan and not sensitive in a press release about its launch. Internal chat can mention public facts (\"shipped publicly last year\", \"it's on the pricing page\"), and public-looking text can contain internal facts (\"internal only\", \"confidential\", \"planned\", \"target date\", \"don't share\").\n\nCompany documents are private by default. Answer sensitive: false only when the document itself gives a clear sign that the span is public or not real. A company's own revenue, bookings, growth, metrics, deal values and plans with no sign either way are sensitive. If you are not sure, answer sensitive: true. Missing real sensitive data is much worse than flagging public data.\n\nAnswer with JSON only: one entry per flagged span, in the order given, with the span's id, a reason of at most 12 words, and sensitive true or false."
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nOrbitly announces Orbitly Sync\n\nFollowing its June 2025 launch, <s1>Project Marigold</s1> is now available on every plan. Teams using it close their books <s2>40%</s2> faster, according to a public customer survey.\n</document>\n\nFlagged spans:\n- s1: \"Project Marigold\" (unreleased-roadmap)\n- s2: \"40%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"press release; the product already launched\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"public marketing claim from a published survey\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nLaunch plan - <s1>Sundial</s1> (target <s2>19 May</s2>)\n\n- Beta churn is <s3>4.1%</s3>, keep this internal\n- Pricing stays as on the public pricing page: <s4>$12</s4> per seat\n</document>\n\nFlagged spans:\n- s1: \"Sundial\" (unreleased-roadmap)\n- s2: \"19 May\" (unreleased-roadmap)\n- s3: \"4.1%\" (internal-metrics)\n- s4: \"$12\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"codename of a launch that is still planned\", \"sensitive\": true}, {\"id\": \"s2\", \"reason\": \"target date of an unreleased launch\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"beta churn, marked internal\", \"sensitive\": true}, {\"id\": \"s4\", \"reason\": \"public price from the pricing page\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nana: <s1>Albatross</s1> shipped publicly in March, docs are live\nraj: nice. Q3 bookings came in at <s2>£2.3M</s2>, board deck only\nana: our SLA is <s3>99.9%</s3>, it's on the website\n</document>\n\nFlagged spans:\n- s1: \"Albatross\" (unreleased-roadmap)\n- s2: \"£2.3M\" (revenue-figures)\n- s3: \"99.9%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"says it shipped publicly in March\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"internal bookings figure for the board\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"published SLA on the website\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa <s1>Heron</s1> ships in May. bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n</document>\n\nFlagged spans:\n- s1: \"Heron\" (unreleased-roadmap)"
+      }
+     ]
+    },
+    {
+     "ids": [
+      "s1"
+     ],
+     "messages": [
+      {
+       "role": "system",
+       "content": "You are the context checker in a data-protection tool. A fast detector has flagged spans in a document as possibly sensitive company data. The detector only sees words, not context, so it also flags things that are already public. For each flagged span, decide whether it is really sensitive, as the data type describes it, in this document.\n\nA span is sensitive when the document treats it as non-public company information:\n- an unreleased product, feature, codename or planned launch date\n- non-public revenue, bookings, margin or growth figures\n- non-public usage, adoption, churn, performance or incident metrics\n- the value of a specific customer's contract or deal\n- or anything else that matches the data type's description and is not public\n\nA span is NOT sensitive when the document shows it is already public or not real:\n- it is in a press release, public announcement, release notes, public docs or a marketing page\n- the product or feature has already shipped, launched, been released or is generally available\n- the date or number was announced publicly, is on the pricing page, is a published SLA, or comes from a public survey or marketing claim\n- it is a placeholder, an example value or a made-up sample\n\nJudge each span by what the document says about that span, not by how it looks. The same codename is sensitive in a launch plan and not sensitive in a press release about its launch. Internal chat can mention public facts (\"shipped publicly last year\", \"it's on the pricing page\"), and public-looking text can contain internal facts (\"internal only\", \"confidential\", \"planned\", \"target date\", \"don't share\").\n\nCompany documents are private by default. Answer sensitive: false only when the document itself gives a clear sign that the span is public or not real. A company's own revenue, bookings, growth, metrics, deal values and plans with no sign either way are sensitive. If you are not sure, answer sensitive: true. Missing real sensitive data is much worse than flagging public data.\n\nAnswer with JSON only: one entry per flagged span, in the order given, with the span's id, a reason of at most 12 words, and sensitive true or false."
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nOrbitly announces Orbitly Sync\n\nFollowing its June 2025 launch, <s1>Project Marigold</s1> is now available on every plan. Teams using it close their books <s2>40%</s2> faster, according to a public customer survey.\n</document>\n\nFlagged spans:\n- s1: \"Project Marigold\" (unreleased-roadmap)\n- s2: \"40%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"press release; the product already launched\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"public marketing claim from a published survey\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nLaunch plan - <s1>Sundial</s1> (target <s2>19 May</s2>)\n\n- Beta churn is <s3>4.1%</s3>, keep this internal\n- Pricing stays as on the public pricing page: <s4>$12</s4> per seat\n</document>\n\nFlagged spans:\n- s1: \"Sundial\" (unreleased-roadmap)\n- s2: \"19 May\" (unreleased-roadmap)\n- s3: \"4.1%\" (internal-metrics)\n- s4: \"$12\" (revenue-figures)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"codename of a launch that is still planned\", \"sensitive\": true}, {\"id\": \"s2\", \"reason\": \"target date of an unreleased launch\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"beta churn, marked internal\", \"sensitive\": true}, {\"id\": \"s4\", \"reason\": \"public price from the pricing page\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n- revenue-figures (Revenue figures): Non-public revenue, bookings, margins or growth numbers.\n- internal-metrics (Internal metrics): Non-public usage, adoption, churn or performance metrics.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nana: <s1>Albatross</s1> shipped publicly in March, docs are live\nraj: nice. Q3 bookings came in at <s2>£2.3M</s2>, board deck only\nana: our SLA is <s3>99.9%</s3>, it's on the website\n</document>\n\nFlagged spans:\n- s1: \"Albatross\" (unreleased-roadmap)\n- s2: \"£2.3M\" (revenue-figures)\n- s3: \"99.9%\" (internal-metrics)"
+      },
+      {
+       "role": "assistant",
+       "content": "{\"spans\": [{\"id\": \"s1\", \"reason\": \"says it shipped publicly in March\", \"sensitive\": false}, {\"id\": \"s2\", \"reason\": \"internal bookings figure for the board\", \"sensitive\": true}, {\"id\": \"s3\", \"reason\": \"published SLA on the website\", \"sensitive\": false}]}"
+      },
+      {
+       "role": "user",
+       "content": "Data types:\n- unreleased-roadmap (Unreleased roadmap): Plans, launch dates and codenames for products or features that are not public yet.\n\nDocument (flagged spans are marked <sN>...</sN>):\n<document>\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb <s1>Quill</s1> is planned. cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n</document>\n\nFlagged spans:\n- s1: \"Quill\" (unreleased-roadmap)"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

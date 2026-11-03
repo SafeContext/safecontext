@@ -23,6 +23,7 @@ import {
 } from '@safecontext/policy';
 import { Hono, type Context } from 'hono';
 import type { Classifier, ClassifyResult } from './classifier/types.ts';
+import { DEFAULT_CHECK_BUDGET_MS } from './config.ts';
 import { decide, failDecision, type Decision, type Failure } from './decide.ts';
 import { countHits, noopEventSink, type EventSink } from './events.ts';
 import { promptResponse, toolInputResponse, toolOutputResponse } from './hooks.ts';
@@ -30,6 +31,7 @@ import { silentLogger, type Logger, type Outcome } from './log.ts';
 import type { PolicySource } from './policy-source.ts';
 import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
 import { createPseudonymStore, type PseudonymStore } from './transform/pseudonyms.ts';
+import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
 import { createRewriter } from './transform/rewrite.ts';
 
 export interface AppDeps {
@@ -39,6 +41,13 @@ export interface AppDeps {
 	events?: EventSink;
 	/** Per-session pseudonyms (in memory). Default: a new store with the default bounds. */
 	pseudonyms?: PseudonymStore;
+	/** Tier 2's generalize call (#16). Without it, only number values get a vague rewrite. */
+	generalizer?: GeneralizeModel;
+	/**
+	 * The check budget (`SC_CHECK_BUDGET_MS`). Generalize calls must finish within it, counted from
+	 * the start of the check. Default `DEFAULT_CHECK_BUDGET_MS`.
+	 */
+	checkBudgetMs?: number;
 	/** Clock in ms. Injected for tests. */
 	now?: () => number;
 }
@@ -67,6 +76,7 @@ export function createApp(deps: AppDeps): Hono {
 	const { policy: policySource, classifier, logger = silentLogger, events = noopEventSink } = deps;
 	const now = deps.now ?? (() => performance.now());
 	const pseudonyms = deps.pseudonyms ?? createPseudonymStore();
+	const { generalizer, checkBudgetMs = DEFAULT_CHECK_BUDGET_MS } = deps;
 	const app = new Hono();
 
 	app.get(AGENT_API.health.path, (c) =>
@@ -75,19 +85,30 @@ export function createApp(deps: AppDeps): Hono {
 
 	/** Classify `texts` and decide. Never throws (the classifier doesn't). */
 	async function check(texts: string[], policy: Policy, hook: HookEventName) {
+		const deadline = now() + checkBudgetMs;
 		const result = await classifier.classify(texts, policy, { hook });
 		const chars = texts.reduce((n, t) => n + t.length, 0);
-		return { result, decision: decide(result, policy), fields: texts.length, chars };
+		return { result, decision: decide(result, policy), fields: texts.length, chars, deadline };
 	}
 
 	/**
 	 * Each text with its flagged spans transformed, or undefined if nothing needs transforming.
-	 * Pseudonyms are per Claude Code session.
+	 * Pseudonyms are per Claude Code session. Generalize may call tier 2 within the check's
+	 * `deadline`; texts go one at a time (the model server answers one call at a time).
 	 */
-	function rewrite(texts: readonly string[], decision: Decision, sessionId: string): string[] | undefined {
+	async function rewrite(
+		texts: readonly string[],
+		decision: Decision,
+		sessionId: string,
+		policy: Policy,
+		deadline: number
+	): Promise<string[] | undefined> {
 		if (decision.cause !== 'policy') return undefined;
-		const rewriter = createRewriter(decision.hits, pseudonyms.session(sessionId));
-		return texts.map((text, i) => rewriter(text, decision.spans[i] ?? []));
+		const generalize = createGeneralize({ model: generalizer, policy, deadline });
+		const rewriter = createRewriter(decision.hits, pseudonyms.session(sessionId), generalize);
+		const out: string[] = [];
+		for (const [i, text] of texts.entries()) out.push(await rewriter(text, decision.spans[i] ?? []));
+		return out;
 	}
 
 	/**
@@ -153,6 +174,7 @@ export function createApp(deps: AppDeps): Hono {
 				...(toolName !== undefined && { tool: toolName }),
 				policyVersion: policy.version,
 				...(result && { tiers: result.tiers.map((t) => t.id), classifyMs: round(result.ms) }),
+				...(result?.ok && result.cleared && { cleared: result.cleared }),
 				...(handled.fields !== undefined && { fields: handled.fields, chars: handled.chars }),
 				spans: decision.hits.reduce((n, h) => n + h.count, 0),
 				totalMs: round(totalMs)
@@ -184,7 +206,7 @@ export function createApp(deps: AppDeps): Hono {
 				// Only a blocked prompt needs a safe version (and only then are pseudonyms handed out).
 				const safe =
 					checked.decision.verdict === 'block'
-						? rewrite([input.prompt], checked.decision, input.session_id)
+						? await rewrite([input.prompt], checked.decision, input.session_id, policy, checked.deadline)
 						: undefined;
 				return { ...checked, output: promptResponse(checked.decision, safe?.[0]) };
 			},
@@ -213,7 +235,7 @@ export function createApp(deps: AppDeps): Hono {
 			async (input, policy) => {
 				const texts = toolOutputTexts(input.tool_name, input.tool_response);
 				const checked = await check(texts, policy, 'PostToolUse');
-				const rewritten = rewrite(texts, checked.decision, input.session_id);
+				const rewritten = await rewrite(texts, checked.decision, input.session_id, policy, checked.deadline);
 				return {
 					...checked,
 					toolName: input.tool_name,

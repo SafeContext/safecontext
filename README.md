@@ -32,7 +32,12 @@ hasn't settled the result.
 | --- | --- | --- |
 | 0. Rules and word lists | Secrets and API keys, emails, phone numbers, card numbers and IP addresses. Plus the word lists IT uploads (codenames, customer names). | Built and on by default ([#7](https://github.com/SafeContext/safecontext/issues/7), [#8](https://github.com/SafeContext/safecontext/issues/8), [#63](https://github.com/SafeContext/safecontext/issues/63)). |
 | 1. Tagger | The company's own kinds of data, such as customer names or revenue figures, that fixed rules miss. A small AI model (GLiNER) fine-tuned on our own example data. | Built ([#13](https://github.com/SafeContext/safecontext/issues/13), [#15](https://github.com/SafeContext/safecontext/issues/15)). Off unless you point the agent at the model. On our held-out test set it finds 97.8% of "never share" items and wrongly flags 8.1% of harmless texts. |
-| 2. Small local LLM | Judgements that need context (a roadmap vs a press release), and rewriting numbers to be vague but true ("mid-teens growth"). | In progress ([#14](https://github.com/SafeContext/safecontext/issues/14), then [#16](https://github.com/SafeContext/safecontext/issues/16)). Until then "make it vague" replaces a value with its data type's name, such as `[Revenue figures]`. |
+| 2. Small local LLM | Judgements that need context: a codename in a launch plan is secret, the same codename in a press release isn't. It also rewrites names and dates to be vague ("an upcoming project"). | Built ([#14](https://github.com/SafeContext/safecontext/issues/14) chose Gemma 4 E4B on Ollama, [#16](https://github.com/SafeContext/safecontext/issues/16) wired it in). Off unless you turn it on. It can only *un-flag* tier 1 finds for roadmap, revenue, metrics and deal sizes. It never un-flags secrets or IT's word lists. If it's slow or down, everything stays flagged. |
+
+"Make it vague" works without tier 2 for numbers: `$4.2M` becomes `over $4M` and `18%` becomes
+`high teens`. These are always true and never repeat the value. Names and dates need tier 2. Without
+it (or if its answer could give the value away) they become the data type's name, such as
+`[Revenue figures]`.
 
 Also working:
 
@@ -70,6 +75,9 @@ Also working:
     ([#61](https://github.com/SafeContext/safecontext/issues/61))
 
   Details: [docs/hook-coverage.md](docs/hook-coverage.md).
+- **Tier 2 speed varies.** A check that needs tier 2 took about 0.5 s (p50) on an M3 Max when the
+  graphics chip was free, and 3–5 s when another app was using it. A call that runs out of time
+  keeps everything flagged. Not measured on a base 16 GB Mac yet; #14 estimates 1.7–2 s there.
 - **How a Mac joins an organisation** uses a temporary enrollment key
   ([#51](https://github.com/SafeContext/safecontext/issues/51)).
 
@@ -120,7 +128,38 @@ Use an absolute path: a relative one is read from `apps/agent`, the agent's work
 SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" pnpm --filter @safecontext/agent dev
 ```
 
-### 3. Dashboard and sync
+### 3. Turn on tier 2
+
+Tier 2 is Gemma 4 E4B (Apache-2.0, about 6.6 GB on disk and 7 GB of memory while loaded), run by
+[Ollama](https://ollama.com) on this Mac. Install and start Ollama with an 8k context, then pull the
+pinned model once:
+
+```bash
+brew install ollama
+OLLAMA_CONTEXT_LENGTH=8192 OLLAMA_FLASH_ATTENTION=1 ollama serve &   # keep it running
+ollama pull gemma4:e4b-it-q4_K_M
+```
+
+Then start the agent with tiers 1 and 2:
+
+```bash
+SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" SC_TIER2_MODEL=gemma4:e4b-it-q4_K_M \
+  pnpm --filter @safecontext/agent dev
+```
+
+The agent logs `tier2_ready` once Ollama has the pinned model (same digest as
+`ml/models.lock.json`) and has answered a first call. If not, it logs `tier2_unavailable` with a
+reason (`unreachable`, `model_missing`, `digest_mismatch`) and keeps checking with tiers 0 and 1
+only. The agent never downloads a model itself. Ollama unloads an idle model after 5 minutes, and
+the next check pays for reloading it (about 6 s). To avoid that, start Ollama with
+`OLLAMA_KEEP_ALIVE=-1`, at the cost of keeping 7 GB in use.
+
+The prompts are read from `ml/prompts/tier2/`, the same files the evaluation in `ml/` scored. To
+try it with the real model: `SC_TIER2_REAL=1 pnpm --filter @safecontext/agent test tier2.real`, and
+`pnpm --filter @safecontext/agent exec tsx scripts/tier2-demo.ts` (before/after examples and
+latency, with the variables above).
+
+### 4. Dashboard and sync
 
 ```bash
 pnpm --filter @safecontext/dashboard db:migrate              # create the tables
@@ -161,6 +200,7 @@ appear in the dashboard's live feed within a few seconds.
 pnpm check && pnpm lint                     # types and lint, every package
 pnpm test                                   # unit tests, every package (the dashboard's also runs Playwright)
 pnpm test:e2e                               # real Claude Code on haiku (small model cost) + dashboard Playwright
+E2E_TIERS=1 pnpm --filter @safecontext/agent test:e2e   # the same with your SC_TIER1_*/SC_TIER2_* settings (tiers 1+2)
 pnpm --filter @safecontext/<name> <script>  # one package
 pnpm models:pull                            # pinned models and data from Hugging Face
 cd ml && uv sync && uv run pytest           # ML tests (downloads the ML libraries on first run)
@@ -182,6 +222,11 @@ Playwright needs its test browser once per machine:
 | `SC_TIER1_THRESHOLD` | the model's `tier1.json`, else 0.5 | Lowest score that counts as a match |
 | `SC_TIER1_THREADS` | `0` (all cores) | onnxruntime threads |
 | `SC_TIER1_LABEL` | `{name}` | Label the model sees for a data type, when `labels.json` has none |
+| `SC_TIER2_MODEL` | `gemma4:e4b-it-q4_K_M` once tier 2 is on | Tier 2 model name. Setting this or `SC_TIER2_BASE_URL` turns tier 2 on; unset both: off |
+| `SC_TIER2_BASE_URL` | `http://127.0.0.1:11434/v1` (Ollama) | Any OpenAI-compatible server. Must be https, except on this Mac (localhost) |
+| `SC_TIER2_API_KEY` | unset | Sent as `Authorization: Bearer`, for a company-hosted model server ([#75](https://github.com/SafeContext/safecontext/issues/75)). Never logged |
+| `SC_TIER2_PROMPTS_DIR` | the repo's `ml/prompts/tier2` | Tier 2 prompt files |
+| `SC_TIER2_TIMEOUT_MS` | `6000` (from `tier2.json`) | Longest one tier 2 call may take. Calls also stop in time for the check budget |
 | `SC_DASHBOARD_URL` | unset | Dashboard address. Unset: no sync. Must be https, except localhost |
 | `SC_ENROLLMENT_KEY` | unset | Organisation key, needed until the device has a token in the Keychain |
 | `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Device id and policy copy |

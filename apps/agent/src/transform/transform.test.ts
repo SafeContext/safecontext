@@ -110,7 +110,7 @@ describe('pseudonyms', () => {
 describe('rewriter', () => {
 	const store = () => createPseudonymStore().session('s');
 
-	it('applies each action and keeps the text around the spans', () => {
+	it('applies each action and keeps the text around the spans', async () => {
 		const text = 'A Northwind B 4242 4242 4242 4242 C $4.2M D sk_x E ok';
 		const at = (s: string, id: string) => span(text.indexOf(s), text.indexOf(s) + s.length, id);
 		const rewrite = createRewriter(
@@ -130,24 +130,24 @@ describe('rewriter', () => {
 			at('sk_x', 'secrets'),
 			at('ok', 'public-docs')
 		];
-		expect(rewrite(text, spans)).toBe(
-			'A customer_name_1 B ****4242 C [Revenue figures] D [Safe Context removed: API keys & secrets] E ok'
+		expect(await rewrite(text, spans)).toBe(
+			'A customer_name_1 B ****4242 C over $4M D [Safe Context removed: API keys & secrets] E ok'
 		);
 	});
 
-	it('returns the text unchanged with no spans', () => {
-		expect(createRewriter([], store())('hello', [])).toBe('hello');
+	it('returns the text unchanged with no spans', async () => {
+		expect(await createRewriter([], store())('hello', [])).toBe('hello');
 	});
 
-	it('removes a span whose data type it was not told about', () => {
-		expect(createRewriter([], store())('a secret b', [span(2, 8, 'mystery')])).toBe(
+	it('removes a span whose data type it was not told about', async () => {
+		expect(await createRewriter([], store())('a secret b', [span(2, 8, 'mystery')])).toBe(
 			'a [Safe Context removed: mystery] b'
 		);
 	});
 
-	it('clamps overlapping or out-of-range spans without exposing or repeating text', () => {
+	it('clamps overlapping or out-of-range spans without exposing or repeating text', async () => {
 		const rewrite = createRewriter([hit('x', 'block', 'X')], store());
-		expect(rewrite('abcdefgh', [span(1, 4, 'x'), span(3, 6, 'x'), span(7, 99, 'x')])).toBe(
+		expect(await rewrite('abcdefgh', [span(1, 4, 'x'), span(3, 6, 'x'), span(7, 99, 'x')])).toBe(
 			'a[Safe Context removed: X][Safe Context removed: X]g[Safe Context removed: X]'
 		);
 	});
