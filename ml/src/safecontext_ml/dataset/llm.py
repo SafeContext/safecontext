@@ -15,6 +15,8 @@ How it works:
 3. The model returns the document with `<data-type-id>...</data-type-id>` tags (see `markup.py`).
 4. Quality gates reject a response if the markup is broken, a hard negative contains the labels it
    should avoid, or a provided sensitive value appears in the text without a tag.
+5. Staff names are tagged afterwards, not by the model (`tag_staff`): the prompt hands the model
+   Macrohard's staff handles, so we know exactly which names are staff.
 """
 
 from __future__ import annotations
@@ -103,9 +105,15 @@ Output only the document itself, with tags. No preamble, no code fences around t
 document, no commentary."""
 
 
+#: Labels the model is asked to tag: every span label except `staff-names`, which `tag_staff`
+#: adds from the staff handles we gave it. Keeping it out of the prompt keeps the prompt (and so
+#: `prompt_sha256` in the cache) the same as before issue #78.
+PROMPT_LABELS: tuple[str, ...] = tuple(t for t in L.SPAN_LABELS if t != L.STAFF)
+
+
 def _types_block() -> str:
     return "\n".join(
-        f"- {L.BY_ID[t].id}: {L.BY_ID[t].description}" for t in L.SPAN_LABELS
+        f"- {L.BY_ID[t].id}: {L.BY_ID[t].description}" for t in PROMPT_LABELS
     )
 
 
@@ -281,6 +289,34 @@ def repair_untagged(
     return sorted(out, key=lambda sp: sp.start), added
 
 
+_STAFF_RE = re.compile(
+    # A staff handle as a whole token, in any case ("dan", "Dan", "@dan", "tom.h"), optionally
+    # as a work email ("tom.h@macrohard.io"). Not part of a longer token ("dan.smith",
+    # "dan@example.com") and not a unit after a number or slash ("$38/mo", "12 mo").
+    r"(?<![\w./-])(?<!\d )("
+    + "|".join(re.escape(h) for h in sorted(V.STAFF, key=len, reverse=True))
+    + r")(@" + re.escape(V.COMPANY_DOMAIN) + r")?(?![\w@-])(?!\.\w)",
+    re.IGNORECASE,
+)
+
+
+def tag_staff(text: str, spans: list[Span]) -> tuple[list[Span], int]:
+    """Tag Macrohard staff handles (and their work emails) as `staff-names` (issue #78).
+
+    The model was told the handles are staff and to leave them untagged, so every occurrence
+    is one of them. An occurrence that touches an existing span is left alone. Returns the new
+    sorted spans and how many were added."""
+    out = list(spans)
+    added = 0
+    for m in _STAFF_RE.finditer(text):
+        a, b = m.span()
+        if any(sp.start < b and a < sp.end for sp in out):
+            continue
+        out.append(Span(a, b, L.STAFF, text[a:b]))
+        added += 1
+    return sorted(out, key=lambda sp: sp.start), added
+
+
 def to_record(
     s: Scenario, cached: dict[str, Any], repair: bool = False
 ) -> tuple[Record | None, str]:
@@ -297,7 +333,9 @@ def to_record(
     except MarkupError as e:
         return None, f"markup: {e}"
     present = {sp.label for sp in spans}
-    negative_for = sorted(set(L.SPAN_LABELS) - present) if s.hard_negative else []
+    # A safe look-alike for every sensitive label. Not for staff names: safe documents mention
+    # staff all the time.
+    negative_for = sorted(set(L.SENSITIVE_LABELS) - present) if s.hard_negative else []
     if s.hard_negative and spans:
         return None, "hard negative contains tags"
     repaired = 0
@@ -323,6 +361,7 @@ def to_record(
                 if covering[0].label != label:
                     return None, f"mislabelled value {v[:30]!r} as {covering[0].label}"
                 start = text.find(v, start + 1)
+    spans, staff = tag_staff(text, spans)
     rec = Record(
         id=s.id,
         text=text,
@@ -339,6 +378,7 @@ def to_record(
             # may have seen those names in training; dev/test pools: it hasn't).
             "pools": s.split,
             **({"repaired_spans": repaired} if repair else {}),
+            "staff_spans": staff,
         },
     )
     errors = validate(rec)

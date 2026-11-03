@@ -17,8 +17,11 @@ Span-matching rule (documented in ml/README.md, "Evaluation"):
 4. **Red recall** = found red gold spans / red gold spans, using the overlap rule.
    "Any label" also counts a red span as found when a prediction of a *different* label covers
    it (the text is still hidden, but the wrong policy action may apply).
-5. **Safe-text false-positive rate** = records with no gold spans that get at least one
-   prediction / records with no gold spans.
+5. **Safe-text false-positive rate** = safe records that get at least one prediction of a
+   sensitive label / safe records. "Sensitive" = yellow or red in the default policy
+   (`SENSITIVE_LABELS`); a safe record has no gold span of a sensitive label. Staff names are
+   green by default (issue #78), so a chat whose only spans are staff handles is safe, and a
+   staff-names prediction doesn't flag it.
 6. **Hard-negative false-positive rate** = hard-negative records (non-empty `negative_for`) with
    at least one prediction whose label is in that record's `negative_for` / hard-negative
    records. Per label in the per-label table.
@@ -31,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from ..dataset import RED_LABELS, SPAN_LABELS
+from ..dataset.labels import SENSITIVE_LABELS
 from ..dataset.schema import Record, Span
 from .classifier import Prediction
 
@@ -163,8 +167,8 @@ def score_record(record: Record, preds: Sequence[Prediction]) -> RecordResult:
         labels=labels,
         red_gold=len(red),
         red_found_any=red_found_any,
-        safe=not record.spans,
-        flagged=bool(kept),
+        safe=not any(s.label in SENSITIVE_LABELS for s in record.spans),
+        flagged=any(p.label in SENSITIVE_LABELS for p in kept),
         hard_negative=bool(record.negative_for),
         hn_flagged=bool(predicted_labels & set(record.negative_for)),
         dropped_ignore=ignored,
@@ -241,8 +245,15 @@ class GroupScores:
     def latency(self, q: float) -> float | None:
         return percentile(self.latencies_ms, q)
 
+    @property
+    def micro(self) -> LabelCounts:
+        """Micro totals over the sensitive labels (the seven yellow and red types), so the
+        number means the same as before staff names were added. Staff names have their own
+        row in the label table."""
+        return self.total(SENSITIVE_LABELS)
+
     def to_json(self) -> dict:
-        micro = self.total()
+        micro = self.micro
         return {
             "records": self.records,
             "chars": self.chars,

@@ -3,7 +3,13 @@
 import re
 from pathlib import Path
 
-from safecontext_ml.dataset.labels import DATA_TYPES, RED_LABELS, SPAN_LABELS
+from safecontext_ml.dataset.labels import (
+    DATA_TYPES,
+    DOCUMENT_TYPES,
+    RED_LABELS,
+    SENSITIVE_LABELS,
+    SPAN_LABELS,
+)
 
 DEFAULTS_TS = Path(__file__).resolve().parents[2] / "packages/policy/src/defaults.ts"
 
@@ -17,8 +23,8 @@ def parse_defaults() -> list[tuple[str, str, str, str]]:
         raw_id = re.search(r"id: (?:'([^']+)'|BUILTIN_DATA_TYPE\.(\w+))", obj)
         assert raw_id, obj
         type_id = raw_id.group(1) or builtin[raw_id.group(2)]
-        name = re.search(r"name: '([^']+)'", obj).group(1)
-        description = re.search(r"description: '([^']+)'", obj).group(1)
+        name = re.search(r"name:\s*'([^']+)'", obj).group(1)
+        description = re.search(r"description:\s*'([^']+)'", obj).group(1)
         tier = re.search(r"tier: '(\w+)'", obj).group(1)
         out.append((type_id, name, tier, description))
     return out
@@ -26,15 +32,18 @@ def parse_defaults() -> list[tuple[str, str, str, str]]:
 
 def test_matches_policy_defaults():
     expected = parse_defaults()
-    assert len(expected) == 10
+    assert len(expected) == 11
     assert [(d.id, d.name, d.tier, d.description) for d in DATA_TYPES] == expected
 
 
-def test_span_labels_exclude_green():
-    assert "public-docs" not in SPAN_LABELS
+def test_span_labels_are_values_not_document_types():
+    # Decided by what a type is, not by its tier: staff names are green but still spans.
+    assert not set(DOCUMENT_TYPES) & set(SPAN_LABELS)
+    assert "staff-names" in SPAN_LABELS
     assert set(RED_LABELS) == {
         "unreleased-roadmap",
         "secrets",
         "customer-personal-data",
     }
-    assert len(SPAN_LABELS) == 7
+    assert len(SPAN_LABELS) == 8
+    assert set(SPAN_LABELS) - set(SENSITIVE_LABELS) == {"staff-names"}

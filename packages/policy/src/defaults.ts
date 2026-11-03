@@ -41,6 +41,17 @@ export const DEFAULT_DATA_TYPES: DataType[] = [
 		tier: 'green',
 		action: 'allow'
 	},
+	{
+		// Decided on #2 (issue #78): staff names are their own type, so IT decides where the
+		// names of colleagues sit. Green by default. Names of customers stay customer personal data.
+		id: 'staff-names',
+		name: 'Staff names',
+		description:
+			'Names, chat handles and work email addresses of colleagues: people who work for the organisation, not its customers.',
+		examples: ['priya: deploy is done', 'ask Dan in finance', 'tom.h@macrohard.io'],
+		tier: 'green',
+		action: 'allow'
+	},
 	// Yellow: make it vague
 	{
 		id: 'revenue-figures',

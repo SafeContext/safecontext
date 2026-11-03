@@ -61,9 +61,9 @@ def _headline(scorer: Scorer, info: RunInfo) -> list[str]:
         row("Predicted spans", lambda x: f"{x.total().pred:,}"),
         row(f"**Red recall** (target ≥ {RED_RECALL_TARGET:.0%})", red),
         row("Red recall, any label", lambda x: pct(x.red_recall_any)),
-        row("Micro precision", lambda x: pct(x.total().precision)),
-        row("Micro recall", lambda x: pct(x.total().recall)),
-        row("Micro F1", lambda x: pct(x.total().f1)),
+        row("Micro precision", lambda x: pct(x.micro.precision)),
+        row("Micro recall", lambda x: pct(x.micro.recall)),
+        row("Micro F1", lambda x: pct(x.micro.f1)),
         row(
             "**Safe text flagged** (FP rate)",
             lambda x: frac(x.safe_flagged, x.safe_records),
@@ -160,13 +160,19 @@ def render(scorer: Scorer, info: RunInfo, judge: JudgeSummary | None) -> str:
             "column); predictions that only touch `ignore` regions are dropped. Rules: "
             "`ml/README.md`, Evaluation."
         ),
+        (
+            "- **Sensitive labels:** micro scores and *Safe text flagged* use the yellow and red "
+            "labels only. `staff-names` is green by default, so it has its own row below and "
+            "doesn't flag a document."
+        ),
     ]
     out += [f"- ⚠️ {w}" for w in info.warnings]
     out += [
         "",
         (
             "Public PII (Nemotron, Gretel) carries only `customer-personal-data` and `secrets`; the "
-            "five business labels come only from Macrohard, so read the per-source columns."
+            "five business labels and `staff-names` come only from Macrohard, so read the "
+            "per-source columns."
         ),
         "",
         "## Headline",

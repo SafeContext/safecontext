@@ -41,6 +41,13 @@ DATA_TYPES: tuple[DataType, ...] = (
         "Code from public open-source projects and libraries.",
     ),
     DataType(
+        "staff-names",
+        "Staff names",
+        "green",
+        "Names, chat handles and work email addresses of colleagues: people who work for the "
+        "organisation, not its customers.",
+    ),
+    DataType(
         "revenue-figures",
         "Revenue figures",
         "yellow",
@@ -86,11 +93,25 @@ DATA_TYPES: tuple[DataType, ...] = (
 
 BY_ID: dict[str, DataType] = {d.id: d for d in DATA_TYPES}
 
-#: Labels that appear on spans: every non-green data type. Green types ("allow") are never
-#: span-labelled; green text is simply text with no spans.
-SPAN_LABELS: tuple[str, ...] = tuple(d.id for d in DATA_TYPES if d.tier != "green")
+#: Data types that describe a whole document, not a value in it ("this is public docs"). They
+#: never appear on spans: such text is simply text with no spans.
+DOCUMENT_TYPES: tuple[str, ...] = ("public-docs", "release-notes", "open-source-code")
+
+#: Labels that appear on spans: every data type except the document types. This is decided by
+#: what the type *is*, not by its tier: `staff-names` is green by default but IT can move it to
+#: yellow or red, so it is labelled like any other value (issue #78).
+SPAN_LABELS: tuple[str, ...] = tuple(
+    d.id for d in DATA_TYPES if d.id not in DOCUMENT_TYPES
+)
 
 RED_LABELS: tuple[str, ...] = tuple(d.id for d in DATA_TYPES if d.tier == "red")
+
+#: Span labels that are sensitive under the default policy (yellow or red). Scores that ask
+#: "was safe text flagged?" use these: a document whose only spans are staff names is safe by
+#: default, and a staff-names prediction doesn't flag it.
+SENSITIVE_LABELS: tuple[str, ...] = tuple(
+    t for t in SPAN_LABELS if BY_ID[t].tier != "green"
+)
 
 # Short names used by the generators, so templates stay readable.
 REVENUE = "revenue-figures"
@@ -100,3 +121,4 @@ CUSTOMER = "customer-names"
 ROADMAP = "unreleased-roadmap"
 SECRET = "secrets"
 PERSONAL = "customer-personal-data"
+STAFF = "staff-names"

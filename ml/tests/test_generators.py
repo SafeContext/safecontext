@@ -8,7 +8,7 @@ import pytest
 from safecontext_ml.dataset import llm, offline, public
 from safecontext_ml.dataset.banks import BANKS, bank_for_split
 from safecontext_ml.dataset.build import FrozenTestError, build
-from safecontext_ml.dataset.labels import SPAN_LABELS
+from safecontext_ml.dataset.labels import SENSITIVE_LABELS, SPAN_LABELS
 from safecontext_ml.dataset.render import SLOT_RE, render
 from safecontext_ml.dataset.schema import (
     Record,
@@ -120,12 +120,32 @@ def test_llm_to_record_quality_gates():
     assert llm.to_record(s, _cached("Bluefin Bank renewed."))[1].startswith("untagged")
     assert llm.to_record(s, _cached("x", stop="refusal"))[1].startswith("stop_reason")
     neg = _scenario(True, {})
-    rec, _ = llm.to_record(neg, _cached("We shipped Macrohard Ledger."))
-    assert rec and set(rec.negative_for) == set(SPAN_LABELS)
+    rec, _ = llm.to_record(neg, _cached("We shipped Macrohard Ledger. Thanks, priya"))
+    # Safe documents mention staff, so a hard negative is never a look-alike for staff-names.
+    assert rec and set(rec.negative_for) == set(SENSITIVE_LABELS)
+    assert [(sp.text, sp.label) for sp in rec.spans] == [("priya", "staff-names")]
     assert (
         llm.to_record(neg, _cached("<secrets>abc</secrets>"))[1]
         == "hard negative contains tags"
     )
+
+
+def test_llm_tag_staff_handles_and_work_emails():
+    text = ("dan: ask @Priya or tom.h@macrohard.io, not dan@example.com or dan.smith.\n"
+            "Plan is $38/mo for 12 mo. mo: ok (mo)")  # fmt: skip
+    spans, n = llm.tag_staff(text, [])
+    assert [sp.text for sp in spans] == ["dan", "Priya", "tom.h@macrohard.io", "mo", "mo"]
+    assert n == 5 and {sp.label for sp in spans} == {"staff-names"}
+    # Never on top of a span the model tagged.
+    taken = [Span(0, 3, "secrets", "dan")]
+    assert llm.tag_staff("dan", taken) == (taken, 0)
+
+
+def test_llm_prompt_leaves_staff_names_to_tag_staff():
+    # The prompt is unchanged by issue #78, so cached responses stay fresh (prompt_sha256).
+    params = llm.request_params(llm.plan(1)[0], "m", "medium")
+    assert "staff-names" not in params["system"]
+    assert "customer-personal-data" in params["system"]
 
 
 def test_llm_repair_tags_provided_values_left_untagged():

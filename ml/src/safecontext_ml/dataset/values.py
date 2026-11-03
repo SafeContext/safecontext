@@ -69,7 +69,9 @@ PRODUCTS = (
     "Macrohard Vault", "Macrohard Pulse", "Macrohard Atlas Search", "Macrohard Forms",
 )  # fmt: skip
 
-# Macrohard staff (not customers): never labelled.
+# Macrohard staff (not customers): labelled `staff-names` (issue #78), never personal data.
+# The same handles are used in every split, so a model can learn them by heart; test with
+# handles it hasn't seen before trusting staff-names recall on new names.
 STAFF = (
     "priya", "dan", "mo", "sasha", "tom.h", "lena", "kofi", "ruth", "jae", "omar", "bea",
     "alex.k", "marta", "ivan", "zoe", "femi",
@@ -455,10 +457,11 @@ SLOT_KINDS: dict[str, SlotKind] = {
     "card": SlotKind(card, L.PERSONAL),
     "address": SlotKind(address, L.PERSONAL),
     "ip": SlotKind(ip, L.PERSONAL),
+    # Green by default, but a span label: IT can move staff names to yellow or red.
+    "staff": SlotKind(pick(STAFF), L.STAFF),
     # Unlabelled look-alikes and filler
     "launched_codename": SlotKind(codename, None),
     "product": SlotKind(pick(PRODUCTS), None),
-    "staff": SlotKind(pick(STAFF), None),
     "service": SlotKind(pick(SERVICES), None),
     "public_count": SlotKind(public_count, None),
     "public_pct": SlotKind(public_pct, None),

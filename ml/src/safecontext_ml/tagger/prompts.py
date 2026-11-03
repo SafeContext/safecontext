@@ -23,14 +23,13 @@ from __future__ import annotations
 
 from ..dataset import labels as L
 
-NAMES: dict[str, str] = {
-    d.id: d.name.lower() for d in L.DATA_TYPES if d.tier != "green"
-}
+NAMES: dict[str, str] = {t: L.BY_ID[t].name.lower() for t in L.SPAN_LABELS}
 
 #: prompt -> data type id
 PROMPT_SETS: dict[str, dict[str, str]] = {
     "names": {prompt: type_id for type_id, prompt in NAMES.items()},
     "entity": {
+        "employee name": L.STAFF,
         "revenue figure": L.REVENUE,
         "internal metric": L.METRICS,
         "deal size": L.DEAL,
@@ -40,6 +39,7 @@ PROMPT_SETS: dict[str, dict[str, str]] = {
         "personal information": L.PERSONAL,
     },
     "entity2": {
+        "colleague name or chat handle": L.STAFF,
         "revenue amount": L.REVENUE,
         "usage metric": L.METRICS,
         "contract value": L.DEAL,
@@ -49,6 +49,8 @@ PROMPT_SETS: dict[str, dict[str, str]] = {
         "person name or contact detail": L.PERSONAL,
     },
     "fine": {
+        "employee name": L.STAFF,
+        "chat handle": L.STAFF,
         "revenue figure": L.REVENUE,
         "internal metric": L.METRICS,
         "deal size": L.DEAL,
