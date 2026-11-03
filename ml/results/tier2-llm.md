@@ -20,6 +20,11 @@ Q4_K_M quantisation, server started with `OLLAMA_CONTEXT_LENGTH=8192`. Pinned in
   rewrites only values without a number** (names, codenames, dates), where Gemma leaked nothing
   in 309 values.
 
+On realistic Claude-written documents (`llm-test`, issue #76), Gemma again cleared only false
+positives (7 spans, no true span lost). The rule rewrite answered 96.5% of values, missing 8
+whose format it doesn't parse ("47 minutes", "$38 per seat per month"), and Gemma was 81.1%
+clean. See [`llm-test.md`](llm-test.md).
+
 No fine-tuning: prompting got context judgement to 0 wrong clears on test, and the part
 prompting can't do (exact numeric buckets) is solved better without a model.
 

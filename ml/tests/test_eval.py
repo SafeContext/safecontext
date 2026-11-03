@@ -293,6 +293,33 @@ def test_cli_sampling_and_write_inputs(splits, tmp_path, capsys):
     assert "1 of 3 records (random 1, seed 0)" in capsys.readouterr().out
 
 
+def test_cli_scores_the_llm_test_set_next_to_the_splits(splits, tmp_path, capsys):
+    """`--split llm-test` reads `<data>/llm-test/llm-test.jsonl` and its own manifest (#76)."""
+    from safecontext_ml.dataset.build import write_set_manifest
+    from safecontext_ml.dataset.paths import split_path
+
+    assert split_path("test", splits) == splits / "test.jsonl"
+    path = split_path("llm-test", splits)
+    assert path == splits.parent / "llm-test" / "llm-test.jsonl"
+    with pytest.raises(ValueError):
+        split_path("nope", splits)
+    write_jsonl(path, [rec("Bluefin Logistics renewed", [("Bluefin Logistics", "customer-names")],
+                           id="l1", source="macrohard-llm", genre="sales-notes")])  # fmt: skip
+    write_set_manifest(path)
+    out = tmp_path / "results"
+    main(["gold", "--split", "llm-test", "--splits-dir", str(splits), "--out-dir", str(out)])
+    report = capsys.readouterr().out
+    assert "on `llm-test`" in report and "1 of 1 records" in report
+    assert "differs from `manifest.json`" not in report
+    data = json.loads((out / "gold-llm-test.json").read_text())
+    assert data["groups"]["overall"]["records"] == 1
+    assert data["groups"]["overall"]["micro"]["f1"] == 1.0
+    # the set's own manifest is the one checked
+    write_jsonl(path, [rec("Nothing here", id="l2", source="macrohard-llm")])
+    main(["none", "--split", "llm-test", "--splits-dir", str(splits), "--no-save"])
+    assert "differs from `manifest.json`" in capsys.readouterr().out
+
+
 # --- judge (API always mocked) ---
 
 

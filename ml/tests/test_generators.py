@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 from collections import Counter
@@ -125,6 +126,26 @@ def test_llm_to_record_quality_gates():
         llm.to_record(neg, _cached("<secrets>abc</secrets>"))[1]
         == "hard negative contains tags"
     )
+
+
+def test_llm_repair_tags_provided_values_left_untagged():
+    s = _scenario(False, {"customer-names": ["Bluefin Bank"], "unreleased-roadmap": ["Project Heron"]})
+    text = ("# Bluefin Bank review\n<customer-names>Bluefin Bank</customer-names> asked about "
+            "Project <unreleased-roadmap>Heron</unreleased-roadmap>. Bluefin Banking is not it.")  # fmt: skip
+    assert llm.to_record(s, _cached(text))[1].startswith("untagged")
+    rec, why = llm.to_record(s, _cached(text), repair=True)
+    assert rec and not why and rec.meta["repaired_spans"] == 1
+    assert [(sp.text, sp.label) for sp in rec.spans] == [
+        ("Bluefin Bank", "customer-names"),
+        ("Bluefin Bank", "customer-names"),
+        ("Heron", "unreleased-roadmap"),
+    ]
+    assert rec.spans[0].start == 2  # the heading; "Bluefin Banking" is not a whole-word match
+    # a mislabelled value or a tagged hard negative is still rejected
+    bad = "<secrets>Bluefin Bank</secrets> renewed."
+    assert llm.to_record(s, _cached(bad), repair=True)[1].startswith("mislabelled")
+    neg = _scenario(True, {})
+    assert llm.to_record(neg, _cached("<secrets>a</secrets>"), repair=True)[0] is None
 
 
 def test_llm_rejects_value_tagged_with_the_wrong_label():
@@ -262,3 +283,40 @@ def test_build_rejects_invalid_and_duplicate_ids(tmp_path):
     write_jsonl(src / "a.jsonl", [bad])
     with pytest.raises(ValueError, match="invalid records"):
         build(src, tmp_path / "o")
+
+
+def test_llm_out_writes_a_scored_set_that_build_leaves_out(monkeypatch, tmp_path):
+    """`dataset llm --out` (issue #76): records + manifest outside data/sources/, from the cache
+    only, with rejection reasons; `build` never sees them, so the frozen test split can't move."""
+    from safecontext_ml.dataset import __main__ as cli
+
+    monkeypatch.setattr(llm, "LLM_CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(llm, "_call", lambda *a, **k: pytest.fail("must not call claude"))
+    scenarios = llm.plan(1)
+    for i, s in enumerate(scenarios):
+        if s.hard_negative:
+            text = "We shipped Macrohard Ledger." if i % 2 else "<secrets>x</secrets>"
+        else:
+            name = s.values["customer-names"][0]
+            text = f"<customer-names>{name}</customer-names> renewed."
+        path = llm.cache_path(s, "m", "medium", "claude-cli")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(_cached(text)))
+    sources = tmp_path / "sources"
+    monkeypatch.setattr(cli, "SOURCES_DIR", sources)
+    out = tmp_path / "llm-test" / "llm-test.jsonl"
+    cli.main(["llm", "--n-per-genre", "1", "--backend", "claude-cli", "--model", "m",
+              "--out", str(out)])  # fmt: skip
+    recs = list(read_jsonl(out))
+    manifest = json.loads((out.parent / "manifest.json").read_text())
+    rejected = sum(s.hard_negative and i % 2 == 0 for i, s in enumerate(scenarios))
+    assert rejected and manifest["rejected"] == {"hard": rejected}
+    assert manifest["responses"] == len(scenarios)
+    assert manifest["kept"] == len(recs) == len(scenarios) - rejected
+    assert len(manifest["rejections"]) == rejected
+    assert manifest["generation"]["backend"] == "claude-cli"
+    info = manifest["splits"]["llm-test"]
+    assert info["records"] == len(recs)
+    assert info["sha256"] == hashlib.sha256(out.read_bytes()).hexdigest()
+    assert all(r.meta["pools"] == assign_split(r.id) for r in recs)
+    assert not sources.exists()

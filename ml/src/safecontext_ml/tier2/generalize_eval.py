@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from ..dataset import labels as L
-from ..dataset.paths import ML_ROOT, SPLITS_DIR
+from ..dataset.paths import ML_ROOT, SPLITS_DIR, split_path
 from ..dataset.schema import Record, read_jsonl
 from ..eval import judge as J
 from ..eval.metrics import percentile
@@ -288,7 +288,7 @@ def run(
     yes: bool = False,
     splits_dir: Path = SPLITS_DIR,
 ) -> Summary:
-    records = select(list(read_jsonl(splits_dir / f"{split}.jsonl")), labels)
+    records = select(list(read_jsonl(split_path(split, splits_dir))), labels)
     if limit is not None:
         records = records[:limit]
     s = Summary(model, split, len(records))

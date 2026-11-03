@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 import sys
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -33,7 +34,7 @@ from . import labels as L
 from . import values as V
 from .markup import MarkupError, parse
 from .paths import LLM_CACHE_DIR
-from .schema import Record, validate
+from .schema import Record, Span, validate
 from .split import Split, assign_split
 
 SOURCE = "macrohard-llm"
@@ -248,8 +249,47 @@ def _call(params: dict[str, Any], backend: str = "api") -> dict[str, Any]:
     }
 
 
-def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
-    """Parse a cached response into a record, or return (None, reason)."""
+def _whole_word(text: str, start: int, end: int) -> bool:
+    return not (start > 0 and text[start - 1].isalnum()) and not (
+        end < len(text) and text[end].isalnum()
+    )
+
+
+def repair_untagged(
+    text: str, spans: list[Span], values: dict[str, list[str]]
+) -> tuple[list[Span], int]:
+    """Tag the occurrences of provided values that the model left untagged.
+
+    Claude sometimes leaves the first mention of a codename or customer untagged (a heading,
+    "Macrohard Quasar"). We know those values are sensitive and their label, so each whole-word
+    occurrence that no span touches gets a span with the provided label. Longest values first;
+    an occurrence that overlaps any span is left alone (the checks in `to_record` decide).
+    Returns the new sorted spans and how many were added."""
+    out = list(spans)
+    added = 0
+    pairs = sorted(
+        ((label, v) for label, vals in values.items() for v in vals),
+        key=lambda p: -len(p[1]),
+    )
+    for label, v in pairs:
+        for m in re.finditer(re.escape(v), text):
+            a, b = m.span()
+            if not _whole_word(text, a, b) or any(sp.start < b and a < sp.end for sp in out):
+                continue
+            out.append(Span(a, b, label, v))
+            added += 1
+    return sorted(out, key=lambda sp: sp.start), added
+
+
+def to_record(
+    s: Scenario, cached: dict[str, Any], repair: bool = False
+) -> tuple[Record | None, str]:
+    """Parse a cached response into a record, or return (None, reason).
+
+    `repair` (`--repair-untagged`): tag provided values the model left untagged
+    (`repair_untagged`) and accept a provided value that a span of the same label partly covers
+    ("Project <unreleased-roadmap>Heron</unreleased-roadmap>"), instead of rejecting the
+    response. Hard negatives and mislabelled values are still rejected."""
     if cached["stop_reason"] != "end_turn":
         return None, f"stop_reason={cached['stop_reason']}"
     try:
@@ -260,6 +300,9 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
     negative_for = sorted(set(L.SPAN_LABELS) - present) if s.hard_negative else []
     if s.hard_negative and spans:
         return None, "hard negative contains tags"
+    repaired = 0
+    if repair and s.values:
+        spans, repaired = repair_untagged(text, spans, s.values)
     # Every provided sensitive value that made it into the text must be tagged, with its own label.
     for label, vals in s.values.items():
         for v in vals:
@@ -268,6 +311,13 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
                 covering = [
                     sp for sp in spans if sp.start <= start and start + len(v) <= sp.end
                 ]
+                if not covering and repair:
+                    covering = [
+                        sp for sp in spans if sp.start < start + len(v) and start < sp.end
+                    ]
+                    if not covering and not _whole_word(text, start, start + len(v)):
+                        start = text.find(v, start + 1)  # part of a longer word
+                        continue
                 if not covering:
                     return None, f"untagged value {v[:30]!r}"
                 if covering[0].label != label:
@@ -285,6 +335,10 @@ def to_record(s: Scenario, cached: dict[str, Any]) -> tuple[Record | None, str]:
             "backend": "llm",
             "model": cached["params"]["model"],
             "served_by": cached["served_by"],
+            # The split whose entity pools the values came from (train pools: the tier 1 model
+            # may have seen those names in training; dev/test pools: it hasn't).
+            "pools": s.split,
+            **({"repaired_spans": repaired} if repair else {}),
         },
     )
     errors = validate(rec)
@@ -301,7 +355,11 @@ def run(
     max_requests: int | None = None,
     workers: int = 4,
     backend: str = "api",
+    stats: dict[str, Any] | None = None,
+    repair: bool = False,
 ) -> Iterator[Record]:
+    """Send the uncached requests (only with `yes`), then yield a record per usable cached
+    response. `stats`, if given, is filled at the end: responses, kept, rejected reasons."""
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, not {backend!r}")
     scenarios = plan(n_per_genre, seed)
@@ -354,7 +412,8 @@ def run(
                     print(f"  {i}/{len(todo)} requests done", file=sys.stderr)
 
     rejected: dict[str, int] = {}
-    stale = 0
+    rejections: list[dict[str, str]] = []
+    stale = kept = 0
     for s in scenarios:
         path = cache_path(s, model, effort, backend)
         if not path.exists():
@@ -362,11 +421,13 @@ def run(
         cached = json.loads(path.read_text(encoding="utf-8"))
         if cached.get("prompt_sha256") != _sha256(request_params(s, model, effort)):
             stale += 1
-        rec, reason = to_record(s, cached)
+        rec, reason = to_record(s, cached, repair)
         if rec is None:
             key = reason.split(" ")[0].split("=")[0].rstrip(":")
             rejected[key] = rejected.get(key, 0) + 1
+            rejections.append({"id": s.id, "reason": reason})
             continue
+        kept += 1
         yield rec
     if stale:
         print(
@@ -376,3 +437,11 @@ def run(
         )
     if rejected:
         print(f"rejected responses: {rejected}", file=sys.stderr)
+    if stats is not None:
+        stats.update(
+            responses=kept + len(rejections),
+            kept=kept,
+            rejected=dict(sorted(rejected.items())),
+            rejections=rejections,
+            stale_prompt=stale,
+        )

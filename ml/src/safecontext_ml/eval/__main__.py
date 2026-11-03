@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..dataset.paths import SPLITS_DIR
+from ..dataset.paths import SET_NAMES, SPLITS_DIR
 from . import judge as J
 from .adapters import ADAPTERS
 from .run import RESULTS_DIR, Options, command_line, load, run, write_inputs
@@ -22,7 +22,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "model", nargs="?", help="model spec, e.g. regex or predictions:FILE"
     )
-    p.add_argument("--split", default="test", choices=("train", "dev", "test"))
+    p.add_argument(
+        "--split",
+        default="test",
+        choices=SET_NAMES,
+        help="train, dev, test (default), or llm-test (realistic documents, issue #76)",
+    )
     p.add_argument(
         "--splits-dir", type=Path, default=SPLITS_DIR, help=argparse.SUPPRESS
     )
