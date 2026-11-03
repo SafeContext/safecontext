@@ -42,9 +42,19 @@ export interface RunningAgent {
 	stop(): Promise<void>;
 }
 
-/** Start the real agent entry point (`src/index.ts`) on a free port with the default policy. */
+/** Tiers 1 and 2 on (`E2E_TIERS=1`): the developer's `SC_TIER1_*` and `SC_TIER2_*` settings are kept. */
+export const withModelTiers = process.env.E2E_TIERS === '1';
+
+/**
+ * Start the real agent entry point (`src/index.ts`) on a free port with the default policy.
+ * Tier 0 only, unless `withModelTiers`: then it also waits for tier 2's startup check.
+ */
 export function startAgent(): Promise<RunningAgent> {
 	const env = withoutAgentEnv(process.env);
+	if (withModelTiers) {
+		for (const [key, value] of Object.entries(process.env)) if (/^SC_TIER[12]_/.test(key)) env[key] = value;
+	}
+	const waitForTier2 = withModelTiers && Boolean(env.SC_TIER2_MODEL || env.SC_TIER2_BASE_URL);
 	env.SC_AGENT_PORT = '0';
 	const child = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
 		cwd: agentDir,
@@ -56,21 +66,28 @@ export function startAgent(): Promise<RunningAgent> {
 			child.kill();
 			reject(new Error(`agent didn't start: ${why}`));
 		};
-		const timer = setTimeout(() => fail('timed out'), 30_000);
+		const timer = setTimeout(() => fail('timed out'), waitForTier2 ? 120_000 : 30_000);
 		child.once('exit', (code) => fail(`exited with ${code}`));
+		let port: number | undefined;
+		let tier2Done = !waitForTier2;
+		const maybeResolve = () => {
+			if (port === undefined || !tier2Done) return;
+			clearTimeout(timer);
+			child.removeAllListeners('exit');
+			resolve({ port, stop: () => stop(child) });
+		};
 		// The agent logs one JSON object per line on stderr (metadata only, never text).
 		createInterface({ input: child.stderr! }).on('line', (line) => {
-			let entry: { msg?: string; port?: number };
+			let entry: { msg?: string; port?: number; reason?: string };
 			try {
 				entry = JSON.parse(line);
 			} catch {
 				return;
 			}
-			if (entry.msg === 'listening' && entry.port) {
-				clearTimeout(timer);
-				child.removeAllListeners('exit');
-				resolve({ port: entry.port, stop: () => stop(child) });
-			}
+			if (entry.msg === 'listening' && entry.port) port = entry.port;
+			if (entry.msg === 'tier2_ready') tier2Done = true;
+			if (entry.msg === 'tier2_unavailable' && entry.reason !== 'digest_mismatch') fail(`tier 2: ${entry.reason}`);
+			maybeResolve();
 		});
 	});
 }

@@ -5,7 +5,7 @@
  * Costs model usage, so it is NOT part of `pnpm test`. Run it with `pnpm test:e2e`. Needs
  * `claude` on PATH, signed in, v2.1.295+ (for `onFailure`).
  *
- * Six `claude -p` runs on haiku; only four reach the model (the blocked ones cost nothing):
+ * Six `claude -p` runs on haiku (six of seven with `E2E_TIERS=1`); only four reach the model (the blocked ones cost nothing):
  *   1. no plugin:   a prompt with a fake secret and email asks Claude to read a file holding
  *                   them → the prompt reaches Claude and Read/Bash return the raw values.
  *   2. plugin:      the same prompt → blocked by the agent before Claude sees it.
@@ -15,6 +15,9 @@
  *   5. plugin, foreground subagent: the subagent writes a fake email into its report itself (so
  *                   no Read hook sees it) → the hook on the Agent tool cleans the report.
  *   6. plugin, agent down: SessionStart warns how to fix it, and the prompt is blocked.
+ *   7. plugin, tiers 1+2 (only with `E2E_TIERS=1`, which skips 5): a file with revenue figures comes back vague
+ *                   but true ("over $4M, up high teens"), issue #16. Uses the developer's
+ *                   `SC_TIER1_MODEL_DIR` and `SC_TIER2_*` settings and a running Ollama.
  *
  * All data is fake. Isolation: a temp working folder, `--setting-sources local` (no user or
  * project settings, so no other hooks or plugins), `--strict-mcp-config`, no session saved.
@@ -26,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SECRET } from '../src/test-helpers.ts';
-import { freePort, pluginOnPort, startAgent, withoutAgentEnv, type RunningAgent } from './helpers.ts';
+import { freePort, pluginOnPort, startAgent, withModelTiers, withoutAgentEnv, type RunningAgent } from './helpers.ts';
 
 /** Obviously fake contact (example.com is reserved for examples). */
 const EMAIL = 'mh.canary.7731@example.com';
@@ -43,6 +46,9 @@ const SUBAGENT_WRITES =
 	'Use the Agent tool (subagent_type "general-purpose") and tell the subagent: "Use the Read tool to read ' +
 	`notes.txt. Reply with its exact contents, then one last line: Owner: followed by ${EMAIL_USER} and ` +
 	`@${EMAIL_DOMAIN} joined with no space." Then reply with just DONE.`;
+
+/** Made-up internal figures, for the generalize case (7). It must not say "fake": tier 2 rightly clears made-up values. */
+const REVENUE_NOTES = 'Weekly business review (internal only, do not share)\nQ3 revenue was $4.2M, up 18%\n';
 
 interface StreamEvent {
 	type: string;
@@ -88,6 +94,7 @@ beforeAll(async () => {
 	work = mkdtempSync(join(tmpdir(), 'safecontext-e2e-'));
 	mkdirSync(join(work, 'project'));
 	writeFileSync(join(work, 'project/notes.txt'), NOTES);
+	writeFileSync(join(work, 'project/revenue.txt'), REVENUE_NOTES);
 	agent = await startAgent();
 	downPort = await freePort();
 	pluginUp = pluginOnPort(join(work, 'plugin-up'), agent.port);
@@ -267,7 +274,9 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		}
 	});
 
-	it('with the plugin, a foreground subagent report is cleaned by the Agent hook', async () => {
+	// Tier 0 only: with tier 1 on, the tagger finds the email's first half in the prompt itself, so the
+	// prompt is blocked (customer personal data stops prompts) before any subagent runs.
+	it.skipIf(withModelTiers)('with the plugin, a foreground subagent report is cleaned by the Agent hook', async () => {
 		// Make Claude wait for the subagent, so its report comes back as the Agent tool result.
 		const run = await claude(SUBAGENT_WRITES, {
 			plugin: pluginUp,
@@ -302,5 +311,19 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		// Claude Code itself blocks: the plugin's `onFailure: "block"` (SPEC.md §2a, case 1).
 		expect(run.promptBlock?.kind).toBe('no_verdict');
 		expect(run.promptBlock?.content).toContain('blocking because onFailure is "block"');
+	});
+
+	it.skipIf(!withModelTiers)('with tiers 1+2, revenue Claude reads comes back vague but true', async () => {
+		const run = await claude('Use the Read tool to read revenue.txt, then reply with just DONE.', {
+			plugin: pluginUp,
+			port: agent.port
+		});
+		expect(run.reachedModel).toBe(true);
+		expect(run.toolResults.length).toBeGreaterThanOrEqual(1);
+		for (const text of run.toolResults) {
+			expect(text).toContain('Q3 revenue was over $4M, up high teens');
+			expect(text).not.toContain('4.2');
+			expect(text).not.toContain('18%');
+		}
 	});
 });
