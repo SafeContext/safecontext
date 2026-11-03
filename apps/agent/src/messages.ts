@@ -32,6 +32,6 @@ export const messages = {
 	toolOutputUnchecked: () => `[${PRODUCT}: withheld because it couldn't be checked]`,
 	/** Replaces a span whose action is `block`. */
 	removed: (name: string) => `[${PRODUCT} removed: ${name}]`,
-	/** Replaces a span whose action is `generalize`, until tier 2 (#16) writes a real vague version. */
+	/** Replaces a span whose action is `generalize` when no safe vague version could be made (transform/generalize.ts). */
 	generalized: (name: string) => `[${name}]`
 };

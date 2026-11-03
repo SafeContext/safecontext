@@ -93,11 +93,11 @@ describe('POST /v1/tool-output', () => {
 
 	// One value per action. A term-list style tier flags them; the policy sets personal data to mask.
 	const CUSTOMER = 'Contoso Widgets'; // pseudonymize (also in the read, grep and mcp fixtures)
-	const REVENUE = '$4.2M'; // generalize (stub)
+	const REVENUE = '$4.2M'; // generalize (the number rule)
 	const EMAIL = 'jane@northwind.example'; // mask
 	const replacements: Array<[string, string]> = [
 		[CUSTOMER, 'customer_name_1'],
-		[REVENUE, '[Revenue figures]'],
+		[REVENUE, 'over $4M'],
 		[EMAIL, '****mple'],
 		[SECRET, REMOVED_SECRET]
 	];

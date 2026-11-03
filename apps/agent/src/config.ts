@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { AGENT_DEFAULT_PORT } from '@safecontext/policy';
 import { readSyncConfig, type SyncConfig } from './sync/config.ts';
 
@@ -15,7 +16,33 @@ export interface AgentConfig {
 	sync: SyncConfig | undefined;
 	/** Tier 1 tagger (issue #15). Undefined when `SC_TIER1_MODEL_DIR` is unset: tier 1 is off. */
 	tier1: Tier1Config | undefined;
+	/** Tier 2 small LLM (issue #16). Undefined unless `SC_TIER2_BASE_URL` or `SC_TIER2_MODEL` is set. */
+	tier2: Tier2Config | undefined;
 }
+
+export interface Tier2Config {
+	/**
+	 * OpenAI-compatible API base (`SC_TIER2_BASE_URL`, default Ollama on this Mac). https, or http
+	 * only on loopback: prompt and tool text must not cross a network in the clear (#75).
+	 */
+	baseUrl: string;
+	/** Model name (`SC_TIER2_MODEL`, default the model pinned in `ml/models.lock.json`). */
+	model: string;
+	/** Optional key, sent as `Authorization: Bearer` (`SC_TIER2_API_KEY`). Never logged. */
+	apiKey: string | undefined;
+	/** Prompt files (`SC_TIER2_PROMPTS_DIR`, default the repo's `ml/prompts/tier2`). */
+	promptsDir: string;
+	/** Cap on one call (`SC_TIER2_TIMEOUT_MS`). Unset: `tier2.json` `timeouts.per_call_ms` (6 s). */
+	timeoutMs: number | undefined;
+}
+
+/** Ollama's OpenAI-compatible API on this Mac. */
+export const DEFAULT_TIER2_BASE_URL = 'http://127.0.0.1:11434/v1';
+/** Chosen in #14; pinned with its digest in `ml/models.lock.json` (`external`, `tier2-llm`). */
+export const PINNED_TIER2_MODEL = 'gemma4:e4b-it-q4_K_M';
+export const PINNED_TIER2_DIGEST = 'sha256:dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c';
+/** The prompt files the evaluation scored, in this repo. */
+export const DEFAULT_TIER2_PROMPTS_DIR = join(import.meta.dirname, '../../../ml/prompts/tier2');
 
 export interface Tier1Config {
 	/** GLiNER ONNX export directory (`SC_TIER1_MODEL_DIR`). See classifier/tier1/gliner.ts. */
@@ -46,8 +73,41 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
 		policyFile: env.SC_POLICY_FILE?.trim() || undefined,
 		checkBudgetMs: int(env.SC_CHECK_BUDGET_MS, DEFAULT_CHECK_BUDGET_MS, 1, MAX_CHECK_BUDGET_MS, 'SC_CHECK_BUDGET_MS'),
 		sync: readSyncConfig(env),
-		tier1: readTier1Config(env)
+		tier1: readTier1Config(env),
+		tier2: readTier2Config(env)
 	};
+}
+
+function readTier2Config(env: NodeJS.ProcessEnv): Tier2Config | undefined {
+	const rawUrl = env.SC_TIER2_BASE_URL?.trim();
+	const model = env.SC_TIER2_MODEL?.trim();
+	if (!rawUrl && !model) return undefined;
+	const timeout = env.SC_TIER2_TIMEOUT_MS?.trim();
+	return {
+		baseUrl: tier2BaseUrl(rawUrl || DEFAULT_TIER2_BASE_URL),
+		model: model || PINNED_TIER2_MODEL,
+		apiKey: env.SC_TIER2_API_KEY?.trim() || undefined,
+		promptsDir: env.SC_TIER2_PROMPTS_DIR?.trim() || DEFAULT_TIER2_PROMPTS_DIR,
+		timeoutMs: timeout ? int(timeout, 0, 100, MAX_CHECK_BUDGET_MS, 'SC_TIER2_TIMEOUT_MS') : undefined
+	};
+}
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** https anywhere, http only on this Mac. No credentials, query or fragment in the URL. */
+export function tier2BaseUrl(raw: string): string {
+	let url: URL;
+	try {
+		url = new URL(raw);
+	} catch {
+		throw new Error('SC_TIER2_BASE_URL must be a URL');
+	}
+	const ok = url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK.has(url.hostname));
+	if (!ok) throw new Error('SC_TIER2_BASE_URL must use https (http is only allowed for localhost)');
+	if (url.username || url.password || url.search || url.hash) {
+		throw new Error('SC_TIER2_BASE_URL must not contain credentials, a query or a fragment');
+	}
+	return url.origin + url.pathname.replace(/\/+$/, '');
 }
 
 function readTier1Config(env: NodeJS.ProcessEnv): Tier1Config | undefined {
