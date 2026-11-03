@@ -128,6 +128,26 @@ def test_llm_to_record_quality_gates():
     )
 
 
+def test_llm_repair_tags_provided_values_left_untagged():
+    s = _scenario(False, {"customer-names": ["Bluefin Bank"], "unreleased-roadmap": ["Project Heron"]})
+    text = ("# Bluefin Bank review\n<customer-names>Bluefin Bank</customer-names> asked about "
+            "Project <unreleased-roadmap>Heron</unreleased-roadmap>. Bluefin Banking is not it.")  # fmt: skip
+    assert llm.to_record(s, _cached(text))[1].startswith("untagged")
+    rec, why = llm.to_record(s, _cached(text), repair=True)
+    assert rec and not why and rec.meta["repaired_spans"] == 1
+    assert [(sp.text, sp.label) for sp in rec.spans] == [
+        ("Bluefin Bank", "customer-names"),
+        ("Bluefin Bank", "customer-names"),
+        ("Heron", "unreleased-roadmap"),
+    ]
+    assert rec.spans[0].start == 2  # the heading; "Bluefin Banking" is not a whole-word match
+    # a mislabelled value or a tagged hard negative is still rejected
+    bad = "<secrets>Bluefin Bank</secrets> renewed."
+    assert llm.to_record(s, _cached(bad), repair=True)[1].startswith("mislabelled")
+    neg = _scenario(True, {})
+    assert llm.to_record(neg, _cached("<secrets>a</secrets>"), repair=True)[0] is None
+
+
 def test_llm_rejects_value_tagged_with_the_wrong_label():
     s = _scenario(False, {"customer-names": ["Bluefin Bank"]})
     rec, why = llm.to_record(s, _cached("<secrets>Bluefin Bank</secrets> renewed."))

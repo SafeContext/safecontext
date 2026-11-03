@@ -38,13 +38,14 @@ def _llm(args: argparse.Namespace) -> None:
         workers=args.workers,
         backend=args.backend,
         stats=stats,
+        repair=args.repair_untagged,
     )
     n = write_jsonl(out, records)
     print(f"wrote {n} records (cached responses only) to {out}")
     if args.out:
         from .build import write_set_manifest
 
-        keys = ("n_per_genre", "model", "effort", "seed", "backend")
+        keys = ("n_per_genre", "model", "effort", "seed", "backend", "repair_untagged")
         settings = {k: getattr(args, k) for k in keys}
         print(f"manifest: {write_set_manifest(out, {'generation': settings, **stats})}")
 
@@ -121,6 +122,11 @@ def main(argv: list[str] | None = None) -> None:
         help="api (Anthropic API, PAID) or claude-cli (local `claude -p`, no API spend)",
     )
     m.add_argument("--yes", action="store_true", help="actually send the requests")
+    m.add_argument(
+        "--repair-untagged",
+        action="store_true",
+        help="tag provided values Claude left untagged instead of rejecting the response",
+    )
     m.add_argument(
         "--out",
         type=Path,
