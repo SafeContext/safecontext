@@ -1,5 +1,7 @@
+import http.client
 import json
 import math
+import urllib.request
 
 import pytest
 
@@ -41,6 +43,20 @@ def test_manifest_has_what_the_agent_needs():
     assert m["timeouts"]["per_call_ms"] < 8000  # inside the agent's default 8 s budget
     for t in m["tasks"].values():
         assert (P.PROMPTS_DIR / t["dir"] / "schema.json").exists()
+
+
+def test_render_user_fills_placeholders_in_one_pass():
+    text = "Notes: {{spans}} and {{data_types}} stay literal. Heron ships."
+    a = text.index("Heron")
+    req = P.build_request(
+        "context", text, [P.SpanRef(a, a + 5, "unreleased-roadmap")], few_shot=False
+    )
+    user = req.messages[-1]["content"]
+    assert (
+        "Notes: {{spans}} and {{data_types}} stay literal. <s1>Heron</s1> ships."
+        in user
+    )
+    assert user.count('- s1: "Heron" (unreleased-roadmap)') == 1
 
 
 def test_mark_and_render_user():
@@ -118,6 +134,51 @@ def test_generalize_answer_length_limit():
 
 
 # --- runtime request bodies ---
+
+
+class _Resp:
+    def __init__(self, body=b"", exc=None):
+        self.body, self.exc = body, exc
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        if self.exc:
+            raise self.exc
+        return self.body
+
+
+@pytest.mark.parametrize(
+    "resp",
+    [
+        _Resp(b'{"error": "model not found"}'),  # HTTP 200 without choices
+        _Resp(b'{"choices": []}'),
+        _Resp(b'{"choices": [{"message": null}]}'),
+        _Resp(b"not json"),
+        _Resp(exc=http.client.IncompleteRead(b"par")),
+    ],
+)
+def test_chat_turns_bad_responses_into_runtime_call_error(monkeypatch, resp):
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: resp)
+    rt = Runtime.parse("ollama:m")
+    with pytest.raises(RuntimeCallError):
+        rt.chat([{"role": "user", "content": "hi"}])
+    # ...which the calls layer reports as a failure and keeps the span unjudged.
+    log = calls.CallLog()
+    s = P.SpanRef(0, 5, "unreleased-roadmap")
+    assert calls.judge_context(rt, "Heron ships.", [s], log=log) == {s: None}
+    assert log.n_failed == 1
+
+
+def test_chat_reads_a_good_response(monkeypatch):
+    body = b'{"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "usage": {"completion_tokens": 3}}'
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Resp(body))
+    r = Runtime.parse("ollama:m").chat([{"role": "user", "content": "hi"}])
+    assert (r.text, r.finish_reason, r.completion_tokens) == ("{}", "stop", 3)
 
 
 def test_runtime_bodies():
@@ -309,8 +370,12 @@ def test_rule_rewrite_is_true_and_never_leaks(span):
     assert check_format(r, span)
 
 
-def test_rule_rewrite_skips_non_numbers():
-    assert N.rule_rewrite("Project Heron") is None
+@pytest.mark.parametrize(
+    "span",
+    ["Project Heron", "March 3, 2026", "Q2 2027", "2027-03-12", "$4.2M ARR", "v2.4"],
+)
+def test_rule_rewrite_skips_spans_that_are_not_one_number(span):
+    assert N.rule_rewrite(span) is None
 
 
 # --- generalize checks ---

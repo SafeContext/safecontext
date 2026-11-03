@@ -135,11 +135,16 @@ def render_user(
     span_lines = [
         f"- {sid}: {json.dumps(t, ensure_ascii=False)} ({dt})" for sid, t, dt in spans
     ]
-    return (
-        task.user_template.replace("{{data_types}}", "\n".join(type_lines))
-        .replace("{{document}}", marked_document)
-        .replace("{{spans}}", "\n".join(span_lines))
-    )
+    values = {
+        "data_types": "\n".join(type_lines),
+        "document": marked_document,
+        "spans": "\n".join(span_lines),
+    }
+    # One pass, so a document that itself contains "{{spans}}" is left as it is.
+    return _PLACEHOLDER.sub(lambda m: values[m[1]], task.user_template)
+
+
+_PLACEHOLDER = re.compile(r"\{\{(data_types|document|spans)\}\}")
 
 
 _EXAMPLE_SPAN = re.compile(r"<([sg]\d+)>(.*?)</\1>", re.DOTALL)

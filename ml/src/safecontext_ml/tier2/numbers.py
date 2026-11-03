@@ -312,11 +312,14 @@ def rule_rewrite(span_text: str) -> str | None:
       "over 100%"
     - money, counts, durations: a one-significant-digit bound ("$4.2M" -> "over $4M",
       "12,946" -> "over 10,000", "$2M" -> "under $3M")
-    None when the span has no number (names, dates). The agent's fallback when tier 2 can't
-    answer in time (see `prompts/tier2/tier2.json`)."""
-    val = parse_value(span_text)
-    if val is None:
+    None unless the whole span is one number with its currency, magnitude and unit (the
+    labelling rule for number spans), so names, dates ("March 3, 2026") and mixed text are left
+    to the caller's fallback. The agent's fallback when tier 2 can't answer in time (see
+    `prompts/tier2/tier2.json`)."""
+    m = _NUM.fullmatch(span_text.strip())
+    if m is None:
         return None
+    val = _to_value(m)
     v = abs(val.value)
     if val.kind == "percent":
         sign = "down " if val.value < 0 else ""

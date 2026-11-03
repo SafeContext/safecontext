@@ -14,6 +14,7 @@ Uses only the standard library, so the tests and the harness need nothing extra.
 
 from __future__ import annotations
 
+import http.client
 import json
 import time
 import urllib.error
@@ -120,22 +121,33 @@ class Runtime:
             method="POST",
         )
         t0 = time.perf_counter()
+        # Every failure, including a malformed body or an error JSON sent with HTTP 200,
+        # becomes RuntimeCallError, so callers can keep spans flagged instead of crashing.
         try:
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 payload = json.loads(resp.read())
+            elapsed = (time.perf_counter() - t0) * 1000
+            choice = payload["choices"][0]
+            usage = payload.get("usage") or {}
+            return ChatResult(
+                text=choice["message"].get("content") or "",
+                elapsed_ms=elapsed,
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                finish_reason=choice.get("finish_reason"),
+            )
         except urllib.error.HTTPError as e:
             raise RuntimeCallError(
                 f"{self.label}: HTTP {e.code}: {e.read()[:300]!r}"
             ) from e
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            http.client.HTTPException,
+        ) as e:
             raise RuntimeCallError(f"{self.label}: {e}") from e
-        elapsed = (time.perf_counter() - t0) * 1000
-        choice = payload["choices"][0]
-        usage = payload.get("usage") or {}
-        return ChatResult(
-            text=choice["message"].get("content") or "",
-            elapsed_ms=elapsed,
-            prompt_tokens=usage.get("prompt_tokens"),
-            completion_tokens=usage.get("completion_tokens"),
-            finish_reason=choice.get("finish_reason"),
-        )
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+            raise RuntimeCallError(
+                f"{self.label}: unexpected response: {type(e).__name__}: {e}"
+            ) from e
