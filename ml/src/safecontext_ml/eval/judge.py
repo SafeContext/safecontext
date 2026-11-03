@@ -1,8 +1,13 @@
 """Task-preservation score: does Claude still solve the task from the cleaned text?
 
-COSTS MONEY. Opt-in with `--judge N`; nothing is sent unless you also pass `--yes`. Without
-`--yes` the harness prints how many requests it would send and a rough cost, and scores only
+Opt-in with `--judge N`; nothing is sent unless you also pass `--yes`. Without `--yes` the
+harness prints how many requests it would send (and, for the API, a rough cost), and scores only
 items whose responses are already cached.
+
+Two backends (`--judge-backend`):
+- `api` (default): the Anthropic API. **Costs money** (`ANTHROPIC_API_KEY`).
+- `claude-cli`: the local Claude Code CLI (`claude -p`) on the user's own login. No API spend
+  and no API key; it uses the subscription's limits. See `safecontext_ml/claude_cli.py`.
 
 For each judged record (3 requests):
 1. Claude answers a genre-appropriate task (summarise, triage, review...) on the **original** text.
@@ -12,11 +17,13 @@ For each judged record (3 requests):
    not penalising placeholders where exact sensitive values used to be.
 
 Records whose cleaned text equals the original are skipped (trivially preserved, not paid for).
-Responses are cached in `data/raw/judge-cache/<model>/<sha256 of request>.json`, so reruns
-are free.
+Responses are cached in `data/raw/judge-cache/<model>/<sha256 of request>.json` (API) or
+`data/raw/judge-cache/claude-cli/<model>/...` (CLI), so reruns are free.
 
 `clean_text` is a stand-in for the real transformations (generalize, pseudonymize, mask,
-block; tier 2, not built yet): it pseudonymizes every predicted span.
+block): it pseudonymizes every predicted span. The tier 2 generalize evaluation
+(`python -m safecontext_ml.tier2 generalize --judge N`) builds its own cleaned text with the
+model's rewrites and uses the same judge.
 """
 
 from __future__ import annotations
@@ -42,6 +49,7 @@ JUDGE_EFFORT = "medium"
 ANSWER_MAX_TOKENS = 2048
 JUDGE_MAX_TOKENS = 2048
 JUDGE_CACHE_DIR = RAW_DIR / "judge-cache"
+BACKENDS = ("api", "claude-cli")
 
 #: List prices in $ per million tokens (input, output), October 2026. For the estimate only.
 PRICES: dict[str, tuple[float, float]] = {
@@ -59,8 +67,8 @@ EST_JUDGE_OUTPUT_TOKENS = 500
 ANSWER_SYSTEM = (
     "You are an assistant helping an employee of a software company with a document they "
     "pasted. Some values in the document may have been replaced by placeholders in square "
-    "brackets, such as [customer-names 1]; treat each placeholder as an opaque value and use "
-    "it as written. Answer concisely."
+    "brackets, such as [customer-names 1], or by vaguer wording, such as \"about $4M\"; treat "
+    "each placeholder as an opaque value and use it as written. Answer concisely."
 )
 
 DEFAULT_TASK = "Summarise this document in 3-5 bullet points, then list any follow-up actions it calls for."
@@ -83,8 +91,9 @@ JUDGE_SYSTEM = (
     "You grade whether an assistant's answer still does the job when parts of its input were "
     "hidden. You are given a task, the original document, a reference answer written from the "
     "original, and a candidate answer written from a version of the document where some values "
-    "were replaced by placeholders like [customer-names 1]. Placeholders appearing in the "
-    "candidate instead of the exact values are expected and are not a fault. Judge whether the "
+    "were replaced by placeholders like [customer-names 1] or by vaguer but true wording like "
+    "\"about $4M\" or \"high teens\". Placeholders and vaguer values appearing in the candidate "
+    "instead of the exact values are expected and are not a fault. Judge whether the "
     "candidate still accomplishes the task: the same structure, conclusions, actions and "
     "reasoning a user would need. Penalise answers that are confused by the placeholders, miss "
     "points the reference makes, or become useless because essential non-sensitive context was "
@@ -211,12 +220,21 @@ def judge_params(
     }
 
 
-def cache_path(params: dict[str, Any]) -> Path:
+def cache_path(params: dict[str, Any], backend: str = "api") -> Path:
     key = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()
-    return JUDGE_CACHE_DIR / params["model"] / f"{key}.json"
+    base = JUDGE_CACHE_DIR if backend == "api" else JUDGE_CACHE_DIR / backend
+    return base / params["model"] / f"{key}.json"
 
 
-def _call(
+def _call(params: dict[str, Any], backend: str = "api") -> dict[str, Any]:  # pragma: no cover
+    if backend == "claude-cli":
+        from .. import claude_cli
+
+        return claude_cli.call(params)
+    return _call_api(params)
+
+
+def _call_api(
     params: dict[str, Any],
 ) -> dict[str, Any]:  # pragma: no cover - paid, never in tests
     import anthropic  # lazily, so scoring never needs it
@@ -238,17 +256,19 @@ def _call(
     }
 
 
-def _cached(params: dict[str, Any]) -> dict[str, Any] | None:
-    path = cache_path(params)
+def _cached(params: dict[str, Any], backend: str = "api") -> dict[str, Any] | None:
+    path = cache_path(params, backend)
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def _fetch(params: dict[str, Any], send: bool) -> dict[str, Any] | None:
-    hit = _cached(params)
+def _fetch(
+    params: dict[str, Any], send: bool, backend: str = "api"
+) -> dict[str, Any] | None:
+    hit = _cached(params, backend)
     if hit is not None or not send:
         return hit
-    out = _call(params)
-    path = cache_path(params)
+    out = _call(params, backend)
+    path = cache_path(params, backend)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     return out
@@ -258,13 +278,16 @@ def _tokens(text: str) -> int:
     return len(text) // CHARS_PER_TOKEN + PROMPT_OVERHEAD_TOKENS
 
 
-def estimate(items: Sequence[JudgeItem], model: str) -> tuple[int, float | None]:
-    """(uncached requests, rough cost in $ or None if the model's price is unknown)."""
+def estimate(
+    items: Sequence[JudgeItem], model: str, backend: str = "api"
+) -> tuple[int, float | None]:
+    """(uncached requests, rough API cost in $, or None if the model's price is unknown).
+    For `claude-cli` the cost is what the API would charge; the CLI bills the login instead."""
     requests, tok_in, tok_out = 0, 0, 0
     for it in items:
         answers = []
         for doc in (it.original, it.cleaned):
-            hit = _cached(answer_params(it.task, doc, model))
+            hit = _cached(answer_params(it.task, doc, model), backend)
             if hit is None:
                 requests += 1
                 tok_in += _tokens(doc) + _tokens(it.task)
@@ -272,7 +295,9 @@ def estimate(items: Sequence[JudgeItem], model: str) -> tuple[int, float | None]
             answers.append(hit)
         judged = (
             all(answers)
-            and _cached(judge_params(it, answers[0]["text"], answers[1]["text"], model))
+            and _cached(
+                judge_params(it, answers[0]["text"], answers[1]["text"], model), backend
+            )
             is not None
         )
         if not judged:
@@ -307,6 +332,7 @@ class JudgeSummary:
     uncached_requests: int
     est_cost: float | None
     results: list[JudgeResult] = field(default_factory=list)
+    backend: str = "api"
 
     @property
     def scored(self) -> list[JudgeResult]:
@@ -323,6 +349,7 @@ class JudgeSummary:
     def to_json(self) -> dict[str, Any]:
         return {
             "model": self.model,
+            "backend": self.backend,
             "selected": self.selected,
             "sent": self.sent,
             "uncached_requests": self.uncached_requests,
@@ -334,20 +361,24 @@ class JudgeSummary:
         }
 
 
-def _judge_one_safe(item: JudgeItem, model: str, send: bool) -> JudgeResult:
+def _judge_one_safe(
+    item: JudgeItem, model: str, send: bool, backend: str = "api"
+) -> JudgeResult:
     """One failed request (network, auth, a bad parameter) must not lose the whole report."""
     try:
-        return _judge_one(item, model, send)
+        return _judge_one(item, model, send, backend)
     except Exception as e:  # noqa: BLE001
         res = JudgeResult(item.record_id, item.source, item.genre)
         res.error = f"request failed: {type(e).__name__}"
         return res
 
 
-def _judge_one(item: JudgeItem, model: str, send: bool) -> JudgeResult:
+def _judge_one(
+    item: JudgeItem, model: str, send: bool, backend: str = "api"
+) -> JudgeResult:
     res = JudgeResult(item.record_id, item.source, item.genre)
-    ref = _fetch(answer_params(item.task, item.original, model), send)
-    cand = _fetch(answer_params(item.task, item.cleaned, model), send)
+    ref = _fetch(answer_params(item.task, item.original, model), send, backend)
+    cand = _fetch(answer_params(item.task, item.cleaned, model), send, backend)
     if ref is None or cand is None:
         res.error = "not cached"
         return res
@@ -355,7 +386,9 @@ def _judge_one(item: JudgeItem, model: str, send: bool) -> JudgeResult:
         if a.get("stop_reason") == "refusal":
             res.error = f"{name} answer refused"
             return res
-    verdict = _fetch(judge_params(item, ref["text"], cand["text"], model), send)
+    verdict = _fetch(
+        judge_params(item, ref["text"], cand["text"], model), send, backend
+    )
     if verdict is None:
         res.error = "not cached"
         return res
@@ -374,28 +407,40 @@ def run(
     model: str = DEFAULT_MODEL,
     yes: bool = False,
     workers: int = 4,
+    backend: str = "api",
 ) -> JudgeSummary:
-    requests, cost = estimate(items, model)
-    cost_s = "unknown (no price for this model)" if cost is None else f"~${cost:,.2f}"
+    if backend not in BACKENDS:
+        raise ValueError(f"judge backend must be one of {BACKENDS}, not {backend!r}")
+    requests, cost = estimate(items, model, backend)
+    if backend == "claude-cli":
+        # The CLI bills the user's Claude Code login, not the API: no spend, but it uses limits.
+        cost_s = "no API spend: claude -p on your Claude Code login"
+        cost = None
+    else:
+        cost_s = "unknown (no price for this model)" if cost is None else f"~${cost:,.2f}"
     summary = JudgeSummary(
         model,
         len(items),
         sent=bool(yes and requests),
         uncached_requests=requests,
         est_cost=cost,
+        backend=backend,
     )
+    via = "claude -p" if backend == "claude-cli" else "the API"
     if requests and not yes:
         print(
-            f"judge: {requests} uncached requests to {model} would be sent for {len(items)} "
-            f"records (rough cost {cost_s}). Re-run with --yes to send them. "
+            f"judge: {requests} uncached requests to {model} via {via} would be sent for "
+            f"{len(items)} records ({cost_s}). Re-run with --yes to send them. "
             "Scoring cached responses only.",
             file=sys.stderr,
         )
     elif requests:
         print(
-            f"judge: sending up to {requests} requests to {model} ({cost_s})",
+            f"judge: sending up to {requests} requests to {model} via {via} ({cost_s})",
             file=sys.stderr,
         )
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        summary.results = list(pool.map(lambda it: _judge_one_safe(it, model, yes), items))
+        summary.results = list(
+            pool.map(lambda it: _judge_one_safe(it, model, yes, backend), items)
+        )
     return summary

@@ -68,11 +68,17 @@ def main(argv: list[str] | None = None) -> None:
         type=int,
         default=0,
         metavar="N",
-        help="task-preservation score on N records (PAID; estimate only without --yes)",
+        help="task-preservation score on N records (estimate only without --yes)",
     )
     p.add_argument("--judge-model", default=J.DEFAULT_MODEL)
     p.add_argument(
-        "--yes", action="store_true", help="actually send the paid judge requests"
+        "--judge-backend",
+        choices=J.BACKENDS,
+        default="api",
+        help="api (Anthropic API, PAID) or claude-cli (local `claude -p`, no API spend)",
+    )
+    p.add_argument(
+        "--yes", action="store_true", help="actually send the judge requests"
     )
     args = p.parse_args(argv)
 
@@ -93,6 +99,7 @@ def main(argv: list[str] | None = None) -> None:
         },
         judge=args.judge,
         judge_model=args.judge_model,
+        judge_backend=args.judge_backend,
         yes=args.yes,
         command=command_line(argv),
     )

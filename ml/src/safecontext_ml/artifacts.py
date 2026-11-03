@@ -130,6 +130,70 @@ def load_lock(path: Path = LOCK_PATH) -> dict[str, Artifact]:
     return arts
 
 
+#: Runtimes an `external` entry can name, and how it is pinned.
+EXTERNAL_RUNTIMES = ("ollama", "mlx")
+_OLLAMA_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+@dataclass
+class ExternalModel:
+    """An off-the-shelf model we use but don't host (issue #14: the tier 2 LLM).
+
+    Pinned by what its runtime downloads: Ollama by model name plus the manifest digest that
+    `ollama pull NAME` must produce (`GET /api/tags` -> `digest`); MLX by Hugging Face repo
+    plus commit. `pull` and `push` ignore these; the agent / installer fetch them."""
+
+    name: str
+    description: str
+    runtime: str
+    model: str  # Ollama model name, or the MLX Hugging Face repo id
+    license: str
+    digest: str | None = None  # Ollama only
+    revision: str | None = None  # MLX only: full commit sha
+    size: int | None = None  # bytes on disk
+    upstream: dict[str, str] = field(
+        default_factory=dict
+    )  # base model repo_id + revision
+    settings: dict[str, Any] = field(default_factory=dict)
+
+
+def _external(raw: dict[str, Any]) -> ExternalModel:
+    m = ExternalModel(**raw)
+    if m.runtime not in EXTERNAL_RUNTIMES:
+        raise ArtifactError(f"{m.name}: runtime must be one of {EXTERNAL_RUNTIMES}")
+    if m.runtime == "ollama" and not (m.digest and _OLLAMA_DIGEST.fullmatch(m.digest)):
+        raise ArtifactError(f"{m.name}: an Ollama model needs digest 'sha256:<64 hex>'")
+    if m.runtime == "mlx" and not (m.revision and _REVISION.fullmatch(m.revision)):
+        raise ArtifactError(
+            f"{m.name}: an MLX model needs a full 40-character revision"
+        )
+    return m
+
+
+def load_external(path: Path = LOCK_PATH) -> dict[str, ExternalModel]:
+    """The lock file's `external` models (off-the-shelf, not hosted on our org), by name."""
+    data = json.loads(path.read_text())
+    out: dict[str, ExternalModel] = {}
+    for raw in data.get("external", []):
+        m = _external(raw)
+        if m.name in out:
+            raise ArtifactError(f"{path}: duplicate external model {m.name}")
+        out[m.name] = m
+    return out
+
+
+def ollama_digests(base_url: str = "http://127.0.0.1:11434") -> dict[str, str] | None:
+    """{model name: digest} from a running Ollama, or None if it isn't reachable."""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=2) as resp:
+            tags = json.loads(resp.read())
+    except OSError:
+        return None
+    return {m["name"]: f"sha256:{m['digest']}" for m in tags.get("models", [])}
+
+
 def save_lock(arts: dict[str, Artifact], path: Path = LOCK_PATH) -> None:
     """Rewrite the artifacts, keeping the file's other top-level keys."""
     data = json.loads(path.read_text()) if path.exists() else {"schema_version": 1}
@@ -259,6 +323,29 @@ def status(arts: dict[str, Artifact], root: Path = ML_ROOT) -> None:
     print("  ".join(c.ljust(width[c]) for c in cols))
     for r in rows:
         print("  ".join(r[c].ljust(width[c]) for c in cols))
+    external = load_external()
+    if external:
+        local = (
+            ollama_digests()
+            if any(m.runtime == "ollama" for m in external.values())
+            else {}
+        )
+        print("\nexternal (off-the-shelf, not hosted on the org):")
+        for m in external.values():
+            if m.runtime == "ollama":
+                have = None if local is None else local.get(m.model)
+                state = (
+                    "ollama not running"
+                    if local is None
+                    else "not pulled"
+                    if have is None
+                    else "ok"
+                    if have == m.digest
+                    else f"DIGEST MISMATCH (local {have[:19]}...)"
+                )
+                print(f"  {m.name}: ollama {m.model} {m.digest[:19]}...  {state}")
+            else:
+                print(f"  {m.name}: mlx {m.model}@{(m.revision or '')[:12]}")
 
 
 # --- pull ------------------------------------------------------------------------------------

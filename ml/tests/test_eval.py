@@ -316,7 +316,7 @@ def judge_env(tmp_path, monkeypatch):
     monkeypatch.setattr(J, "JUDGE_CACHE_DIR", tmp_path / "judge-cache")
     calls = []
 
-    def fake_call(params):
+    def fake_call(params, backend="api"):
         calls.append(params)
         if "format" in params["output_config"]:
             text = json.dumps({"reason": "fine", "score": 4, "preserved": True})
@@ -413,7 +413,7 @@ def test_judge_select_uses_the_scored_predictions():
 
 
 def test_judge_run_survives_a_failed_request(judge_env, monkeypatch):
-    def boom(params):
+    def boom(params, backend="api"):
         raise ConnectionError("network down")
 
     monkeypatch.setattr(J, "_call", boom)

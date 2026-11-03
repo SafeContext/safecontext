@@ -1,0 +1,70 @@
+{
+  "about": "Few-shot examples for generalize, sent as earlier user/assistant turns. Invented company (Orbitly), customers and values that are not in the Macrohard dataset pools. `document` carries the <gN> markers already; each example is rendered with user.md like a real request.",
+  "data_types": {
+    "revenue-figures": {
+      "name": "Revenue figures",
+      "description": "Non-public revenue, bookings, margins or growth numbers."
+    },
+    "internal-metrics": {
+      "name": "Internal metrics",
+      "description": "Non-public usage, adoption, churn or performance metrics."
+    },
+    "deal-sizes": {
+      "name": "Deal sizes",
+      "description": "Contract values, renewals and pricing agreed with specific customers."
+    }
+  },
+  "examples": [
+    {
+      "document": "Q3 update: revenue was <g1>$4.2M</g1>, up <g2>18%</g2> on Q2. Gross margin hit <g3>71%</g3>.",
+      "spans": [
+        { "id": "g1", "text": "$4.2M", "data_type": "revenue-figures" },
+        { "id": "g2", "text": "18%", "data_type": "revenue-figures" },
+        { "id": "g3", "text": "71%", "data_type": "revenue-figures" }
+      ],
+      "output": {
+        "rewrites": [
+          { "id": "g1", "text": "about $4M" },
+          { "id": "g2", "text": "high teens" },
+          { "id": "g3", "text": "about 70%" }
+        ]
+      }
+    },
+    {
+      "document": "Pellham Freight renewed at <g1>€865k</g1> a year. Weekly active seats reached <g2>23,418</g2> and p95 latency is <g3>340 ms</g3>; churn fell to <g4>0.8%</g4>.",
+      "spans": [
+        { "id": "g1", "text": "€865k", "data_type": "deal-sizes" },
+        { "id": "g2", "text": "23,418", "data_type": "internal-metrics" },
+        { "id": "g3", "text": "340 ms", "data_type": "internal-metrics" },
+        { "id": "g4", "text": "0.8%", "data_type": "internal-metrics" }
+      ],
+      "output": {
+        "rewrites": [
+          { "id": "g1", "text": "high six figures in euros" },
+          { "id": "g2", "text": "over 20,000" },
+          { "id": "g3", "text": "a few hundred ms" },
+          { "id": "g4", "text": "under 1%" }
+        ]
+      }
+    },
+    {
+      "document": "Closed-won: Dunmore Agri, <g1>$2.7M</g1> over two years. Adoption hit <g2>43.6%</g2> and the error rate peaked at <g3>87%</g3>. Bookings were <g4>$61.2M</g4>, up <g5>6.4%</g5>.",
+      "spans": [
+        { "id": "g1", "text": "$2.7M", "data_type": "deal-sizes" },
+        { "id": "g2", "text": "43.6%", "data_type": "internal-metrics" },
+        { "id": "g3", "text": "87%", "data_type": "internal-metrics" },
+        { "id": "g4", "text": "$61.2M", "data_type": "revenue-figures" },
+        { "id": "g5", "text": "6.4%", "data_type": "revenue-figures" }
+      ],
+      "output": {
+        "rewrites": [
+          { "id": "g1", "text": "a few million dollars" },
+          { "id": "g2", "text": "low forties" },
+          { "id": "g3", "text": "high eighties" },
+          { "id": "g4", "text": "about $60M" },
+          { "id": "g5", "text": "mid single digits" }
+        ]
+      }
+    }
+  ]
+}

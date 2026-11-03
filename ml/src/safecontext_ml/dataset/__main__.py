@@ -34,6 +34,7 @@ def _llm(args: argparse.Namespace) -> None:
         dry_run=args.dry_run,
         max_requests=args.max_requests,
         workers=args.workers,
+        backend=args.backend,
     )
     n = write_jsonl(SOURCES_DIR / f"{SOURCE}.jsonl", records)
     print(
@@ -96,7 +97,8 @@ def main(argv: list[str] | None = None) -> None:
     o.set_defaults(func=_offline)
 
     m = sub.add_parser(
-        "llm", help="generate Macrohard documents with Claude (costs money with --yes)"
+        "llm",
+        help="generate Macrohard documents with Claude (--yes sends; the api backend costs money)",
     )
     m.add_argument("--n-per-genre", type=int, default=100)
     m.add_argument("--model", default="claude-sonnet-5-5")
@@ -105,7 +107,13 @@ def main(argv: list[str] | None = None) -> None:
     m.add_argument("--max-requests", type=int)
     m.add_argument("--workers", type=int, default=4)
     m.add_argument("--dry-run", action="store_true", help="print sample prompts")
-    m.add_argument("--yes", action="store_true", help="actually call the API")
+    m.add_argument(
+        "--backend",
+        choices=("api", "claude-cli"),
+        default="api",
+        help="api (Anthropic API, PAID) or claude-cli (local `claude -p`, no API spend)",
+    )
+    m.add_argument("--yes", action="store_true", help="actually send the requests")
     m.set_defaults(func=_llm)
 
     u = sub.add_parser("public", help="public PII datasets")

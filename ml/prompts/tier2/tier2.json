@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "about": "Tier 2 prompts (issue #14), loaded by ml/src/safecontext_ml/tier2/prompts.py and by the agent (#16). Each task directory has system.md, user.md (template), schema.json (answer JSON Schema) and examples.json (few-shot turns). Bump `version` when any prompt file changes, and re-run the scores in ml/results/tier2-llm.md.",
+  "request": {
+    "endpoint": "POST {base_url}/chat/completions (OpenAI-compatible)",
+    "temperature": 0,
+    "seed": 0,
+    "stream": false,
+    "ollama": {
+      "base_url": "http://127.0.0.1:11434/v1",
+      "reasoning_effort": "none",
+      "response_format": "{type: 'json_schema', json_schema: {name: schema.title, schema, strict: true}}"
+    },
+    "mlx": {
+      "base_url": "http://127.0.0.1:8080/v1",
+      "chat_template_kwargs": { "enable_thinking": false },
+      "response_format": "not supported: parse the JSON from the text and check it against schema.json"
+    }
+  },
+  "tasks": {
+    "context": {
+      "dir": "context",
+      "marker": "s",
+      "max_tokens": 600,
+      "labels": ["unreleased-roadmap", "revenue-figures", "internal-metrics", "deal-sizes"],
+      "on_failure": "keep every span flagged"
+    },
+    "generalize": {
+      "dir": "generalize",
+      "marker": "g",
+      "max_tokens": 300,
+      "on_failure": "use the deterministic rewrite (one significant digit, 'roughly $4M'), else the [Data type name] stub"
+    }
+  },
+  "excerpts": {
+    "max_chars": 4000,
+    "context_chars": 800,
+    "about": "A text up to max_chars is sent whole. A longer one is cut into excerpts: context_chars on each side of each span, and spans whose windows overlap share one call."
+  },
+  "timeouts": {
+    "per_call_ms": 6000,
+    "min_budget_ms": 1500,
+    "about": "per_call_ms caps one call inside the agent's 8 s check budget; min_budget_ms is the least budget worth starting tier 2 with (ClassifierTier.minBudgetMs). See ml/results/tier2-llm.md for measured latencies."
+  }
+}

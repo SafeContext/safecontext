@@ -174,6 +174,43 @@ def test_lock_rejects_bad_entries(tmp_path, bad, msg):
         A.load_lock(lock)
 
 
+def test_committed_lock_pins_the_tier2_llm():
+    ext = A.load_external()
+    assert "tier2-llm" in ext
+    m = ext["tier2-llm"]
+    assert m.runtime == "ollama" and m.digest.startswith("sha256:") and m.license
+    # The MLX alternative is pinned too, by repo and commit.
+    assert any(e.runtime == "mlx" and len(e.revision or "") == 40 for e in ext.values())
+    # pull/push never see external models.
+    assert "tier2-llm" not in A.load_lock()
+
+
+@pytest.mark.parametrize(
+    "bad, msg",
+    [
+        ({"runtime": "vllm"}, "runtime"),
+        ({"digest": "d8b0f5e9760c"}, "digest"),
+        ({"runtime": "mlx", "digest": None, "revision": "abc"}, "revision"),
+    ],
+)
+def test_external_rejects_bad_entries(tmp_path, bad, msg):
+    good = {
+        "name": "m",
+        "description": "d",
+        "runtime": "ollama",
+        "model": "qwen3.5:4b-q4_K_M",
+        "license": "Apache-2.0",
+        "digest": "sha256:" + "0" * 64,
+    }
+    lock = tmp_path / "lock.json"
+    lock.write_text(json.dumps({"schema_version": 1, "artifacts": [], "external": [{**good, **bad}]}))
+    with pytest.raises(A.ArtifactError, match=msg):
+        A.load_external(lock)
+    lock.write_text(json.dumps({"schema_version": 1, "artifacts": [], "external": [good, good]}))
+    with pytest.raises(A.ArtifactError, match="duplicate"):
+        A.load_external(lock)
+
+
 def test_lock_rejects_duplicates(tmp_path):
     with pytest.raises(A.ArtifactError, match="duplicate"):
         A.load_lock(write_lock(tmp_path / "lock.json", entry(), entry()))

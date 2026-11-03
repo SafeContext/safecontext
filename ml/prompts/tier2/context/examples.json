@@ -1,0 +1,64 @@
+{
+  "about": "Few-shot examples for the context judgement, sent as earlier user/assistant turns. Invented company (Orbitly), codenames and customers that are not in the Macrohard dataset pools. `document` carries the <sN> markers already; each example is rendered with user.md like a real request.",
+  "data_types": {
+    "unreleased-roadmap": {
+      "name": "Unreleased roadmap",
+      "description": "Plans, launch dates and codenames for products or features that are not public yet."
+    },
+    "revenue-figures": {
+      "name": "Revenue figures",
+      "description": "Non-public revenue, bookings, margins or growth numbers."
+    },
+    "internal-metrics": {
+      "name": "Internal metrics",
+      "description": "Non-public usage, adoption, churn or performance metrics."
+    }
+  },
+  "examples": [
+    {
+      "document": "Orbitly announces Orbitly Sync\n\nFollowing its June 2025 launch, <s1>Project Marigold</s1> is now available on every plan. Teams using it close their books <s2>40%</s2> faster, according to a public customer survey.",
+      "spans": [
+        { "id": "s1", "text": "Project Marigold", "data_type": "unreleased-roadmap" },
+        { "id": "s2", "text": "40%", "data_type": "internal-metrics" }
+      ],
+      "output": {
+        "spans": [
+          { "id": "s1", "reason": "press release; the product already launched", "sensitive": false },
+          { "id": "s2", "reason": "public marketing claim from a published survey", "sensitive": false }
+        ]
+      }
+    },
+    {
+      "document": "Launch plan - <s1>Sundial</s1> (target <s2>19 May</s2>)\n\n- Beta churn is <s3>4.1%</s3>, keep this internal\n- Pricing stays as on the public pricing page: <s4>$12</s4> per seat",
+      "spans": [
+        { "id": "s1", "text": "Sundial", "data_type": "unreleased-roadmap" },
+        { "id": "s2", "text": "19 May", "data_type": "unreleased-roadmap" },
+        { "id": "s3", "text": "4.1%", "data_type": "internal-metrics" },
+        { "id": "s4", "text": "$12", "data_type": "revenue-figures" }
+      ],
+      "output": {
+        "spans": [
+          { "id": "s1", "reason": "codename of a launch that is still planned", "sensitive": true },
+          { "id": "s2", "reason": "target date of an unreleased launch", "sensitive": true },
+          { "id": "s3", "reason": "beta churn, marked internal", "sensitive": true },
+          { "id": "s4", "reason": "public price from the pricing page", "sensitive": false }
+        ]
+      }
+    },
+    {
+      "document": "ana: <s1>Albatross</s1> shipped publicly in March, docs are live\nraj: nice. Q3 bookings came in at <s2>£2.3M</s2>, board deck only\nana: our SLA is <s3>99.9%</s3>, it's on the website",
+      "spans": [
+        { "id": "s1", "text": "Albatross", "data_type": "unreleased-roadmap" },
+        { "id": "s2", "text": "£2.3M", "data_type": "revenue-figures" },
+        { "id": "s3", "text": "99.9%", "data_type": "internal-metrics" }
+      ],
+      "output": {
+        "spans": [
+          { "id": "s1", "reason": "says it shipped publicly in March", "sensitive": false },
+          { "id": "s2", "reason": "internal bookings figure for the board", "sensitive": true },
+          { "id": "s3", "reason": "published SLA on the website", "sensitive": false }
+        ]
+      }
+    }
+  ]
+}

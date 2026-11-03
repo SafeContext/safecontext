@@ -55,6 +55,12 @@ def _gliner(arg: str | None, ctx: AdapterContext) -> Classifier:
     return factory(arg, ctx)
 
 
+def _tier2(arg: str | None, ctx: AdapterContext) -> Classifier:
+    from .tier2 import factory
+
+    return factory(arg, ctx)
+
+
 ADAPTERS: dict[str, tuple[Factory, str]] = {
     "regex": (_regex, "free local regex baseline for secrets and personal data"),
     "predictions": (
@@ -69,6 +75,10 @@ ADAPTERS: dict[str, tuple[Factory, str]] = {
     "gliner": (
         _gliner,
         "gliner[:MODEL[,threshold=,prompts=,device=]], GLiNER tier 1 tagger",
+    ),
+    "tier2": (
+        _tier2,
+        "tier2:RUNTIME:MODEL,base=PREDICTIONS[,labels=,url=], tier 2 LLM context judgement on earlier tiers' spans",
     ),
 }
 
