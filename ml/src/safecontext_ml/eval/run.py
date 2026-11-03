@@ -43,6 +43,7 @@ class Options:
     adapter_options: dict[str, Any] = field(default_factory=dict)
     judge: int = 0
     judge_model: str = J.DEFAULT_MODEL
+    judge_backend: str = "api"
     yes: bool = False
     command: str = ""
 
@@ -178,7 +179,9 @@ def run(opts: Options) -> tuple[str, dict[str, Any]]:
     judge_summary = None
     if opts.judge:
         items = J.select(records, preds, opts.judge, opts.seed)
-        judge_summary = J.run(items, opts.judge_model, yes=opts.yes)
+        judge_summary = J.run(
+            items, opts.judge_model, yes=opts.yes, backend=opts.judge_backend
+        )
 
     manifest = opts.splits_dir / "manifest.json"
     manifest_sha = None

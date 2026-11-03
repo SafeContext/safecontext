@@ -1,8 +1,12 @@
 """LLM backend: Claude writes realistic "Macrohard" documents with inline span tags.
 
-COSTS MONEY. Nothing is sent unless you pass `--yes`; without it the command only reports how many
-requests it would make. Every response is cached under `ml/data/raw/llm-cache/`, so re-running is
-free and the dataset can be rebuilt from the cache alone.
+Nothing is sent unless you pass `--yes`; without it the command only reports how many requests
+it would make. Every response is cached under `ml/data/raw/llm-cache/`, so re-running is free and
+the dataset can be rebuilt from the cache alone.
+
+Backends (`--backend`): `api` (the Anthropic API; **costs money**, `ANTHROPIC_API_KEY`) or
+`claude-cli` (the local `claude -p` on the user's Claude Code login: no API spend, no key; see
+`safecontext_ml/claude_cli.py`). CLI responses are cached under `llm-cache/claude-cli/<model>/`.
 
 How it works:
 1. Scenarios are planned deterministically: (genre, index) -> scenario id -> split.
@@ -195,7 +199,7 @@ def _sha256(obj: Any) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()
 
 
-def cache_path(s: Scenario, model: str, effort: str) -> Path:
+def cache_path(s: Scenario, model: str, effort: str, backend: str = "api") -> Path:
     """Cache file for a scenario. The key leaves out the prompt text on purpose, so rewording a
     data type description or the system prompt doesn't throw away paid responses. Bump
     PROMPT_VERSION to regenerate on purpose."""
@@ -209,10 +213,20 @@ def cache_path(s: Scenario, model: str, effort: str) -> Path:
             "prompt_version": PROMPT_VERSION,
         }
     )
-    return LLM_CACHE_DIR / model / f"{key}.json"
+    base = LLM_CACHE_DIR if backend == "api" else LLM_CACHE_DIR / backend
+    return base / model / f"{key}.json"
 
 
-def _call(params: dict[str, Any]) -> dict[str, Any]:
+BACKENDS = ("api", "claude-cli")
+
+
+def _call(params: dict[str, Any], backend: str = "api") -> dict[str, Any]:
+    if backend == "claude-cli":
+        from .. import claude_cli
+
+        out = claude_cli.call(params)
+        out["prompt_sha256"] = _sha256(params)
+        return out
     import anthropic  # imported lazily so the offline pipeline never needs it
 
     client = anthropic.Anthropic(max_retries=5)
@@ -286,11 +300,14 @@ def run(
     dry_run: bool = False,
     max_requests: int | None = None,
     workers: int = 4,
+    backend: str = "api",
 ) -> Iterator[Record]:
+    if backend not in BACKENDS:
+        raise ValueError(f"backend must be one of {BACKENDS}, not {backend!r}")
     scenarios = plan(n_per_genre, seed)
     todo = []
     for s in scenarios:
-        if not cache_path(s, model, effort).exists():
+        if not cache_path(s, model, effort, backend).exists():
             todo.append((s, request_params(s, model, effort)))
     if max_requests is not None:
         todo = todo[:max_requests]
@@ -309,9 +326,14 @@ def run(
         cost = (
             len(todo) * (EST_INPUT_TOKENS * 2 + EST_OUTPUT_TOKENS * 10) / 1e6
         )  # Sonnet 5.5 $/MTok
+        cost_s = (
+            "no API spend: claude -p on your Claude Code login"
+            if backend == "claude-cli"
+            else f"rough cost ${cost:,.2f} at Sonnet 5.5 list prices"
+        )
         print(
-            f"{len(todo)} uncached requests to {model} would be sent "
-            f"(rough cost ${cost:,.2f} at Sonnet 5.5 list prices). Re-run with --yes to send them. "
+            f"{len(todo)} uncached requests to {model} via {backend} would be sent "
+            f"({cost_s}). Re-run with --yes to send them. "
             "Using cached responses only.",
             file=sys.stderr,
         )
@@ -319,8 +341,8 @@ def run(
 
         def work(item: tuple[Scenario, dict[str, Any]]) -> None:
             s, params = item
-            out = _call(params)
-            path = cache_path(s, model, effort)
+            out = _call(params, backend)
+            path = cache_path(s, model, effort, backend)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -334,7 +356,7 @@ def run(
     rejected: dict[str, int] = {}
     stale = 0
     for s in scenarios:
-        path = cache_path(s, model, effort)
+        path = cache_path(s, model, effort, backend)
         if not path.exists():
             continue
         cached = json.loads(path.read_text(encoding="utf-8"))

@@ -9,6 +9,8 @@ classifier (SPEC.md §4). Run everything from this directory with `uv run ...`.
 | `src/safecontext_ml/eval/` | The evaluation harness: scores any classifier the same way (issue #12) |
 | `src/safecontext_ml/tagger/` | Tier 1 tagger: GLiNER prompts, chunking, batch prediction, threshold sweeps, fine-tuning (issue #13) |
 | `src/safecontext_ml/export.py` | ONNX export of the tier 1 model for the TypeScript agent (issue #13) |
+| `src/safecontext_ml/tier2/`, `prompts/tier2/` | Tier 2 small LLM: prompt files the agent loads too, OpenAI-compatible client, generalize evaluation, speed benchmark (issue #14). See *Tier 2 small LLM* |
+| `src/safecontext_ml/claude_cli.py` | `claude-cli` backend: judge and synthetic data through the local `claude -p` (no API spend) |
 | `src/safecontext_ml/artifacts.py`, `models.lock.json` | Pull/push models and data on the private Hugging Face org, pinned by commit and sha256 (issue #70). See *Models and data* |
 | `models/` | Downloaded / fine-tuned weights and ONNX exports. Gitignored; `pnpm models:pull` fills it |
 | `results/` | Evaluation reports. Only the `.md` reports are committed |
@@ -43,7 +45,7 @@ All are `uv run python -m safecontext_ml.dataset <command>`.
 | Command | Does | Cost |
 | --- | --- | --- |
 | `offline [--docs-per-genre 200] [--seed 0]` | Writes `data/sources/macrohard-offline.jsonl` from templates. Deterministic. | Free, no network |
-| `llm [--n-per-genre 100] [--model claude-sonnet-5-5] [--effort medium] [--dry-run] [--yes] [--max-requests N]` | Writes `data/sources/macrohard-llm.jsonl`. Without `--yes`, sends nothing: it says how many requests it would send and roughly what they'd cost, and builds from cached responses only. `--dry-run` prints sample prompts. | **Paid** (Anthropic API, `ANTHROPIC_API_KEY`) |
+| `llm [--n-per-genre 100] [--model claude-sonnet-5-5] [--effort medium] [--backend api\|claude-cli] [--dry-run] [--yes] [--max-requests N]` | Writes `data/sources/macrohard-llm.jsonl`. Without `--yes`, sends nothing: it says how many requests it would send and roughly what they'd cost, and builds from cached responses only. `--dry-run` prints sample prompts. `--n-per-genre 10` is 100 requests. | `api`: **paid** (Anthropic API, `ANTHROPIC_API_KEY`). `claude-cli`: the local `claude -p` on your Claude Code login, no API spend |
 | `public list` | Lists the public datasets, licences and sizes | Free |
 | `public download NAME --yes` | Downloads a pinned commit into `data/raw/public/NAME/` | Download |
 | `public convert NAME [--limit N]` | Writes `data/sources/NAME.jsonl` | Free |
@@ -249,7 +251,7 @@ any model.
 | `--seed 0` | Seed for the sampling and for the judge's record choice |
 | `--warmup 3` | Untimed `predict()` calls before timing starts |
 | `--no-save`, `--out-dir DIR` | Print only, or write the reports somewhere else |
-| `--judge N [--judge-model M] [--yes]` | Task-preservation score on N records. **Paid**, see below |
+| `--judge N [--judge-model M] [--judge-backend api\|claude-cli] [--yes]` | Task-preservation score on N records. See below |
 
 ### Metrics and the span-matching rule
 
@@ -277,7 +279,7 @@ The five business labels come only from Macrohard.
 7. **Latency p50/p95**: wall-clock time of each `predict()` call, one document at a time, on
    this machine (named in the report). Nearest-rank percentiles.
 
-### Task preservation (LLM judge, paid)
+### Task preservation (LLM judge)
 
 `--judge N` picks N records whose text the model changed, taking them from each source in turn.
 For each record, Claude (`claude-sonnet-5-5` by default) does a task suited to the genre
@@ -288,10 +290,20 @@ against the original one, from 1 to 5. The report shows the mean score and the s
 4-5 ("preserved").
 
 That is 3 requests per record. **Nothing is sent without `--yes`.** Without it, the run prints
-how many requests it would send and a rough cost (100 records ≈ 300 requests ≈ $2.30), and
-scores only responses already in the cache. Responses are cached in
-`data/raw/judge-cache/<model>/`, so a rerun never pays twice. The placeholder cleaning stands
-in for the real transformations (generalize, pseudonymize, mask, block), which tier 2 will do.
+how many requests it would send (and, for the API, a rough cost: 100 records ≈ 300 requests ≈
+$2.30), and scores only responses already in the cache. Responses are cached in
+`data/raw/judge-cache/<model>/` (`judge-cache/claude-cli/<model>/` for the CLI), so a rerun
+never pays twice. The placeholder cleaning stands in for the real transformations; the tier 2
+generalize evaluation scores its own rewrites with the same judge (see *Tier 2 small LLM*).
+
+Two backends, `--judge-backend`:
+
+| Backend | How | Cost |
+| --- | --- | --- |
+| `api` (default) | Anthropic API, `ANTHROPIC_API_KEY` | **Paid** |
+| `claude-cli` | `claude -p --output-format json --json-schema ... --model M --tools ""`, run from an empty temp dir with `ANTHROPIC_API_KEY` removed from its environment (`claude_cli.py`) | No API spend: your own Claude Code login and its usage limits |
+
+Get the OK for a run before passing `--yes`, whichever backend.
 
 ## Tier 1 tagger (GLiNER)
 
@@ -307,7 +319,9 @@ uv run python -m safecontext_ml.export
 uv run python -m safecontext_ml.eval gliner:models/tier1-onnx,device=onnx --per-source 500
 ```
 
-Point the agent at the export with `SC_TIER1_MODEL_DIR=ml/models/tier1-onnx` (#15).
+Point the agent at the export with an absolute path (#15), from the repo root:
+`SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" pnpm --filter @safecontext/agent dev`. A relative
+path breaks, because the agent runs in `apps/agent` under `pnpm --filter`.
 
 ### The export directory
 
@@ -335,24 +349,87 @@ Point the agent at the export with `SC_TIER1_MODEL_DIR=ml/models/tier1-onnx` (#1
 
 Tune thresholds and prompts on `dev` only. `test` is for the final numbers.
 
+## Tier 2 small LLM
+
+Issue #14. Scores, candidates, speed and memory, and why: [`results/tier2-llm.md`](results/tier2-llm.md).
+
+**Chosen:** `gemma4:e4b-it-q4_K_M` (Gemma 4 E4B, Apache-2.0) on **Ollama**, pinned in
+`models.lock.json` under `external`. The agent (#16) calls it through Ollama's
+OpenAI-compatible API, so MLX (`mlx_lm.server`) can be swapped in by changing the base URL and
+model name.
+
+Tier 2 does two jobs:
+
+1. **Context judgement.** For tier 0/1 spans of the context-dependent types (roadmap, revenue,
+   metrics, deals), is this span sensitive *in this document*? A codename in a launch plan is;
+   the same codename in a press release about its launch isn't. Spans judged not sensitive are
+   dropped. On test it cut roadmap-vs-press-release false positives from 52% to 0% without
+   losing a true span.
+2. **Generalize.** Rewrite a value to be vague but true ("$4.2M, up 18%" → "over $4M, up high
+   teens"). Numbers use the deterministic `numbers.rule_rewrite` (always true, never leaks); the
+   LLM rewrites values without a number.
+
+```bash
+cd ml
+OLLAMA_CONTEXT_LENGTH=8192 OLLAMA_FLASH_ATTENTION=1 ollama serve &     # brew install ollama
+ollama pull gemma4:e4b-it-q4_K_M
+uv run python -m safecontext_ml.artifacts status          # checks the pulled digest against the lock
+uv run python -m safecontext_ml.eval tier2:ollama:gemma4:e4b-it-q4_K_M,base=PREDS.jsonl --source macrohard-offline
+uv run python -m safecontext_ml.tier2 generalize ollama:gemma4:e4b-it-q4_K_M --split dev
+uv run python -m safecontext_ml.tier2 bench ollama:gemma4:e4b-it-q4_K_M
+```
+
+`PREDS.jsonl` is tier 0/1 output (`--save-predictions` from a `gliner:` run). The `tier2:`
+adapter only removes spans, and keeps them all when a call fails.
+
+### Prompt files (shared with the agent)
+
+`prompts/tier2/tier2.json` holds the version, request settings, the labels sent for context
+judgement, excerpt sizes and timeouts. One directory per task (`context/`, `generalize/`):
+
+| File | What |
+| --- | --- |
+| `system.md` | System prompt |
+| `user.md` | User message template: `{{data_types}}` (`- <id> (<name>): <description>` per type used), `{{document}}` (the text with `<s1>…</s1>` / `<g1>…</g1>` around the spans), `{{spans}}` (`- s1: "<span text as JSON string>" (<data type id>)`) |
+| `schema.json` | JSON Schema of the answer: `{"spans": [{"id", "reason", "sensitive"}]}` / `{"rewrites": [{"id", "text"}]}`. Sent as `response_format` (Ollama) and always checked on the way back |
+| `examples.json` | Few-shot examples, rendered with `user.md` and sent as user/assistant turns before the real request |
+
+`tier2/prompts.py` is the reference implementation (rendering, excerpts for long texts, answer
+checks). Bump `version` in `tier2.json` when a prompt file changes, and re-run the scores.
+
+### Pieces
+
+| Module | Does |
+| --- | --- |
+| `tier2/client.py` | OpenAI-compatible chat client; the two runtimes' request differences |
+| `tier2/calls.py` | One text's context judgement / generalize calls, as the agent will make them |
+| `tier2/numbers.py` | Number parsing, the leak / precision / "still true" checks, `rule_rewrite` |
+| `tier2/generalize_eval.py` | `python -m safecontext_ml.tier2 generalize`: rewrite quality without Claude, plus the optional Claude judge |
+| `tier2/bench.py` | `python -m safecontext_ml.tier2 bench`: cold start, p50/p95 latency, peak RAM |
+| `eval/adapters/tier2.py` | The `tier2:` harness adapter (context judgement on earlier tiers' spans) |
+
+Use `dev` for prompt changes; `test` is for the final numbers.
+
 ## Models and data
 
-Weights, exports and built splits never go in git. They live in a **private Hugging Face
-organisation**, and [`models.lock.json`](models.lock.json) pins each one to an exact commit, with
+Weights, exports and built splits never go in git. They live in the **private Hugging Face
+organisation `SafeContext`**, and [`models.lock.json`](models.lock.json) pins each one to an exact commit, with
 the sha256 and size of every file. Changing a model or the dataset is a normal PR that changes
 the lock file. Issue #70.
 
 | Artifact | Hugging Face repo | Local directory (in `ml/`) | What |
 | --- | --- | --- | --- |
-| `tier1-onnx` | model `<org>/tier1-gliner` (repo root) | `models/tier1-onnx` | The ONNX export as the agent loads it, plus `provenance.json` |
-| `tier1-pytorch` | model `<org>/tier1-gliner`, under `pytorch/` | `models/tier1-small-ft` | The final fine-tuned model (`pytorch_model.bin`, configs, tokenizer, `finetune_args.json`); not the `checkpoint-*` dirs |
-| `data-splits` | dataset `<org>/safecontext-data`, under `splits/` | `data/splits` | `train/dev/test.jsonl` and `manifest.json`. The frozen test split is the one that matters |
+| `tier1-onnx` | model `SafeContext/tier1-gliner` (repo root) | `models/tier1-onnx` | The ONNX export as the agent loads it, plus `provenance.json` |
+| `tier1-pytorch` | model `SafeContext/tier1-gliner`, under `pytorch/` | `models/tier1-small-ft` | The final fine-tuned model (`pytorch_model.bin`, configs, tokenizer, `finetune_args.json`); not the `checkpoint-*` dirs |
+| `data-splits` | dataset `SafeContext/safecontext-data`, under `splits/` | `data/splits` | `train/dev/test.jsonl` and `manifest.json`. The frozen test split is the one that matters |
 
-The raw public downloads aren't hosted: `dataset public download` fetches them again.
+All three are pinned in `models.lock.json`. The raw public downloads aren't hosted: `dataset
+public download` fetches them again. The tier 2 LLM is off the shelf, so it isn't hosted either:
+it is pinned under `external` (see *Tier 2 small LLM*).
 
 ### Getting access
 
-1. Ask an org admin to invite your Hugging Face account to the org, and accept the invite.
+1. Ask an org admin to invite your Hugging Face account to `SafeContext`, and accept the invite.
 2. `uv run hf auth login` (in `ml/`) with a token that can **read** the org's repos (to
    publish, it needs **write**). `uv run hf auth whoami` should list the org. Tokens stay in
    your Hugging Face config; never put one in git.
@@ -382,7 +459,7 @@ SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" pnpm --filter @safecontext/agent 
 
 ```bash
 cd ml
-export SC_HF_ORG=<org>                    # or pass --org <org>
+export SC_HF_ORG=SafeContext             # or pass --org SafeContext
 uv run python -m safecontext_ml.artifacts push tier1-onnx      # dry run: files, sizes, target repo
 uv run python -m safecontext_ml.artifacts push tier1-onnx --yes
 ```
@@ -398,9 +475,6 @@ uv run python -m safecontext_ml.artifacts push tier1-onnx --yes
   `results/predictions-tier1-small-ft-names-t0.6-test.md` (`--scores` for another report). It
   reads `models/tier1-small-ft/finetune_args.json` (`--finetune-dir`) and
   `data/splits/manifest.json`, and refuses if the report was scored on a different test split.
-
-Tier 2 (#14): if it's an off-the-shelf model, it will be pinned by name and version only; its
-weights are hosted here only if we fine-tune it.
 
 ## Tests and lint
 

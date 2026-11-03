@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tier2ContextResponse",
+  "type": "object",
+  "properties": {
+    "spans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^s[0-9]+$" },
+          "reason": { "type": "string", "maxLength": 120 },
+          "sensitive": { "type": "boolean" }
+        },
+        "required": ["id", "reason", "sensitive"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["spans"],
+  "additionalProperties": false
+}

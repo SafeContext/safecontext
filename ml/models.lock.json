@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "about": "Models and datasets hosted on the private Hugging Face org, pinned to exact commits (issue #70). Fill and update with `uv run python -m safecontext_ml.artifacts push NAME --yes`; download with `pnpm models:pull`. See ml/README.md, Models and data.",
+  "about": "Models and datasets hosted on the private Hugging Face org, pinned to exact commits (issue #70). Fill and update with `uv run python -m safecontext_ml.artifacts push NAME --yes`; download with `pnpm models:pull`. See ml/README.md, Models and data. `external` pins off-the-shelf models we use but don't host (the tier 2 LLM, issue #14): Ollama by name + manifest digest (`GET /api/tags`), MLX by Hugging Face repo + commit. `pull`/`push` ignore them; `status` checks a running Ollama's digest.",
   "artifacts": [
     {
       "name": "tier1-onnx",
@@ -130,6 +130,61 @@
           "sha256": "f8e8ffb9a45e9ca357194f8cc889150e9beaf1eb45ff336b79969d402a714a14"
         }
       ]
+    }
+  ],
+  "external": [
+    {
+      "name": "tier2-llm",
+      "description": "Tier 2 context judgement + generalize (issue #14). Default runtime: Ollama. Pull with `ollama pull gemma4:e4b-it-q4_K_M`, then check GET /api/tags gives this digest.",
+      "runtime": "ollama",
+      "model": "gemma4:e4b-it-q4_K_M",
+      "license": "Apache-2.0",
+      "digest": "sha256:dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c",
+      "revision": null,
+      "size": 6583656505,
+      "upstream": {
+        "repo_id": "google/gemma-4-e4b-it",
+        "revision": "ee0ef6023621cff504d758262d4e04895a5af4a2"
+      },
+      "settings": {
+        "prompts": "ml/prompts/tier2 (version 1)",
+        "base_url": "http://127.0.0.1:11434/v1",
+        "server_env": {
+          "OLLAMA_CONTEXT_LENGTH": "8192",
+          "OLLAMA_FLASH_ATTENTION": "1"
+        },
+        "request": {
+          "temperature": 0,
+          "seed": 0,
+          "reasoning_effort": "none",
+          "response_format": "json_schema from the task's schema.json"
+        },
+        "scores": "ml/results/tier2-llm.md"
+      }
+    },
+    {
+      "name": "tier2-llm-mlx",
+      "description": "The same model for MLX (mlx_lm.server --model REPO --revision REV), the swappable alternative runtime. Slower than Ollama here and no structured output.",
+      "runtime": "mlx",
+      "model": "mlx-community/gemma-4-e4b-it-4bit",
+      "license": "Apache-2.0 (upstream google/gemma-4-e4b-it; this repo's card metadata still says `gemma`)",
+      "digest": null,
+      "revision": "475b9088d29754a3379866cf5aeb6b41acd313c2",
+      "size": 5179241512,
+      "upstream": {
+        "repo_id": "google/gemma-4-e4b-it",
+        "revision": "fee6332c1abaafb77f6f9624236c63aa2f1d0187"
+      },
+      "settings": {
+        "prompts": "ml/prompts/tier2 (version 1)",
+        "base_url": "http://127.0.0.1:8080/v1",
+        "request": {
+          "temperature": 0,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        }
+      }
     }
   ]
 }

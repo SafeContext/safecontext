@@ -143,6 +143,23 @@ def test_llm_cache_key_survives_prompt_rewording(monkeypatch):
     assert llm.cache_path(s, "m", "low") != llm.cache_path(s, "m", "medium")
 
 
+def test_llm_claude_cli_backend_dry_run_counts_and_never_calls(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(llm, "LLM_CACHE_DIR", tmp_path)
+
+    def boom(*a, **k):
+        raise AssertionError("must not call claude without --yes")
+
+    monkeypatch.setattr(llm, "_call", boom)
+    assert list(llm.run(2, backend="claude-cli")) == []
+    err = capsys.readouterr().err
+    n = len(llm.plan(2))
+    assert f"{n} uncached requests" in err and "via claude-cli" in err and "no API spend" in err
+    s = llm.plan(2)[0]
+    assert llm.cache_path(s, "m", "medium", "claude-cli").parent == tmp_path / "claude-cli" / "m"
+    with pytest.raises(ValueError):
+        list(llm.run(1, backend="nope"))
+
+
 def test_write_jsonl_keeps_old_file_if_records_fail(tmp_path):
     path = tmp_path / "src.jsonl"
     write_jsonl(path, [_rec(1, "abc old", "g")])

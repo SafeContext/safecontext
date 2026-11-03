@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tier2GeneralizeResponse",
+  "type": "object",
+  "properties": {
+    "rewrites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^g[0-9]+$" },
+          "text": { "type": "string", "minLength": 1, "maxLength": 60 }
+        },
+        "required": ["id", "text"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["rewrites"],
+  "additionalProperties": false
+}

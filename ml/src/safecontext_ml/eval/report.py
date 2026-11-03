@@ -100,12 +100,14 @@ def _judge_section(j: JudgeSummary | None, sources: list[str]) -> list[str]:
     if j is None:
         return [
             (
-                "Not run. It is paid and opt-in: `--judge N` picks N records the model changed and "
-                "prints a cost estimate; add `--yes` to send the requests."
+                "Not run. It is opt-in: `--judge N` picks N records the model changed and "
+                "prints how many requests it would send; add `--yes` to send them. "
+                "`--judge-backend claude-cli` uses the local `claude -p` (no API spend)."
             ),
         ]
+    via = " via `claude -p`" if j.backend == "claude-cli" else ""
     lines = [
-        f"Model `{j.model}`. {j.selected} records selected, {len(j.scored)} scored."
+        f"Model `{j.model}`{via}. {j.selected} records selected, {len(j.scored)} scored."
         + (
             ""
             if j.sent or not j.uncached_requests
