@@ -48,7 +48,8 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 					let toClear: Span[][] | undefined;
 					try {
 						found = await withDeadline(tier.detect(texts, ctx), remainingMs);
-						if (found.length !== texts.length) throw new Error(`${tier.id} returned spans for the wrong number of texts`);
+						if (found.length !== texts.length)
+							throw new Error(`${tier.id} returned spans for the wrong number of texts`);
 						for (const [i, f] of found.entries()) {
 							for (const s of f) if (s.source === 'rule' || s.source === 'list') protectedSpans[i]!.push(s);
 						}
@@ -65,7 +66,8 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 					// A sync tier can't be interrupted, so check the clock after it returns too.
 					if (now() > deadline) throw new Timeout();
 					if (toClear) {
-						if (toClear.length !== texts.length) throw new Error(`${tier.id} cleared spans for the wrong number of texts`);
+						if (toClear.length !== texts.length)
+							throw new Error(`${tier.id} cleared spans for the wrong number of texts`);
 						const clearable = new Set(tier.clearable ?? []);
 						spans = spans.map((current, i) => {
 							const keys = new Set(toClear![i]!.map(spanKey));

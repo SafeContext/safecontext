@@ -114,8 +114,7 @@ const FRACTIONS: Array<[string, number]> = [
 ];
 const LOW_MID_HIGH: Record<string, [number, number]> = { low: [0.0, 0.4], mid: [0.3, 0.7], high: [0.6, 1.0] };
 
-const ABOVE =
-	'(?:over|more than|above|exceeding|at least|upwards of|north of|beyond|greater than|in excess of)';
+const ABOVE = '(?:over|more than|above|exceeding|at least|upwards of|north of|beyond|greater than|in excess of)';
 const BELOW = '(?:under|less than|below|up to|at most|fewer than|no more than|sub-?)';
 /** How far "about N" may be from N, relative (one significant digit rounds by up to ~±35%). */
 export const ABOUT_TOLERANCE = 0.4;
@@ -134,9 +133,8 @@ export function claimedRange(rewrite: string, original: Value): [number, number]
 	const targetKind = original.kind;
 
 	// "low/mid/high teens", "high twenties", "teens"
-	let m = /\b(?:(low|mid|high)[- ])?(teens|twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b/.exec(
-		s
-	);
+	let m =
+		/\b(?:(low|mid|high)[- ])?(teens|twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties)\b/.exec(s);
 	if (m && targetKind === 'percent') {
 		const base = DECADES[m[2]!]!;
 		return m[1] ? bounds(m[1], base, 10) : [base, base + 10];
@@ -242,7 +240,8 @@ export function leaksValue(rewrite: string, original: Value, spanText: string): 
 	for (const n of parseNumbers(rewrite)) {
 		if (n.digits === original.digits && original.sig >= 2) return true;
 		const same =
-			original.value !== 0 && Math.abs(Math.abs(n.value) - Math.abs(original.value)) <= 0.005 * Math.abs(original.value);
+			original.value !== 0 &&
+			Math.abs(Math.abs(n.value) - Math.abs(original.value)) <= 0.005 * Math.abs(original.value);
 		if (same && n.sig >= original.sig) return true;
 	}
 	return false;

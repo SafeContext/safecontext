@@ -217,9 +217,7 @@ export function buildRequest<S extends SpanRef>(
 	const sorted = [...spans].sort((a, b) => a.start - b.start);
 	const ids = sorted.map((_, i) => `${task.prefix}${i + 1}`);
 	const marked = mark(text, sorted, task.prefix, offset);
-	const rows = sorted.map(
-		(s, i) => [ids[i]!, text.slice(s.start - offset, s.end - offset), s.dataTypeId] as const
-	);
+	const rows = sorted.map((s, i) => [ids[i]!, text.slice(s.start - offset, s.end - offset), s.dataTypeId] as const);
 	const messages: ChatMessage[] = [
 		{ role: 'system', content: task.system },
 		...(fewShot ? task.exampleTurns : []),
