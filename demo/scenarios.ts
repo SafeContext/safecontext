@@ -1,7 +1,7 @@
 /**
  * What each persona would type or have Claude read, and what Safe Context should do with it.
- * `demo/check.ts` sends each one through a running agent and compares; `--list` prints them as
- * the "try these" guide that `demo/setup.sh` writes to ~/macrohard/TRY-THESE.md.
+ * The personas live in the SafeContext/MacroHard repo. `demo/check.ts` sends each scenario
+ * through a running agent and compares; `--list` prints them as MacroHard's TRY-THESE.md.
  *
  * Expectations assume the demo policy: the default data types plus the dashboard seed's word
  * lists (Northwind, Acme Corp, Contoso; Project Atlas, Project Helios), with tiers 1 and 2 on.
@@ -109,7 +109,7 @@ export const SCENARIOS: Scenario[] = [
 	{
 		persona: 'dev',
 		kind: 'prompt',
-		text: 'Can you ask Priya to review the checkout PR once tests pass?',
+		text: 'Can you ask Richard to review the checkout PR once tests pass?',
 		expect: 'allow',
 		why: "People's names aren't sensitive."
 	},

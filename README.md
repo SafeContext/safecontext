@@ -114,10 +114,10 @@ pnpm --filter @safecontext/dashboard db:generate
 
 ## Try it locally
 
-**Quickest way to try it by hand:** the Macrohard demo personas (dev, PM and sales) in
-[demo/README.md](demo/README.md). `demo/setup.sh` makes three folders of realistic work files
-where Safe Context is on, from the terminal or the desktop app, and `demo/start-agent.sh` runs
-the agent with every tier. The steps below set each piece up by hand.
+**Quickest way to try it by hand:** the [SafeContext/MacroHard](https://github.com/SafeContext/MacroHard)
+repo, a made-up company whose three people (dev, PM, sales) each have a folder of realistic work
+files where Safe Context is on, from the terminal or the desktop app. `demo/start-agent.sh` runs
+the agent with every tier; see [demo/README.md](demo/README.md). The steps below set each piece up by hand.
 
 ### 1. Agent and plugin
 
@@ -212,8 +212,8 @@ appear in the dashboard's live feed within a few seconds.
 | `packages/policy/` | Shared data formats ("contracts"): policy, agent API, dashboard API, events, hook messages |
 | `packages/detectors/` | Tier 0 rules and the term-list matcher |
 | `ml/` | Python: dataset, evaluation harness, tier 1 fine-tuning and ONNX export, model hosting (`models.lock.json`). See [ml/README.md](ml/README.md) |
-| `demo/` | Macrohard demo personas (dev, PM, sales) to try Safe Context by hand, and a check that runs their scenarios through the agent. See [demo/README.md](demo/README.md) |
-| `.claude-plugin/marketplace.json` | Lists `plugin/` as a local plugin marketplace, so a folder's settings can turn the plugin on |
+| `demo/` | Tools for the [MacroHard](https://github.com/SafeContext/MacroHard) demo: `start-agent.sh`, and the scenarios plus a check that runs them through the agent. See [demo/README.md](demo/README.md) |
+| `.claude-plugin/marketplace.json` | Lists `plugin/` as a plugin marketplace, so a folder's settings can turn the plugin on (MacroHard uses it) |
 | `installer/` | Homebrew formula and launchd (not built yet) |
 | `docs/` | Findings: [hook shapes](docs/hook-shapes.md), [hook coverage](docs/hook-coverage.md) |
 

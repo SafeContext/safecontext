@@ -1,7 +1,0 @@
-account,industry,seats,arr_usd,renewal_date,stage,primary_contact,contact_email,contact_phone
-Northwind,Logistics,1400,1100000,2027-01-31,Renewal - negotiating,Hannah Lewis,hannah.lewis@northwind.com,+44 20 7946 0123
-Acme Corp,Manufacturing,850,640000,2027-03-15,Renewal - early,Tom Becker,tom.becker@acmecorp.com,+44 161 496 0456
-Contoso,Retail,600,410000,2026-12-20,Expansion - proposal sent,Dev Patel,dev.patel@contoso.com,+44 113 496 0789
-Fabrikam,Manufacturing,220,150000,2027-06-01,Healthy,Rosa Ortiz,r.ortiz@fabrikam.com,+44 20 7946 0958
-Tailspin Toys,Retail,95,62000,2027-02-10,At risk,Leo Grant,leo.grant@tailspintoys.com,+44 117 496 0321
-Wide World Importers,Logistics,310,205000,2027-04-30,Expansion - discovery,Amara Okonkwo,amara.okonkwo@wideworldimporters.com,+44 141 496 0654

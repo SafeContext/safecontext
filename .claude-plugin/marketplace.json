@@ -1,6 +1,6 @@
 {
   "name": "safecontext",
-  "description": "Safe Context's plugin, straight from this repo. Used by the demo personas in demo/.",
+  "description": "Safe Context's plugin, straight from this repo. The SafeContext/MacroHard demo turns it on from here.",
   "owner": {
     "name": "Safe Context"
   },
