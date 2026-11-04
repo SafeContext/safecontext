@@ -180,9 +180,11 @@ data type (tier 0). When spans of two data types overlap, the stricter type in t
 - **Labels:** one per data type, from `labels.json` in the export (`{ dataTypeId: label }`); types
   missing there use `SC_TIER1_LABEL` (default the type's name). **Threshold 0.6**, from the
   export's `tier1.json`, chosen on dev.
-- **Scores** on the full frozen test split (29,018 records): red recall **97.8%** (target ≥ 95%),
-  micro F1 97.7%, safe text flagged 8.1%, hard negatives flagged 34.2%. Macrohard red recall is
-  91.5%, because long secrets are only partly caught; tier 0 is relied on to catch them whole.
+- **Scores** (retrained in #78 so names aren't flagged) on the full frozen test split (29,018
+  records, sha `dfe667ab…`): red recall **97.8%** (target ≥ 95%), micro F1 97.9%, safe text
+  flagged 7.7%, hard negatives flagged 25.3%. Macrohard red recall is 89.9%, because long
+  secrets are only partly caught; tier 0 is relied on to catch them whole. On the realistic
+  `llm-test` set: safe documents flagged 38.3% (83.0% before #78), red recall 74.8%.
   Macrohard data is template-only so far, so the business labels' scores are an upper bound.
 - **Latency** (ONNX, CPU, idle M3 Max, one text per call): p50 40 ms, p95 256 ms; about
   75–110 ms per KB for longer text. Not yet measured on a base M-series Mac.

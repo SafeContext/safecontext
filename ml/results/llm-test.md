@@ -31,12 +31,29 @@ not something tier 2 can fix.
   records use train-pool names (which tier 1 may have seen in training), 25 use dev/test pools.
   Recall on the 25 unseen-pool records is the same (customer names 100%, roadmap 34.5%,
   personal data 97.7%), so we found no sign that seen names inflate the scores.
-- sha256 `f525da3f4b92dc49a172bb4de85ecfb2a165a517dd6b4d3be7331ba569ea7627`. Hosted as `data-llm`
+- sha256 `f525da3f4b92dc49a172bb4de85ecfb2a165a517dd6b4d3be7331ba569ea7627` (before #78; now `b76f9971…`). Hosted as `data-llm`
   (`SafeContext/safecontext-data`, `llm-test/`), pinned in `models.lock.json`.
 
 On `llm-test`, the hard negatives are whole safe documents (`negative_for` = every label), so
 *Hard negatives flagged* = *Safe docs flagged* there. On the templates, a hard negative is a
 look-alike for specific labels.
+
+## Update: names are not sensitive (issue #78)
+
+Decided on #2: people's names (staff or customers, chat handles) are fine to share. `llm-test` was
+rebuilt from the same cached responses with name tags removed (46 spans; no new calls; sha
+`b76f9971fd004c03…`, pinned as `data-llm`), and tier 1 was retrained
+([`tier1-gliner.md`](tier1-gliner.md)). Tier 1 alone, ONNX:
+
+| Set | Model | Safe docs flagged | Red recall | Micro F1 | Personal data P / R | Secrets R | Hard negatives flagged |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **`llm-test`** (99) | before #78 | 39/47 (83.0%) | 69.1% | 56.3% | 18.4% / 100.0% | 79.3% | 83.0% |
+| **`llm-test`** (99) | **after #78** | **18/47 (38.3%)** | 74.8% | 81.7% | 77.1% / **100.0%** | 82.8% | 38.3% |
+| test split (29,018) | before #78 | 889/2,355 (37.7%) | 97.9% | 79.4% | 65.6% / 98.2% | 93.3% | 34.2% |
+| test split (29,018) | **after #78** | **182/2,355 (7.7%)** | 97.8% | 97.9% | 98.2% / 98.1% | 92.8% | 25.3% |
+
+The tables below are from before #78 (old labels, sha `f525da3f…`). Tier 2 was not re-run: it
+only judges roadmap and number spans, which #78 didn't change.
 
 ## Context judgement: tier 1, then tier 1 + Gemma
 

@@ -10,11 +10,53 @@ large, ~3x the compute, with 20 hand-picked labels the agent can't use) reached 
 and flagged 55.6% of safe records, so fine-tuning was needed.
 
 **On realistic Claude-written documents** (`llm-test`, issue #76), the Macrohard scores are
-much lower: red recall 73.2%, and 83% of safe documents flagged, mostly because staff names get
-flagged. See [`llm-test.md`](llm-test.md).
+much lower: red recall 73.2%, and 83% of safe documents flagged, mostly because staff names got
+flagged. See [`llm-test.md`](llm-test.md). **Since #78** names are not sensitive and the model
+was retrained: safe documents flagged on `llm-test` 38%, and on the refrozen test split 7.7%.
+See *Retrained so names aren't flagged* below.
 
 Everything below was tuned on `dev` only (thresholds, prompts, checkpoint). `test` was used once
 per variant for the numbers in this file. Test sha256 `1aec53bb6700782d…` (see the per-run reports).
+
+## Retrained so names aren't flagged (issue #78)
+
+Decided on #2: **people's names are not sensitive** (staff or customers, chat handles included).
+*Customer personal data* is now contact and account details only. The training and test data
+were relabelled so names are not spans (see `ml/README.md`, *Names relabelled*), the test split
+was refrozen (`1aec53bb…` → `dfe667ab75ef91b0…`), and the model was fine-tuned again with the same
+script and settings (4,000 steps, 1 h 15 min on an M3 Max). Its label for personal data is now
+"email, phone, address, card or id number" (`prompts.LABEL_TEXT`), not the type's name.
+
+Choice on dev (300 records per source): the final checkpoint (4,000) at threshold **0.6**, the
+best mean per-source F1 (95.4%) among thresholds with dev red recall ≥ 95% (97.2%). Checkpoint
+3,500 was within 0.02 points. ONNX parity: 152/152 spans on 50 dev records, max score
+difference 3e-6.
+
+Both models scored on the relabelled data ("before" = the #13 model, whose predictions are the
+same as before; only the gold changed, so it is now wrong about every name it flags):
+
+| Set | Model | Safe docs flagged | Red recall | Micro F1 | Personal data P / R | Secrets R | Hard negatives flagged |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **`llm-test`** (99) | before #78 | 39/47 (83.0%) | 69.1% | 56.3% | 18.4% / 100.0% | 79.3% | 83.0% |
+| **`llm-test`** (99) | **after #78** | **18/47 (38.3%)** | 74.8% | 81.7% | 77.1% / **100.0%** | 82.8% | 38.3% |
+| test split (29,018) | before #78 | 889/2,355 (37.7%) | 97.9% | 79.4% | 65.6% / 98.2% | 93.3% | 34.2% |
+| test split (29,018) | **after #78** | **182/2,355 (7.7%)** | 97.8% | 97.9% | 98.2% / 98.1% | 92.8% | 25.3% |
+
+- **Done-when met:** on `llm-test`, safe documents flagged fell from 83% to 38%, and recall of
+  the remaining personal data (emails, phones, addresses, cards) stayed at 100%. On the test
+  split it is 98.2% → 98.1% (72,636 spans), the same within noise.
+- **What still flags safe `llm-test` documents:** example and company addresses tagged as
+  personal data (16 documents: `press@example.com`, `support@macrohard.io`...) and an env var
+  name tagged as a secret (3 documents, `MACROHARD_WEBHOOK_SECRET`). Out of scope for #78.
+- Macrohard (templates) secrets recall fell from 59.2% to 51.0% (49 spans; long secrets that
+  tier 0 catches whole). Macrohard red recall 90.6% → 89.9%.
+- The roadmap look-alikes in the templates are flagged less (hard negatives 52% → 34%).
+
+Reports: [`predictions-tier1-small-ft-names-t0.6-test.md`](predictions-tier1-small-ft-names-t0.6-test.md)
+(after), [`predictions-tier1-before-78-t0.6-test.md`](predictions-tier1-before-78-t0.6-test.md)
+(before), [`gliner-tier1-onnx-export-t0.6-onnx-llm-test.md`](gliner-tier1-onnx-export-t0.6-onnx-llm-test.md)
+(after, ONNX as the agent runs it), [`predictions-tier1-before-78-llm-llm-test.md`](predictions-tier1-before-78-llm-llm-test.md)
+(before). The sections below are the #13 model on the old labels (test `1aec53bb…`).
 
 ## Variants tried
 
