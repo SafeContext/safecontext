@@ -16,7 +16,7 @@
  * one pass over the text however many terms there are. Build the detector once per policy.
  */
 import type { TermList } from '@safecontext/policy';
-import { mergeSpans } from './spans.ts';
+import { mergeSpans, type Strictness } from './spans.ts';
 import type { Detector, Span } from './types.ts';
 
 const SPACE = 0x20;
@@ -210,13 +210,14 @@ class Automaton {
  * that list's `dataTypeId`, `source: 'list'` and confidence 1.
  *
  * Overlapping matches are merged into one span covering all of them (see `mergeSpans`), so
- * nothing matched is left exposed. The merged span takes the data type of the longest match
- * starting first; for the same term in two lists, the list that comes first in `lists` wins.
+ * nothing matched is left exposed. The merged span takes the strictest data type
+ * (`strictness`, when given: a term in a yellow list and a red list counts as red), then that of the longest match starting first; for the same term in two lists
+ * of equal strictness, the list that comes first in `lists` wins.
  *
  * Building costs time proportional to the total length of all terms, so build once per policy
  * and reuse the detector. `detect` is one pass over the text.
  */
-export function createTermListDetector(lists: readonly TermList[]): Detector {
+export function createTermListDetector(lists: readonly TermList[], strictness?: Strictness): Detector {
 	const automaton = new Automaton(lists);
 	const { patterns, maxLength } = automaton;
 	if (patterns.length === 0) return { id: 'term-list', detect: () => [] };
@@ -286,7 +287,10 @@ export function createTermListDetector(lists: readonly TermList[]): Detector {
 			}
 			// mergeSpans lets the earliest input win, so order by start, longest first, then list order.
 			matches.sort((a, b) => a.span.start - b.span.start || b.span.end - a.span.end || a.id - b.id);
-			return mergeSpans(matches.map((m) => m.span));
+			return mergeSpans(
+				matches.map((m) => m.span),
+				strictness
+			);
 		}
 	};
 }

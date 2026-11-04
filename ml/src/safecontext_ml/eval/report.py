@@ -61,9 +61,9 @@ def _headline(scorer: Scorer, info: RunInfo) -> list[str]:
         row("Predicted spans", lambda x: f"{x.total().pred:,}"),
         row(f"**Red recall** (target ≥ {RED_RECALL_TARGET:.0%})", red),
         row("Red recall, any label", lambda x: pct(x.red_recall_any)),
-        row("Micro precision", lambda x: pct(x.total().precision)),
-        row("Micro recall", lambda x: pct(x.total().recall)),
-        row("Micro F1", lambda x: pct(x.total().f1)),
+        row("Micro precision", lambda x: pct(x.micro.precision)),
+        row("Micro recall", lambda x: pct(x.micro.recall)),
+        row("Micro F1", lambda x: pct(x.micro.f1)),
         row(
             "**Safe text flagged** (FP rate)",
             lambda x: frac(x.safe_flagged, x.safe_records),

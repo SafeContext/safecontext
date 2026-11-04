@@ -2,7 +2,7 @@ import type { Detector } from '@safecontext/detectors';
 import { describe, expect, it, vi } from 'vitest';
 import { fakeTier, policyWith, SECRET } from '../test-helpers.ts';
 import { createClassifier } from './classifier.ts';
-import { createTier0 } from './tier0.ts';
+import { createTier0, termListDetectors } from './tier0.ts';
 import type { ClassifierTier } from './types.ts';
 
 const policy = policyWith();
@@ -27,6 +27,33 @@ describe('createClassifier', () => {
 		const c = createClassifier({ tiers: [createTier0(), tier1], budgetMs: 1_000 });
 		const result = await c.classify([`Abc ${SECRET}`], policy);
 		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['customer-names', 'secrets']);
+	});
+
+	// Issue #78: where two data types overlap, the stricter one in the policy wins.
+	it('lets the stricter data type win an overlap, whatever the confidence or tier order', async () => {
+		const listed = policyWith({ lists: [{ dataTypeId: 'customer-names', terms: ['Jane Doe'] }] }); // yellow
+		const tagger = fakeTier({
+			id: 'tier1',
+			spans: (texts) =>
+				texts.map(() => [
+					{ start: 4, end: 12, dataTypeId: 'customer-personal-data', source: 'tagger', confidence: 0.7 }
+				])
+		});
+		const text = 'Ask Jane Doe today';
+		for (const tiers of [
+			[createTier0({ policyDetectors: termListDetectors }), tagger],
+			[tagger, createTier0({ policyDetectors: termListDetectors })]
+		]) {
+			const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], listed);
+			expect(result.ok && result.spans[0]).toEqual([
+				{ start: 4, end: 12, dataTypeId: 'customer-personal-data', source: 'tagger', confidence: 0.7 }
+			]);
+		}
+		// The confidence-1 list match only wins when it is the stricter type.
+		const redList = policyWith({ lists: [{ dataTypeId: 'unreleased-roadmap', terms: ['Jane Doe'] }] });
+		const tiers = [createTier0({ policyDetectors: termListDetectors }), tagger];
+		const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], redList);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['unreleased-roadmap']);
 	});
 
 	it('skips a tier when shouldRun says no, and passes it the spans so far', async () => {

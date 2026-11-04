@@ -81,3 +81,66 @@ describe('latency with 10k admin terms', () => {
 		expect(p95).toBeLessThan(10);
 	});
 });
+
+// Issue #78: people's names aren't sensitive by default, but IT can protect specific names by
+// listing them on a term list, under any data type.
+describe('specific names on a term list', () => {
+	const people = ['Priya Raman', 'priya', 'dan.k'];
+	const withNames = (dataTypeId: string) =>
+		policyWith({
+			lists: [
+				{ dataTypeId, terms: people },
+				{ dataTypeId: 'customer-names', terms: ['Northwind'] }
+			]
+		});
+	const vipType = {
+		id: 'vip-names',
+		name: 'VIP names',
+		description: 'Names of executives and board members.',
+		examples: ['Priya Raman'],
+		tier: 'red' as const,
+		action: 'block' as const
+	};
+
+	it('lets names through when nobody listed them', async () => {
+		const { post } = testApp({ policy: policyWith(), tiers: [tier0()] });
+		const stdout = 'Priya Raman and dan.k fixed it; ping priya.';
+		expect((await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }))).json).toEqual({});
+	});
+
+	it('pseudonymizes listed names in tool output, whatever their case', async () => {
+		const { post, reports } = testApp({ policy: withNames('customer-personal-data'), tiers: [tier0()] });
+		const stdout = 'PRIYA RAMAN asked dan.k to call Northwind.';
+		const res = await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }));
+		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
+			stdout: 'customer_personal_data_1 asked customer_personal_data_2 to call customer_name_1.',
+			stderr: ''
+		});
+		expect(reports[0]).toMatchObject({ counts: { 'customer-personal-data': 2, 'customer-names': 1 } });
+	});
+
+	it('blocks a prompt naming a listed person under an admin’s own red + block type', async () => {
+		const policy = policyWith({
+			dataTypes: [...policyWith().dataTypes, vipType],
+			lists: [{ dataTypeId: 'vip-names', terms: people }]
+		});
+		const { post } = testApp({ policy, tiers: [tier0()] });
+		const out = prompt.response.parse((await post(prompt.path, promptInput('What did priya say?'))).json);
+		expect(out.decision).toBe('block');
+		expect(out.reason).toContain('VIP names');
+		expect(out.reason?.toLowerCase()).not.toContain('priya');
+	});
+
+	it('uses the stricter list when a name is on two lists', async () => {
+		const policy = policyWith({
+			dataTypes: [...policyWith().dataTypes, vipType],
+			lists: [
+				{ dataTypeId: 'customer-names', terms: ['priya'] }, // yellow, listed first
+				{ dataTypeId: 'vip-names', terms: ['priya'] } // red
+			]
+		});
+		const classifier = createClassifier({ tiers: [tier0()], budgetMs: 1_000 });
+		const result = await classifier.classify(['ask priya'], policy);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['vip-names']);
+	});
+});

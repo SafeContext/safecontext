@@ -1,6 +1,6 @@
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import type { DataType, Policy } from '@safecontext/policy';
-import { stopsPromptsAndToolCalls, summarize } from '../../decide.ts';
+import { severity, stopsPromptsAndToolCalls, strictness, summarize } from '../../decide.ts';
 import type { Tier1Config } from '../../config.ts';
 import type { Logger } from '../../log.ts';
 import type { ClassifierTier, ClassifyState } from '../types.ts';
@@ -141,7 +141,7 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 						});
 					}
 				}
-				out.push(spans.length > 1 ? mergeSpans(spans) : spans);
+				out.push(spans.length > 1 ? mergeSpans(spans, strictness(policy)) : spans);
 			}
 			return out;
 		},
@@ -185,14 +185,6 @@ export function needsTier1({ policy, texts, spans, hook }: ClassifyState): boole
 		return !summarize(spans.flat(), policy).some((hit) => hit.action !== 'allow' && stopsPromptsAndToolCalls(hit));
 	}
 	return true;
-}
-
-const TIER_RANK = { green: 0, yellow: 1, red: 2 } as const;
-const ACTION_RANK = { allow: 0, generalize: 1, pseudonymize: 2, mask: 3, block: 4 } as const;
-
-/** Higher is more severe: data that stops prompts first, then tier, then action. */
-function severity(dt: DataType): number {
-	return (stopsPromptsAndToolCalls(dt) ? 100 : 0) + TIER_RANK[dt.tier] * 10 + ACTION_RANK[dt.action];
 }
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

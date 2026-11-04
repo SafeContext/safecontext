@@ -8,9 +8,11 @@ Writes Hugging Face style checkpoints to `--out/checkpoint-N/` and the final mod
 start it in the background with a log file; `--resume` continues from the last checkpoint.
 
 How records become GLiNER training examples:
-- The prompt is the `names` prompt set: every data type's display name in lower case
-  ("customer personal data"). All seven are given on every example, so the model learns to
-  tell them apart, and hard negatives (no spans) teach it what not to flag.
+- The prompt is the `names` prompt set: one label per data type, its display name in lower
+  case ("revenue figures"), except where `prompts.LABEL_TEXT` words it more precisely
+  (customer personal data: contact details, not names). All seven are given on every example,
+  so the model learns to tell them apart, and hard negatives (no spans) teach it what not to
+  flag.
 - Public PII records never contain business labels. When they have `company` ignore regions,
   "customer names" is left out of their prompt, so company names there are not taught as
   negatives (our Macrohard data labels customer companies).

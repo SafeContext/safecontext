@@ -4,7 +4,7 @@
  */
 import { cardDetector, emailDetector, ipDetector, phoneDetector } from './personal-data.ts';
 import { secretsDetector } from './secrets.ts';
-import { mergeSpans } from './spans.ts';
+import { mergeSpans, type Strictness } from './spans.ts';
 import type { Detector, Span } from './types.ts';
 
 export type { Detector, Span } from './types.ts';
@@ -23,7 +23,7 @@ export {
 	passesLuhn,
 	phoneDetector
 } from './personal-data.ts';
-export { mergeSpans, ruleSpan } from './spans.ts';
+export { mergeSpans, ruleSpan, type Strictness } from './spans.ts';
 export { createTermListDetector } from './term-list.ts';
 
 /**
@@ -41,9 +41,16 @@ export const defaultDetectors: readonly Detector[] = [
 ];
 
 /**
- * Run every detector over `text` and merge overlapping spans (see `mergeSpans`).
- * Returns spans sorted by `start`, none overlapping.
+ * Run every detector over `text` and merge overlapping spans (see `mergeSpans`, which also
+ * explains `strictness`). Returns spans sorted by `start`, none overlapping.
  */
-export function detectAll(text: string, detectors: readonly Detector[] = defaultDetectors): Span[] {
-	return mergeSpans(detectors.flatMap((detector) => detector.detect(text)));
+export function detectAll(
+	text: string,
+	detectors: readonly Detector[] = defaultDetectors,
+	strictness?: Strictness
+): Span[] {
+	return mergeSpans(
+		detectors.flatMap((detector) => detector.detect(text)),
+		strictness
+	);
 }

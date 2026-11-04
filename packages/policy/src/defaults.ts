@@ -7,7 +7,7 @@ import { Policy, type DataType } from './policy.ts';
 export const BUILTIN_DATA_TYPE = {
 	/** API keys, tokens, private keys, passwords. */
 	secrets: 'secrets',
-	/** Emails, phone numbers, card numbers, IP addresses of customers or people. */
+	/** Emails, phone numbers, card numbers, IP addresses of customers or people (not names). */
 	personalData: 'customer-personal-data'
 } as const;
 
@@ -94,8 +94,11 @@ export const DEFAULT_DATA_TYPES: DataType[] = [
 	{
 		id: BUILTIN_DATA_TYPE.personalData,
 		name: 'Customer personal data',
-		description: 'Personal details of customers or people: emails, phone numbers, card numbers, addresses.',
-		examples: ['jane@northwind.com', 'card 4242 4242 4242 4242'],
+		// Decided on #2 (issue #78): names of people (staff or customers, chat handles) are not
+		// sensitive. IT can still protect specific names with a term list.
+		description:
+			'Contact and account details of customers or people: emails, phone numbers, postal addresses, card and account numbers, government IDs. Not their names: a name on its own is fine to share.',
+		examples: ['jane@northwind.com', '+1 415 555 0134', 'card 4242 4242 4242 4242'],
 		tier: 'red',
 		action: 'pseudonymize'
 	}

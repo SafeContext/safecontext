@@ -15,6 +15,8 @@ How it works:
 3. The model returns the document with `<data-type-id>...</data-type-id>` tags (see `markup.py`).
 4. Quality gates reject a response if the markup is broken, a hard negative contains the labels it
    should avoid, or a provided sensitive value appears in the text without a tag.
+5. People's names are not sensitive (issue #78). Responses cached before that tagged customers'
+   names as personal data; `drop_name_spans` removes those tags, so no new calls are needed.
 """
 
 from __future__ import annotations
@@ -91,8 +93,9 @@ Tagging rules:
 ("$4.2M", "18%", "340 ms", "3,412"), not the surrounding words.
 - unreleased-roadmap: codenames of unreleased products and planned dates of unreleased launches. \
 A product that already shipped publicly, or a date announced publicly, is not tagged.
-- customer-personal-data: names and contact details (email, phone, card number, postal address, \
-IP address) of customers or end users. Macrohard employees' names and chat handles are not tagged.
+- customer-personal-data: contact and account details (email, phone, card number, postal \
+address, IP address) of customers or end users. People's names are not sensitive: never tag a \
+person's name, a customer's or a Macrohard employee's, or a chat handle.
 - secrets: the secret value only (key, token, password, private key block, or a whole \
 connection string that contains a password), never the variable name.
 - Placeholders ("<YOUR_API_KEY>"), environment variable names, example.com addresses, masked \
@@ -119,6 +122,8 @@ class Scenario:
     values: dict[str, list[str]]
     length: str
     seed: int = 0
+    #: People's names the model may use. Not sensitive, never tagged (issue #78).
+    names: tuple[str, ...] = ()
 
     def user_prompt(self) -> str:
         lines = [f"Write {self.genre.brief}. Length: {self.length}."]
@@ -141,6 +146,11 @@ class Scenario:
             )
             for label, vals in self.values.items():
                 lines.append(f"- {label}: " + "; ".join(vals))
+        if self.names:
+            lines.append(
+                "People you may name (names are not sensitive, do not tag them): "
+                + "; ".join(self.names)
+            )
         lines.append(f"Safe facts you may use: shipped products {', '.join(V.PRODUCTS[:4])}; staff handles "
                      f"{', '.join(V.STAFF[:6])}; company domain {V.COMPANY_DOMAIN}.")  # fmt: skip
         return "\n".join(lines)
@@ -155,17 +165,19 @@ def plan(n_per_genre: int, seed: int = 0) -> list[Scenario]:
             rng = random.Random(f"{seed}:{sid}")
             hard_negative = rng.random() < genre.negative_share
             vals: dict[str, list[str]] = {}
+            names: tuple[str, ...] = ()
             if not hard_negative:
+                # Same random draws in the same order as before issue #78, so every scenario
+                # (and its cached response) keeps its values; the name just moved out of them.
+                customers = sorted(
+                    {V.customer(rng, split) for _ in range(rng.randint(1, 3))}
+                )
+                roadmap = [V.codename(rng, split), V.future_date(rng, split)]
+                names = (V.person(rng, split),)
                 vals = {
-                    L.CUSTOMER: sorted(
-                        {V.customer(rng, split) for _ in range(rng.randint(1, 3))}
-                    ),
-                    L.ROADMAP: [V.codename(rng, split), V.future_date(rng, split)],
-                    L.PERSONAL: [
-                        V.person(rng, split),
-                        V.email(rng, split),
-                        V.phone(rng, split),
-                    ],
+                    L.CUSTOMER: customers,
+                    L.ROADMAP: roadmap,
+                    L.PERSONAL: [V.email(rng, split), V.phone(rng, split)],
                     L.SECRET: [V.secret(rng, split)],
                 }
                 if genre.name in ("code", "incident-log"):
@@ -181,7 +193,7 @@ def plan(n_per_genre: int, seed: int = 0) -> list[Scenario]:
                 )
             )
             scenarios.append(
-                Scenario(sid, genre, split, hard_negative, vals, length, seed)
+                Scenario(sid, genre, split, hard_negative, vals, length, seed, names)
             )
     return scenarios
 
@@ -281,6 +293,18 @@ def repair_untagged(
     return sorted(out, key=lambda sp: sp.start), added
 
 
+def drop_name_spans(s: Scenario, spans: list[Span]) -> tuple[list[Span], int]:
+    """Remove personal-data tags on people's names (issue #78): the scenario's names and any
+    other made-up person's full name. Returns the kept spans and how many were removed."""
+    names = set(s.names)
+    kept = [
+        sp
+        for sp in spans
+        if not (sp.label == L.PERSONAL and (sp.text in names or V.is_person_name(sp.text)))
+    ]
+    return kept, len(spans) - len(kept)
+
+
 def to_record(
     s: Scenario, cached: dict[str, Any], repair: bool = False
 ) -> tuple[Record | None, str]:
@@ -296,6 +320,7 @@ def to_record(
         text, spans = parse(cached["text"].strip())
     except MarkupError as e:
         return None, f"markup: {e}"
+    spans, dropped_names = drop_name_spans(s, spans)
     present = {sp.label for sp in spans}
     negative_for = sorted(set(L.SPAN_LABELS) - present) if s.hard_negative else []
     if s.hard_negative and spans:
@@ -339,6 +364,7 @@ def to_record(
             # may have seen those names in training; dev/test pools: it hasn't).
             "pools": s.split,
             **({"repaired_spans": repaired} if repair else {}),
+            **({"dropped_name_spans": dropped_names} if dropped_names else {}),
         },
     )
     errors = validate(rec)

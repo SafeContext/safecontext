@@ -58,7 +58,7 @@ def table(results: list[tuple[float, Scorer]]) -> str:
     for t, sc in results:
         for src in [OVERALL, *sc.sources()]:
             g = sc.groups[src]
-            m = g.total()
+            m = g.micro
             lines.append(
                 f"| {t:g} | {src} | {pct(g.red_recall)} | {pct(m.precision)} | {pct(m.recall)} | "
                 f"{pct(m.f1)} | {pct(g.safe_fp_rate)} | {pct(g.hn_fp_rate)} |"

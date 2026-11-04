@@ -128,6 +128,40 @@ def test_llm_to_record_quality_gates():
     )
 
 
+def test_llm_drops_name_tags_from_cached_responses():
+    # Issue #78: responses cached before it tagged customers' names as personal data.
+    s = llm.Scenario("mh-llm-x-00000", llm.GENRES[0], "train", False,
+                     {"customer-personal-data": ["ana@x.com"]}, "short", names=("Ana Lee",))  # fmt: skip
+    text = ("<customer-personal-data>Ana Lee</customer-personal-data> "
+            "(<customer-personal-data>ana@x.com</customer-personal-data>) and "
+            "<customer-personal-data>Jolene Kristiansen</customer-personal-data> wrote in.")  # fmt: skip
+    rec, why = llm.to_record(s, _cached(text))
+    assert rec and not why
+    assert [sp.text for sp in rec.spans] == ["ana@x.com"]
+    assert rec.meta["dropped_name_spans"] == 2
+    # An untagged name is fine; an untagged email still isn't.
+    assert llm.to_record(s, _cached("Ana Lee wrote in."))[0] is not None
+    assert llm.to_record(s, _cached("Mail ana@x.com"))[1].startswith("untagged")
+
+
+def test_llm_names_are_not_sensitive_values_but_keep_their_random_draws():
+    sc = next(x for x in llm.plan(3) if not x.hard_negative)
+    (name,) = sc.names
+    assert name not in sc.values["customer-personal-data"]
+    assert "@" in sc.values["customer-personal-data"][0]  # the email, as before the name
+    prompt = llm.request_params(sc, "m", "medium")
+    assert "never tag a person's name" in prompt["system"]
+    assert f"do not tag them): {name}" in prompt["messages"][0]["content"]
+
+
+def test_offline_never_labels_peoples_names(offline_records):
+    from safecontext_ml.dataset.values import STAFF, is_person_name
+
+    for r in offline_records:
+        for sp in r.spans:
+            assert not is_person_name(sp.text) and sp.text not in STAFF, (r.id, sp)
+
+
 def test_llm_repair_tags_provided_values_left_untagged():
     s = _scenario(False, {"customer-names": ["Bluefin Bank"], "unreleased-roadmap": ["Project Heron"]})
     text = ("# Bluefin Bank review\n<customer-names>Bluefin Bank</customer-names> asked about "
@@ -212,6 +246,7 @@ def test_public_build_record_maps_ignores_and_drops_overlaps():
             (0, 3, "first_name"),
             (0, 7, "name"),
             (9, 18, "email"),
+            (13, 18, "phone_number"),
             (20, 25, "city"),
             (27, 37, "weird"),
         ],
@@ -219,8 +254,8 @@ def test_public_build_record_maps_ignores_and_drops_overlaps():
         unmapped,
     )
     assert rec is not None
+    # Names are not sensitive (issue #78): dropped, neither a span nor an ignore region.
     assert [(s.text, s.label) for s in rec.spans] == [
-        ("Ana Lee", "customer-personal-data"),
         ("ana@x.com", "customer-personal-data"),
     ]
     assert [(s.text, s.label) for s in rec.ignore] == [
