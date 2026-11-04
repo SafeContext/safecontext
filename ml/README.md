@@ -103,11 +103,11 @@ JSONL, UTF-8, one record per line. Fields in this order:
 | `id` | Unique across the whole dataset. |
 | `text` | The document. |
 | `spans` | Sensitive spans, sorted by `start`, never overlapping. `start`/`end` are **Python string indices: Unicode code points, 0-based, `end` exclusive**, and `text[start:end] == span.text`. TypeScript strings count UTF-16 units, so convert offsets before comparing with JS output when the text has characters outside the BMP (emoji). Span text never starts or ends with whitespace. |
-| `label` | A data type **id** from `packages/policy/src/defaults.ts`, never a display name. 8 labels appear (`SPAN_LABELS`): `staff-names` (green by default); `revenue-figures`, `internal-metrics`, `deal-sizes`, `customer-names` (yellow); `unreleased-roadmap`, `secrets`, `customer-personal-data` (red). Which types get spans depends on what they are, not on their tier: the three *document* types (`public-docs`, `release-notes`, `open-source-code`, `DOCUMENT_TYPES`) describe a whole text and are never spans, while `staff-names` is a value IT can move to yellow or red, so it is labelled although it is green (issue #78). |
+| `label` | A data type **id** from `packages/policy/src/defaults.ts`, never a display name. 7 labels appear (`SPAN_LABELS`): `revenue-figures`, `internal-metrics`, `deal-sizes`, `customer-names` (yellow); `unreleased-roadmap`, `secrets`, `customer-personal-data` (red). Which types get spans depends on what they are, not on their tier: the three *document* types (`public-docs`, `release-notes`, `open-source-code`, `DOCUMENT_TYPES`) describe a whole text and are never spans; every other type is a value and is. Scores that ask whether safe text was flagged use `SENSITIVE_LABELS` (the yellow and red span labels; today all of them). |
 | `source` | Which generator or public dataset the record came from. Report scores per source. |
 | `group` | The split key (see Splits). Records that are near-copies of each other share a group. |
 | `genre` | `slack-thread`, `incident-log`, `support-ticket`, `launch-review`, `finance-update`, `sales-notes`, `code`, `press-release`, `release-notes`, `public-docs` (Macrohard), or `public-pii` (public datasets). |
-| `negative_for` | Labels the record was built to **look like** without containing. Non-empty = a hard negative (press release vs roadmap, public vs private numbers, placeholder vs real key). Any prediction of these labels on this record is a false positive. Never `staff-names`: safe documents mention staff all the time. |
+| `negative_for` | Labels the record was built to **look like** without containing. Non-empty = a hard negative (press release vs roadmap, public vs private numbers, placeholder vs real key). Any prediction of these labels on this record is a false positive. |
 | `ignore` | Regions labelled sensitive in a public source but with no matching data type here (dates, cities, company names, ethnicity...). Each has `start`, `end`, `text` and the **source's** label. A prediction overlapping an ignore region is neither a true nor a false positive: drop it before scoring. |
 | `meta` | Free-form provenance: backend, seed, snippet ids, model, the source's document type. Don't score on it. |
 
@@ -127,48 +127,46 @@ The span is the smallest piece of text that carries the sensitive value.
   date that was announced publicly, is **not** labelled.
 - **`secrets`**: the value only, never the variable name: the key or token, the password, the
   whole PEM block, or the whole connection string when it contains a password.
-- **`customer-personal-data`**: names and contact details of customers and end users: name,
+- **`customer-personal-data`**: contact and account details of customers and end users:
   email, phone, card number, postal address, IP address. Public datasets add IDs (SSN, passport,
-  IBAN, account numbers...), date of birth and user names.
-- **`staff-names`** (issue #78): Macrohard employees' names and chat handles (`priya`, `Dan`,
-  `@sasha`, `tom.h`), and a handle's work email (`tom.h@macrohard.io`). Only the handle, never
-  the `@` or the `:` after a chat speaker. Offline: the `{{staff}}` slot. LLM: Claude was told
-  the handles are staff and to leave them untagged, so `llm.tag_staff` tags every whole-word
-  occurrence of a `values.STAFF` handle, in any case, after parsing (no new calls; the prompt is
-  unchanged, so the cache stays fresh). It skips a handle inside another token (`dan.smith`,
-  `dan@example.com`) or after a number or slash (`12 mo`, `$38/mo`).
+  IBAN, account numbers...) and date of birth.
+- **People's names are never labelled** (issue #78, decided on #2): customers' and staff names,
+  first names, user names and chat handles (`Jolene Kristiansen`, `priya`, `tom.h`) are fine to
+  share. An email address is still personal data even when it contains a name. IT can protect
+  specific names with a term list (the agent, not the model).
 - **Never labelled** (safe look-alikes): placeholders (`<YOUR_API_KEY>`), env var names
   (`STRIPE_SECRET_KEY`), example.com addresses, masked values (`card ending 4242`), git SHAs and
   UUIDs, public prices and public statistics (`99.95% uptime SLA`), shipped product names.
 
 Public dataset labels are mapped in `public.LABEL_MAP`. Mapped to `customer-personal-data`: email,
-phone, address, card numbers and CVV, government IDs, bank account numbers, date of birth, names,
-user names, IP and MAC addresses, device and vehicle identifiers. Mapped to `secrets`: api_key,
-password, PIN. Everything else becomes an `ignore` region, including dates, cities, countries,
+phone, address, card numbers and CVV, government IDs, bank account numbers, date of birth, IP
+and MAC addresses, device and vehicle identifiers. Mapped to `secrets`: api_key, password, PIN.
+Mapped to `NOT_SENSITIVE`, so **dropped** (no span and no ignore region, so the model learns not
+to flag them): `name`, `first_name`, `last_name`, `user_name`. Everything else becomes an
+`ignore` region, including dates, cities, countries,
 company names, employee IDs, cookies and special-category data (ethnicity, religion, politics,
 sexuality). `convert` prints any label it has never seen.
 
-**Public person names stay `customer-personal-data` (issue #78).** The public sets don't say
-whose name a name is, so they can't be split into staff and customers. Their documents are
-forms, invoices, medical and bank records about customers and end users, so every person name
-and user name in them stays `customer-personal-data`: the least wrong mapping, and the safe
-one, since a red label wins over a green one. Mapping them to `ignore` instead would have taken
-every public name out of training and scoring, and risked personal-data recall. Their records
-have no `staff-names` gold spans, so a `staff-names` prediction on a public name counts as a
-missed personal-data span (it still counts for *Red recall, any label*). The fine-tuning prompt
-includes "staff names" for them too, so they teach the model that names in customer records are
-personal data.
+**Names relabelled (issue #78).** This replaces the old *Known mismatch*: Macrohard left staff
+names untagged while the public sets tagged every name, so tier 1 learnt to flag every name
+(392 of its 447 wrong personal-data spans on `llm-test` were staff handles). Now no source
+labels names. The relabel removed 450 name spans from `macrohard-offline`, 46 from `llm-test`
+(from the cached responses, `llm.drop_name_spans`, no new calls) and 356,347 from the public
+sets (Nemotron 275,664, Gretel finance 38,665, Gretel en 42,018). Texts did not change. A few
+public spans that a name used to overlap are now kept (17), and a few ignore regions too.
 
-This replaces the old *Known mismatch* (Macrohard left staff names untagged while the public
-sets tagged every name, so the model learnt to flag every name, issue #2). Tagging staff names
-as their own label changed the frozen test split once, on purpose (`build --refreeze`, issue
-#78): only the 68 staff handles in its 205 Macrohard records changed; its text and every other
-span are the same.
+It changed the frozen test split once, on purpose (`build --refreeze`, issue #78):
 
 | Test split | sha256 |
 | --- | --- |
 | before #78 | `1aec53bb6700782dd05b3e934af4e5f3a98a81ca15f9440c2163178ae1628f9c` |
-| after #78 (current) | `1bd3ad4f910c457b27b6fa1bc2d358af2ed3aeaff705d025c66b1adf665f2bc2` |
+| after #78 (current) | `dfe667ab75ef91b013f1cd01ef0e59f23398758845b48994fc1599510dff09d9` |
+
+`llm-test` went from `f525da3f…` to `b76f9971fd004c031b836c36be3f5bec91c7d49a7e4bb7611c8a784d0bc56ceb`.
+
+An earlier attempt on #78 added a `staff-names` data type and taught tier 1 to tell staff from
+customers. It didn't help on `llm-test` (safe documents flagged stayed at 83%: the templates
+only use staff handles as chat prefixes), so it was dropped for the decision above.
 
 ### Splits
 
@@ -178,9 +176,6 @@ span are the same.
   Nemotron-PII documents that share a persona `uid` share a group.
 - **Entity pools are split too.** Customer names, people and codenames are partitioned with the
   same hash, so no test customer or codename ever appears in train.
-- **Staff handles are not split.** The same 16 handles (`values.STAFF`) appear in every split,
-  so `staff-names` recall on known handles says little about new names; see
-  `results/tier1-gliner.md` for a check with unseen handles.
 - **Offline snippet banks** split by position (`banks.snippet_split`): positions 3, 13, 23... are
   dev, 7, 17, 27... are test. Only append to a bank; inserting or reordering moves snippets.
 - We ignore the public datasets' own train/test splits and use ours.
@@ -195,7 +190,7 @@ datasets):
 
 | Split | Records | Macrohard | Hard negatives | Nemotron-PII | Gretel finance | Gretel en |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| train | 232,658 | 1,550 | 576 | 160,053 | 23,068 | 47,987 |
+| train | 232,658 | 1,550 | 580 | 160,053 | 23,068 | 47,987 |
 | dev | 29,174 | 216 | 95 | 20,006 | 2,886 | 6,066 |
 | test | 29,018 | 205 | 79 | 19,940 | 2,926 | 5,947 |
 
