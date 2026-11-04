@@ -4,9 +4,10 @@ GLiNER takes natural-language entity types ("email address") at run time. Our la
 type ids (`customer-personal-data`), so every prompt set maps prompts back to ids. Several
 prompts may map to the same id; the tagger reports the id.
 
-- `names`: one prompt per data type, its display name in lower case ("customer personal data").
-  This is what the fine-tuned model is trained on, and the natural choice for an admin's own
-  data types: the agent can prompt with the name the admin typed.
+- `names`: one prompt per data type, its display name in lower case ("revenue figures"),
+  except the types in `LABEL_TEXT`, whose name would prompt for the wrong thing. This is what
+  the fine-tuned model is trained on (and what its `labels.json` holds), and the natural choice
+  for an admin's own data types: the agent can prompt with the name the admin typed.
 - `entity`, `entity2`: one entity-style prompt per data type ("customer name"). Off-the-shelf
   GLiNER models were trained on concrete entity types, so they do better with these than with
   policy names.
@@ -23,34 +24,39 @@ from __future__ import annotations
 
 from ..dataset import labels as L
 
-NAMES: dict[str, str] = {t: L.BY_ID[t].name.lower() for t in L.SPAN_LABELS}
+#: Label text for types whose display name would prompt for the wrong thing. "Customer personal
+#: data" reads as "the customer's name", but names are not sensitive (issue #78): the type is
+#: contact and account details only.
+LABEL_TEXT: dict[str, str] = {
+    L.PERSONAL: "email, phone, address, card or id number",
+}
+
+NAMES: dict[str, str] = {
+    t: LABEL_TEXT.get(t, L.BY_ID[t].name.lower()) for t in L.SPAN_LABELS
+}
 
 #: prompt -> data type id
 PROMPT_SETS: dict[str, dict[str, str]] = {
     "names": {prompt: type_id for type_id, prompt in NAMES.items()},
     "entity": {
-        "employee name": L.STAFF,
         "revenue figure": L.REVENUE,
         "internal metric": L.METRICS,
         "deal size": L.DEAL,
         "customer name": L.CUSTOMER,
         "project codename": L.ROADMAP,
         "api key": L.SECRET,
-        "personal information": L.PERSONAL,
+        "contact details": L.PERSONAL,
     },
     "entity2": {
-        "colleague name or chat handle": L.STAFF,
         "revenue amount": L.REVENUE,
         "usage metric": L.METRICS,
         "contract value": L.DEAL,
         "company name": L.CUSTOMER,
         "codename or launch date": L.ROADMAP,
         "password or api key": L.SECRET,
-        "person name or contact detail": L.PERSONAL,
+        "contact detail or id number": L.PERSONAL,
     },
     "fine": {
-        "employee name": L.STAFF,
-        "chat handle": L.STAFF,
         "revenue figure": L.REVENUE,
         "internal metric": L.METRICS,
         "deal size": L.DEAL,
@@ -61,7 +67,6 @@ PROMPT_SETS: dict[str, dict[str, str]] = {
         "access token": L.SECRET,
         "password": L.SECRET,
         "private key": L.SECRET,
-        "person name": L.PERSONAL,
         "email address": L.PERSONAL,
         "phone number": L.PERSONAL,
         "street address": L.PERSONAL,
@@ -70,7 +75,6 @@ PROMPT_SETS: dict[str, dict[str, str]] = {
         "date of birth": L.PERSONAL,
         "identification number": L.PERSONAL,
         "bank account number": L.PERSONAL,
-        "username": L.PERSONAL,
     },
 }
 

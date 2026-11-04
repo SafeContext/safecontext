@@ -141,16 +141,16 @@ describe('createTermListDetector', () => {
 			]);
 		});
 
-		it('uses the stricter list when given a strictness (a staff name that is also a customer)', () => {
+		it('uses the stricter list when given a strictness', () => {
 			const lists = [
-				{ dataTypeId: 'staff-names', terms: ['Jordan Lee', 'Jordan'] },
+				{ dataTypeId: CODENAMES, terms: ['Jordan Lee', 'Jordan'] },
 				{ dataTypeId: CUSTOMERS, terms: ['Jordan'] }
 			];
-			const strictness = (id: string) => (id === 'staff-names' ? 0 : 1);
+			const strictness = (id: string) => (id === CODENAMES ? 0 : 1);
 			expect(createTermListDetector(lists, strictness).detect('Jordan')).toEqual([
 				{ start: 0, end: 6, dataTypeId: CUSTOMERS, source: 'list', confidence: 1 }
 			]);
-			// Even over a longer match of the less strict list.
+			// Even over a longer match from the less strict list.
 			expect(createTermListDetector(lists, strictness).detect('Jordan Lee')).toEqual([
 				{ start: 0, end: 10, dataTypeId: CUSTOMERS, source: 'list', confidence: 1 }
 			]);

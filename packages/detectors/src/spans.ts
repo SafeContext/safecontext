@@ -7,8 +7,8 @@ export function ruleSpan(start: number, end: number, dataTypeId: string): Span {
 
 /**
  * How strict a data type is: higher wins an overlap. The agent ranks by the policy's tiers
- * (red over yellow over green), so a span that is both a staff name and customer data is
- * treated as the stricter of the two (issue #78).
+ * (red over yellow over green), so text that matches two data types is treated as the
+ * stricter one (issue #78).
  */
 export type Strictness = (dataTypeId: string) => number;
 

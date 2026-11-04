@@ -7,7 +7,7 @@ import { Policy, type DataType } from './policy.ts';
 export const BUILTIN_DATA_TYPE = {
 	/** API keys, tokens, private keys, passwords. */
 	secrets: 'secrets',
-	/** Emails, phone numbers, card numbers, IP addresses of customers or people. */
+	/** Emails, phone numbers, card numbers, IP addresses of customers or people (not names). */
 	personalData: 'customer-personal-data'
 } as const;
 
@@ -38,17 +38,6 @@ export const DEFAULT_DATA_TYPES: DataType[] = [
 		name: 'Open-source code',
 		description: 'Code from public open-source projects and libraries.',
 		examples: ['a snippet from React', 'our public SDK on GitHub'],
-		tier: 'green',
-		action: 'allow'
-	},
-	{
-		// Decided on #2 (issue #78): staff names are their own type, so IT decides where the
-		// names of colleagues sit. Green by default. Names of customers stay customer personal data.
-		id: 'staff-names',
-		name: 'Staff names',
-		description:
-			'Names, chat handles and work email addresses of colleagues: people who work for the organisation, not its customers.',
-		examples: ['priya: deploy is done', 'ask Dan in finance', 'tom.h@macrohard.io'],
 		tier: 'green',
 		action: 'allow'
 	},
@@ -105,8 +94,11 @@ export const DEFAULT_DATA_TYPES: DataType[] = [
 	{
 		id: BUILTIN_DATA_TYPE.personalData,
 		name: 'Customer personal data',
-		description: 'Personal details of customers or people: emails, phone numbers, card numbers, addresses.',
-		examples: ['jane@northwind.com', 'card 4242 4242 4242 4242'],
+		// Decided on #2 (issue #78): names of people (staff or customers, chat handles) are not
+		// sensitive. IT can still protect specific names with a term list.
+		description:
+			'Contact and account details of customers or people: emails, phone numbers, postal addresses, card and account numbers, government IDs. Not their names: a name on its own is fine to share.',
+		examples: ['jane@northwind.com', '+1 415 555 0134', 'card 4242 4242 4242 4242'],
 		tier: 'red',
 		action: 'pseudonymize'
 	}

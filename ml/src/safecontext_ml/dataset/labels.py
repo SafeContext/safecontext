@@ -41,13 +41,6 @@ DATA_TYPES: tuple[DataType, ...] = (
         "Code from public open-source projects and libraries.",
     ),
     DataType(
-        "staff-names",
-        "Staff names",
-        "green",
-        "Names, chat handles and work email addresses of colleagues: people who work for the "
-        "organisation, not its customers.",
-    ),
-    DataType(
         "revenue-figures",
         "Revenue figures",
         "yellow",
@@ -87,7 +80,9 @@ DATA_TYPES: tuple[DataType, ...] = (
         "customer-personal-data",
         "Customer personal data",
         "red",
-        "Personal details of customers or people: emails, phone numbers, card numbers, addresses.",
+        "Contact and account details of customers or people: emails, phone numbers, postal "
+        "addresses, card and account numbers, government IDs. Not their names: a name on its "
+        "own is fine to share.",
     ),
 )
 
@@ -98,8 +93,8 @@ BY_ID: dict[str, DataType] = {d.id: d for d in DATA_TYPES}
 DOCUMENT_TYPES: tuple[str, ...] = ("public-docs", "release-notes", "open-source-code")
 
 #: Labels that appear on spans: every data type except the document types. This is decided by
-#: what the type *is*, not by its tier: `staff-names` is green by default but IT can move it to
-#: yellow or red, so it is labelled like any other value (issue #78).
+#: what the type *is*, not by its tier, so a green type that is a value (not a kind of document)
+#: would still be labelled, and IT could move it to yellow or red.
 SPAN_LABELS: tuple[str, ...] = tuple(
     d.id for d in DATA_TYPES if d.id not in DOCUMENT_TYPES
 )
@@ -107,8 +102,8 @@ SPAN_LABELS: tuple[str, ...] = tuple(
 RED_LABELS: tuple[str, ...] = tuple(d.id for d in DATA_TYPES if d.tier == "red")
 
 #: Span labels that are sensitive under the default policy (yellow or red). Scores that ask
-#: "was safe text flagged?" use these: a document whose only spans are staff names is safe by
-#: default, and a staff-names prediction doesn't flag it.
+#: "was safe text flagged?" use these, so a green span label never makes a text unsafe. Today
+#: every span label is yellow or red.
 SENSITIVE_LABELS: tuple[str, ...] = tuple(
     t for t in SPAN_LABELS if BY_ID[t].tier != "green"
 )
@@ -121,4 +116,3 @@ CUSTOMER = "customer-names"
 ROADMAP = "unreleased-roadmap"
 SECRET = "secrets"
 PERSONAL = "customer-personal-data"
-STAFF = "staff-names"

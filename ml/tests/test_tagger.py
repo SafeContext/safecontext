@@ -35,7 +35,9 @@ def test_prompt_sets_cover_every_span_label():
     for name, prompts in PROMPT_SETS.items():
         assert set(prompts.values()) == set(SPAN_LABELS), name
     assert NAMES["secrets"] == "api keys & secrets"
-    assert NAMES["customer-personal-data"] == "customer personal data"
+    # Issue #78: the label asks for contact details, never "personal data" (which reads as names).
+    assert NAMES["customer-personal-data"] == "email, phone, address, card or id number"
+    assert NAMES["revenue-figures"] == "revenue figures"
 
 
 def test_words_match_gliner_splitter():
@@ -174,14 +176,14 @@ def test_training_windows_never_split_spans_and_truncate_long_ones():
 
 def test_public_company_ignore_drops_customer_names_prompt():
     r = _record(
-        "Ann at Acme",
-        [("Ann", "customer-personal-data")],
+        "ann@acme.com at Acme",
+        [("ann@acme.com", "customer-personal-data")],
         genre="public-pii",
         ignore=[("Acme", "company")],
     )
     (ex,) = to_examples(r, FakeTokenizer(), budget=100, max_width=12)
     assert "customer names" not in ex["ner_labels"]
-    assert "customer personal data" in ex["ner_labels"]
+    assert NAMES["customer-personal-data"] in ex["ner_labels"]
 
 
 def test_sweep_filter_file(tmp_path):

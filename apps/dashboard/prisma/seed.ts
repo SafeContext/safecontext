@@ -22,14 +22,10 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 
 const ORG_SLUG = 'macrohard-demo';
 
-/**
- * Demo term lists (customers, codenames, a staff directory) attached to default data types.
- * The staff directory shows how IT lists colleagues for `staff-names` (green by default, issue #78).
- */
+/** Demo term lists (codenames, customers) attached to default data types. */
 const DEMO_LISTS: TermList[] = [
 	{ dataTypeId: 'customer-names', terms: ['Northwind', 'Acme Corp', 'Contoso'] },
-	{ dataTypeId: 'unreleased-roadmap', terms: ['Project Atlas', 'Project Helios'] },
-	{ dataTypeId: 'staff-names', terms: ['Priya Raman', 'priya', 'Dan Okafor', 'dan.o'] }
+	{ dataTypeId: 'unreleased-roadmap', terms: ['Project Atlas', 'Project Helios'] }
 ];
 
 const DEMO_DEVICE_IDS = ['dev-a1b2c3', 'dev-d4e5f6', 'dev-0a9b8c', 'dev-7f6e5d'];

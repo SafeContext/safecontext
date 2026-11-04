@@ -29,35 +29,31 @@ describe('createClassifier', () => {
 		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['customer-names', 'secrets']);
 	});
 
-	// Issue #78: a name that is both a staff name and customer data is customer data.
+	// Issue #78: where two data types overlap, the stricter one in the policy wins.
 	it('lets the stricter data type win an overlap, whatever the confidence or tier order', async () => {
-		const staffList = policyWith({ lists: [{ dataTypeId: 'staff-names', terms: ['Jane Doe'] }] });
-		const tagger = (dataTypeId: string, confidence: number) =>
-			fakeTier({
-				id: 'tier1',
-				spans: (texts) => texts.map(() => [{ start: 4, end: 12, dataTypeId, source: 'tagger', confidence }])
-			});
+		const listed = policyWith({ lists: [{ dataTypeId: 'customer-names', terms: ['Jane Doe'] }] }); // yellow
+		const tagger = fakeTier({
+			id: 'tier1',
+			spans: (texts) =>
+				texts.map(() => [
+					{ start: 4, end: 12, dataTypeId: 'customer-personal-data', source: 'tagger', confidence: 0.7 }
+				])
+		});
 		const text = 'Ask Jane Doe today';
 		for (const tiers of [
-			[createTier0({ policyDetectors: termListDetectors }), tagger('customer-personal-data', 0.7)],
-			[tagger('customer-personal-data', 0.7), createTier0({ policyDetectors: termListDetectors })]
+			[createTier0({ policyDetectors: termListDetectors }), tagger],
+			[tagger, createTier0({ policyDetectors: termListDetectors })]
 		]) {
-			const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], staffList);
+			const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], listed);
 			expect(result.ok && result.spans[0]).toEqual([
 				{ start: 4, end: 12, dataTypeId: 'customer-personal-data', source: 'tagger', confidence: 0.7 }
 			]);
 		}
-		// Customer names (yellow) lose to customer personal data (red) the same way.
-		const yellowFirst = [
-			fakeTier({
-				id: 'tier0',
-				spans: (texts) =>
-					texts.map(() => [{ start: 4, end: 12, dataTypeId: 'customer-names', source: 'list', confidence: 1 }])
-			}),
-			tagger('customer-personal-data', 0.6)
-		];
-		const result = await createClassifier({ tiers: yellowFirst, budgetMs: 1_000 }).classify([text], policy);
-		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['customer-personal-data']);
+		// The confidence-1 list match only wins when it is the stricter type.
+		const redList = policyWith({ lists: [{ dataTypeId: 'unreleased-roadmap', terms: ['Jane Doe'] }] });
+		const tiers = [createTier0({ policyDetectors: termListDetectors }), tagger];
+		const result = await createClassifier({ tiers, budgetMs: 1_000 }).classify([text], redList);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['unreleased-roadmap']);
 	});
 
 	it('skips a tier when shouldRun says no, and passes it the spans so far', async () => {

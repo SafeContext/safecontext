@@ -160,19 +160,13 @@ def render(scorer: Scorer, info: RunInfo, judge: JudgeSummary | None) -> str:
             "column); predictions that only touch `ignore` regions are dropped. Rules: "
             "`ml/README.md`, Evaluation."
         ),
-        (
-            "- **Sensitive labels:** micro scores and *Safe text flagged* use the yellow and red "
-            "labels only. `staff-names` is green by default, so it has its own row below and "
-            "doesn't flag a document."
-        ),
     ]
     out += [f"- ⚠️ {w}" for w in info.warnings]
     out += [
         "",
         (
             "Public PII (Nemotron, Gretel) carries only `customer-personal-data` and `secrets`; the "
-            "five business labels and `staff-names` come only from Macrohard, so read the "
-            "per-source columns."
+            "five business labels come only from Macrohard, so read the per-source columns."
         ),
         "",
         "## Headline",

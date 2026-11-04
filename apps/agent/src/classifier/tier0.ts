@@ -16,8 +16,7 @@ export interface Tier0Options {
 
 /**
  * The admin term lists in the policy (issue #8), as one tier 0 detector. Each match is tagged
- * with its list's data type; a term in two lists counts as the stricter one (a staff directory
- * entry that is also a listed customer is the customer). Pass as
+ * with its list's data type; a term in two lists counts as the stricter one. Pass as
  * `createTier0({ policyDetectors: termListDetectors })`.
  */
 export const termListDetectors = (policy: Policy): readonly Detector[] => [

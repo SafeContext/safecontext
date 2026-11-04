@@ -211,8 +211,7 @@ class Automaton {
  *
  * Overlapping matches are merged into one span covering all of them (see `mergeSpans`), so
  * nothing matched is left exposed. The merged span takes the strictest data type
- * (`strictness`, when given: a name in both a staff list and a customer list counts as the
- * customer's), then that of the longest match starting first; for the same term in two lists
+ * (`strictness`, when given: a term in a yellow list and a red list counts as red), then that of the longest match starting first; for the same term in two lists
  * of equal strictness, the list that comes first in `lists` wins.
  *
  * Building costs time proportional to the total length of all terms, so build once per policy

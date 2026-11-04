@@ -8,7 +8,7 @@ import pytest
 from safecontext_ml.dataset import llm, offline, public
 from safecontext_ml.dataset.banks import BANKS, bank_for_split
 from safecontext_ml.dataset.build import FrozenTestError, build
-from safecontext_ml.dataset.labels import SENSITIVE_LABELS, SPAN_LABELS
+from safecontext_ml.dataset.labels import SPAN_LABELS
 from safecontext_ml.dataset.render import SLOT_RE, render
 from safecontext_ml.dataset.schema import (
     Record,
@@ -120,32 +120,46 @@ def test_llm_to_record_quality_gates():
     assert llm.to_record(s, _cached("Bluefin Bank renewed."))[1].startswith("untagged")
     assert llm.to_record(s, _cached("x", stop="refusal"))[1].startswith("stop_reason")
     neg = _scenario(True, {})
-    rec, _ = llm.to_record(neg, _cached("We shipped Macrohard Ledger. Thanks, priya"))
-    # Safe documents mention staff, so a hard negative is never a look-alike for staff-names.
-    assert rec and set(rec.negative_for) == set(SENSITIVE_LABELS)
-    assert [(sp.text, sp.label) for sp in rec.spans] == [("priya", "staff-names")]
+    rec, _ = llm.to_record(neg, _cached("We shipped Macrohard Ledger."))
+    assert rec and set(rec.negative_for) == set(SPAN_LABELS)
     assert (
         llm.to_record(neg, _cached("<secrets>abc</secrets>"))[1]
         == "hard negative contains tags"
     )
 
 
-def test_llm_tag_staff_handles_and_work_emails():
-    text = ("dan: ask @Priya or tom.h@macrohard.io, not dan@example.com or dan.smith.\n"
-            "Plan is $38/mo for 12 mo. mo: ok (mo)")  # fmt: skip
-    spans, n = llm.tag_staff(text, [])
-    assert [sp.text for sp in spans] == ["dan", "Priya", "tom.h@macrohard.io", "mo", "mo"]
-    assert n == 5 and {sp.label for sp in spans} == {"staff-names"}
-    # Never on top of a span the model tagged.
-    taken = [Span(0, 3, "secrets", "dan")]
-    assert llm.tag_staff("dan", taken) == (taken, 0)
+def test_llm_drops_name_tags_from_cached_responses():
+    # Issue #78: responses cached before it tagged customers' names as personal data.
+    s = llm.Scenario("mh-llm-x-00000", llm.GENRES[0], "train", False,
+                     {"customer-personal-data": ["ana@x.com"]}, "short", names=("Ana Lee",))  # fmt: skip
+    text = ("<customer-personal-data>Ana Lee</customer-personal-data> "
+            "(<customer-personal-data>ana@x.com</customer-personal-data>) and "
+            "<customer-personal-data>Jolene Kristiansen</customer-personal-data> wrote in.")  # fmt: skip
+    rec, why = llm.to_record(s, _cached(text))
+    assert rec and not why
+    assert [sp.text for sp in rec.spans] == ["ana@x.com"]
+    assert rec.meta["dropped_name_spans"] == 2
+    # An untagged name is fine; an untagged email still isn't.
+    assert llm.to_record(s, _cached("Ana Lee wrote in."))[0] is not None
+    assert llm.to_record(s, _cached("Mail ana@x.com"))[1].startswith("untagged")
 
 
-def test_llm_prompt_leaves_staff_names_to_tag_staff():
-    # The prompt is unchanged by issue #78, so cached responses stay fresh (prompt_sha256).
-    params = llm.request_params(llm.plan(1)[0], "m", "medium")
-    assert "staff-names" not in params["system"]
-    assert "customer-personal-data" in params["system"]
+def test_llm_names_are_not_sensitive_values_but_keep_their_random_draws():
+    sc = next(x for x in llm.plan(3) if not x.hard_negative)
+    (name,) = sc.names
+    assert name not in sc.values["customer-personal-data"]
+    assert "@" in sc.values["customer-personal-data"][0]  # the email, as before the name
+    prompt = llm.request_params(sc, "m", "medium")
+    assert "never tag a person's name" in prompt["system"]
+    assert f"do not tag them): {name}" in prompt["messages"][0]["content"]
+
+
+def test_offline_never_labels_peoples_names(offline_records):
+    from safecontext_ml.dataset.values import STAFF, is_person_name
+
+    for r in offline_records:
+        for sp in r.spans:
+            assert not is_person_name(sp.text) and sp.text not in STAFF, (r.id, sp)
 
 
 def test_llm_repair_tags_provided_values_left_untagged():
@@ -232,6 +246,7 @@ def test_public_build_record_maps_ignores_and_drops_overlaps():
             (0, 3, "first_name"),
             (0, 7, "name"),
             (9, 18, "email"),
+            (13, 18, "phone_number"),
             (20, 25, "city"),
             (27, 37, "weird"),
         ],
@@ -239,8 +254,8 @@ def test_public_build_record_maps_ignores_and_drops_overlaps():
         unmapped,
     )
     assert rec is not None
+    # Names are not sensitive (issue #78): dropped, neither a span nor an ignore region.
     assert [(s.text, s.label) for s in rec.spans] == [
-        ("Ana Lee", "customer-personal-data"),
         ("ana@x.com", "customer-personal-data"),
     ]
     assert [(s.text, s.label) for s in rec.ignore] == [

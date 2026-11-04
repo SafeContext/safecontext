@@ -6,7 +6,9 @@ reproducible.
 
 Their labels are mapped onto our data types with `LABEL_MAP`. A label mapped to None, or not in
 the map, becomes an `ignore` region: sensitive in the source but outside our taxonomy, so it is
-neither rewarded nor penalised when scoring.
+neither rewarded nor penalised when scoring. A label mapped to `NOT_SENSITIVE` (people's names,
+issue #78) is dropped: no span and no ignore region, so that text counts as safe and the model
+learns not to flag it.
 """
 
 from __future__ import annotations
@@ -25,7 +27,10 @@ from . import labels as L
 from .paths import PUBLIC_RAW_DIR
 from .schema import Record, Span, validate
 
-# Source label (lower case) -> our data type id, or None to ignore.
+#: Mapping target for source labels that are not sensitive here: the span is dropped.
+NOT_SENSITIVE = "<not-sensitive>"
+
+# Source label (lower case) -> our data type id, NOT_SENSITIVE to drop, or None to ignore.
 LABEL_MAP: dict[str, str | None] = {
     # Contact details and identifiers of people
     **dict.fromkeys(
@@ -33,14 +38,16 @@ LABEL_MAP: dict[str, str | None] = {
             "email", "phone_number", "phone", "fax_number", "street_address", "address",
             "credit_card_number", "credit_card_security_code", "cvv", "ssn", "national_id",
             "credit_debit_card", "mac_address",
-            "passport_number", "driver_license_number", "date_of_birth", "first_name", "last_name",
-            "name", "ipv4", "ipv6", "iban", "bban", "account_number", "bank_routing_number",
-            "tax_id", "medical_record_number", "health_plan_beneficiary_number", "user_name",
+            "passport_number", "driver_license_number", "date_of_birth",
+            "ipv4", "ipv6", "iban", "bban", "account_number", "bank_routing_number",
+            "tax_id", "medical_record_number", "health_plan_beneficiary_number",
             "customer_id", "license_plate", "biometric_identifier", "local_latlng", "coordinate",
             "device_identifier", "vehicle_identifier", "certificate_license_number",
         ),
         L.PERSONAL,
     ),
+    # People's names and user names: not sensitive (issue #78, decided on #2).
+    **dict.fromkeys(("first_name", "last_name", "name", "user_name"), NOT_SENSITIVE),
     # Credentials
     **dict.fromkeys(("api_key", "password", "pin", "account_pin"), L.SECRET),
     # Sensitive or quasi-identifying in the source, but no matching data type here.
@@ -128,6 +135,8 @@ def build_record(
         target = LABEL_MAP.get(key)
         if key not in LABEL_MAP:
             unmapped[key] += 1
+        if target == NOT_SENSITIVE:
+            continue
         span = Span(start, end, target or label, text[start:end])
         if target is None:
             ignore.append(span)
@@ -218,7 +227,11 @@ def _convert_gretel_en(
             value, types = str(ent["entity"]), [str(t) for t in ent.get("types", [])]
             if not value.strip() or not types:
                 continue
-            label = next((t for t in types if LABEL_MAP.get(t.lower())), types[0])
+            # Prefer a type that maps to one of our data types, then a not-sensitive one.
+            label = next(
+                (t for t in types if LABEL_MAP.get(t.lower()) not in (None, NOT_SENSITIVE)),
+                next((t for t in types if LABEL_MAP.get(t.lower()) == NOT_SENSITIVE), types[0]),
+            )
             spans.extend(
                 (start, start + len(value), label) for start in find_whole(text, value)
             )

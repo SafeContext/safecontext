@@ -13,8 +13,9 @@ LABELLING RULES (also in ml/README.md):
   "3,412"), not the words around it ("revenue", "up").
 - Roadmap: the codename ("Project Heron" or "Heron") and the planned date of an unreleased launch.
   A codename that already shipped publicly, or a publicly announced date, is not labelled.
-- People: a customer's or end user's name and contact details are personal data. Macrohard staff
-  (chat handles like "priya", from the `{{staff}}` slot) are `staff-names` (issue #78).
+- People: a customer's or end user's contact details (email, phone, card, address, IP) are
+  personal data. Names are not sensitive (issue #78): `{{person}}` and `{{staff}}` (chat
+  handles like "priya") are never labelled.
 - Placeholders, env var names, example.com addresses and masked values ("ending 4242") are safe.
 """
 

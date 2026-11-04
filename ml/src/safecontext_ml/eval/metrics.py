@@ -19,9 +19,8 @@ Span-matching rule (documented in ml/README.md, "Evaluation"):
    it (the text is still hidden, but the wrong policy action may apply).
 5. **Safe-text false-positive rate** = safe records that get at least one prediction of a
    sensitive label / safe records. "Sensitive" = yellow or red in the default policy
-   (`SENSITIVE_LABELS`); a safe record has no gold span of a sensitive label. Staff names are
-   green by default (issue #78), so a chat whose only spans are staff handles is safe, and a
-   staff-names prediction doesn't flag it.
+   (`SENSITIVE_LABELS`); a safe record has no gold span of a sensitive label. (Today every span
+   label is sensitive; a green span label would never make a text unsafe.)
 6. **Hard-negative false-positive rate** = hard-negative records (non-empty `negative_for`) with
    at least one prediction whose label is in that record's `negative_for` / hard-negative
    records. Per label in the per-label table.
@@ -247,9 +246,8 @@ class GroupScores:
 
     @property
     def micro(self) -> LabelCounts:
-        """Micro totals over the sensitive labels (the seven yellow and red types), so the
-        number means the same as before staff names were added. Staff names have their own
-        row in the label table."""
+        """Micro totals over the sensitive labels (yellow and red). Today that is every span
+        label; a green span label would get its own row in the label table only."""
         return self.total(SENSITIVE_LABELS)
 
     def to_json(self) -> dict:

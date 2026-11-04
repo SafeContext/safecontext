@@ -32,18 +32,18 @@ def parse_defaults() -> list[tuple[str, str, str, str]]:
 
 def test_matches_policy_defaults():
     expected = parse_defaults()
-    assert len(expected) == 11
+    assert len(expected) == 10
     assert [(d.id, d.name, d.tier, d.description) for d in DATA_TYPES] == expected
 
 
 def test_span_labels_are_values_not_document_types():
-    # Decided by what a type is, not by its tier: staff names are green but still spans.
+    # Decided by what a type is, not by its tier.
     assert not set(DOCUMENT_TYPES) & set(SPAN_LABELS)
-    assert "staff-names" in SPAN_LABELS
+    assert set(DOCUMENT_TYPES) | set(SPAN_LABELS) == {d.id for d in DATA_TYPES}
     assert set(RED_LABELS) == {
         "unreleased-roadmap",
         "secrets",
         "customer-personal-data",
     }
-    assert len(SPAN_LABELS) == 8
-    assert set(SPAN_LABELS) - set(SENSITIVE_LABELS) == {"staff-names"}
+    assert len(SPAN_LABELS) == 7
+    assert SENSITIVE_LABELS == SPAN_LABELS  # no green value types today

@@ -69,9 +69,7 @@ PRODUCTS = (
     "Macrohard Vault", "Macrohard Pulse", "Macrohard Atlas Search", "Macrohard Forms",
 )  # fmt: skip
 
-# Macrohard staff (not customers): labelled `staff-names` (issue #78), never personal data.
-# The same handles are used in every split, so a model can learn them by heart; test with
-# handles it hasn't seen before trusting staff-names recall on new names.
+# Macrohard staff chat handles. Names are not sensitive (issue #78), so they are never labelled.
 STAFF = (
     "priya", "dan", "mo", "sasha", "tom.h", "lena", "kofi", "ruth", "jae", "omar", "bea",
     "alex.k", "marta", "ivan", "zoe", "femi",
@@ -123,6 +121,16 @@ def customer(rng: random.Random, split: Split) -> str:
 
 def person(rng: random.Random, split: Split) -> str:
     return rng.choice(_pool("person", split))
+
+
+def is_person_name(text: str) -> bool:
+    """Is `text` one of the made-up people's full names ("Jolene Kristiansen")?"""
+    return text in _people_set()
+
+
+@cache
+def _people_set() -> frozenset[str]:
+    return frozenset(_people())
 
 
 def codename(rng: random.Random, split: Split) -> str:
@@ -451,15 +459,15 @@ SLOT_KINDS: dict[str, SlotKind] = {
     "password": SlotKind(password, L.SECRET),
     "db_url": SlotKind(db_url, L.SECRET),
     "private_key": SlotKind(private_key, L.SECRET),
-    "person": SlotKind(person, L.PERSONAL),
     "email": SlotKind(email, L.PERSONAL),
     "phone": SlotKind(phone, L.PERSONAL),
     "card": SlotKind(card, L.PERSONAL),
     "address": SlotKind(address, L.PERSONAL),
     "ip": SlotKind(ip, L.PERSONAL),
-    # Green by default, but a span label: IT can move staff names to yellow or red.
-    "staff": SlotKind(pick(STAFF), L.STAFF),
-    # Unlabelled look-alikes and filler
+    # Unlabelled look-alikes and filler. People's names (customers' and staff) are not sensitive
+    # (issue #78): only their contact details are personal data.
+    "person": SlotKind(person, None),
+    "staff": SlotKind(pick(STAFF), None),
     "launched_codename": SlotKind(codename, None),
     "product": SlotKind(pick(PRODUCTS), None),
     "service": SlotKind(pick(SERVICES), None),

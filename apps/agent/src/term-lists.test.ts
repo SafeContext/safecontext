@@ -82,46 +82,65 @@ describe('latency with 10k admin terms', () => {
 	});
 });
 
-// Issue #78: IT can upload a staff directory as a term list for the `staff-names` data type.
-describe('a staff directory as a term list', () => {
-	const directory = { dataTypeId: 'staff-names', terms: ['Priya Raman', 'priya', 'dan.k'] };
-	const withStaff = (tier: 'green' | 'yellow' | 'red', action: 'allow' | 'pseudonymize' | 'block') =>
+// Issue #78: people's names aren't sensitive by default, but IT can protect specific names by
+// listing them on a term list, under any data type.
+describe('specific names on a term list', () => {
+	const people = ['Priya Raman', 'priya', 'dan.k'];
+	const withNames = (dataTypeId: string) =>
 		policyWith({
-			dataTypes: policyWith().dataTypes.map((d) => (d.id === 'staff-names' ? { ...d, tier, action } : d)),
-			lists: [directory, { dataTypeId: 'customer-names', terms: ['Northwind'] }]
+			lists: [
+				{ dataTypeId, terms: people },
+				{ dataTypeId: 'customer-names', terms: ['Northwind'] }
+			]
 		});
+	const vipType = {
+		id: 'vip-names',
+		name: 'VIP names',
+		description: 'Names of executives and board members.',
+		examples: ['Priya Raman'],
+		tier: 'red' as const,
+		action: 'block' as const
+	};
 
-	it('finds listed staff but lets them through while staff names are green (the default)', async () => {
-		const { post, reports } = testApp({ policy: withStaff('green', 'allow'), tiers: [tier0()] });
+	it('lets names through when nobody listed them', async () => {
+		const { post } = testApp({ policy: policyWith(), tiers: [tier0()] });
 		const stdout = 'Priya Raman and dan.k fixed it; ping priya.';
 		expect((await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }))).json).toEqual({});
-		expect(reports[0]).toMatchObject({ counts: { 'staff-names': 3 }, actions: { allow: 3 } });
 	});
 
-	it('pseudonymizes listed staff in tool output once IT moves staff names to yellow', async () => {
-		const { post } = testApp({ policy: withStaff('yellow', 'pseudonymize'), tiers: [tier0()] });
+	it('pseudonymizes listed names in tool output, whatever their case', async () => {
+		const { post, reports } = testApp({ policy: withNames('customer-personal-data'), tiers: [tier0()] });
 		const stdout = 'PRIYA RAMAN asked dan.k to call Northwind.';
 		const res = await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }));
 		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
-			stdout: 'staff_name_1 asked staff_name_2 to call customer_name_1.',
+			stdout: 'customer_personal_data_1 asked customer_personal_data_2 to call customer_name_1.',
 			stderr: ''
 		});
+		expect(reports[0]).toMatchObject({ counts: { 'customer-personal-data': 2, 'customer-names': 1 } });
 	});
 
-	it('blocks a prompt naming listed staff once IT moves staff names to red + block', async () => {
-		const { post } = testApp({ policy: withStaff('red', 'block'), tiers: [tier0()] });
+	it('blocks a prompt naming a listed person under an admin’s own red + block type', async () => {
+		const policy = policyWith({
+			dataTypes: [...policyWith().dataTypes, vipType],
+			lists: [{ dataTypeId: 'vip-names', terms: people }]
+		});
+		const { post } = testApp({ policy, tiers: [tier0()] });
 		const out = prompt.response.parse((await post(prompt.path, promptInput('What did priya say?'))).json);
 		expect(out.decision).toBe('block');
-		expect(out.reason).toContain('Staff names');
+		expect(out.reason).toContain('VIP names');
 		expect(out.reason?.toLowerCase()).not.toContain('priya');
 	});
 
-	it('loses to a stricter list when a term is in both (the stricter data type wins)', async () => {
+	it('uses the stricter list when a name is on two lists', async () => {
 		const policy = policyWith({
-			lists: [directory, { dataTypeId: 'unreleased-roadmap', terms: ['priya'] }]
+			dataTypes: [...policyWith().dataTypes, vipType],
+			lists: [
+				{ dataTypeId: 'customer-names', terms: ['priya'] }, // yellow, listed first
+				{ dataTypeId: 'vip-names', terms: ['priya'] } // red
+			]
 		});
 		const classifier = createClassifier({ tiers: [tier0()], budgetMs: 1_000 });
 		const result = await classifier.classify(['ask priya'], policy);
-		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['unreleased-roadmap']);
+		expect(result.ok && result.spans[0]!.map((s) => s.dataTypeId)).toEqual(['vip-names']);
 	});
 });

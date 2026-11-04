@@ -123,27 +123,6 @@ def test_safe_and_hard_negative_false_positive_rates():
     assert g.latency(50) == 2.0
 
 
-def test_staff_names_are_green_so_they_never_make_text_unsafe():
-    # Issue #78: staff-names is a span label (scored in its own row) but green by default.
-    s = Scorer()
-    t1 = "dan: deploy done, ping priya"
-    s.add(
-        rec(t1, [("dan", "staff-names"), ("priya", "staff-names")], id="a"),
-        [P(t1, "dan", "staff-names")],
-        1.0,
-    )
-    t2 = "lena: thanks"
-    s.add(
-        rec(t2, [("lena", "staff-names")], id="b"),
-        [P(t2, "lena", "customer-personal-data")],
-        1.0,
-    )
-    g = s.overall
-    assert (g.safe_records, g.safe_flagged) == (2, 1)  # only the personal-data guess flags
-    assert g.labels["staff-names"].gold == 3 and g.labels["staff-names"].gold_found == 1
-    assert g.micro.gold == 0 and g.micro.pred == 1  # micro scores are over sensitive labels
-
-
 def test_per_source_groups():
     s = Scorer()
     s.add(rec("a b", id="1", source="macrohard-offline"), [], None)

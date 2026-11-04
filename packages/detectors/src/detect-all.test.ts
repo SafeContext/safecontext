@@ -42,11 +42,11 @@ describe('mergeSpans', () => {
 	});
 
 	it('lets the stricter data type win over confidence and order, when given a strictness', () => {
-		const strictness = (id: string) => ({ 'staff-names': 0, 'customer-personal-data': 2 })[id] ?? 1;
-		const input = [span(0, 10, 'staff-names', 1), span(5, 15, 'customer-personal-data', 0.6)];
+		const strictness = (id: string) => ({ 'green-type': 0, 'customer-personal-data': 2 })[id] ?? 1;
+		const input = [span(0, 10, 'green-type', 1), span(5, 15, 'customer-personal-data', 0.6)];
 		expect(mergeSpans(input, strictness)).toEqual([span(0, 15, 'customer-personal-data', 0.6)]);
 		expect(mergeSpans([...input].reverse(), strictness)).toEqual([span(0, 15, 'customer-personal-data', 0.6)]);
-		expect(mergeSpans(input)).toEqual([span(0, 15, 'staff-names', 1)]); // without: confidence decides
+		expect(mergeSpans(input)).toEqual([span(0, 15, 'green-type', 1)]); // without: confidence decides
 	});
 
 	it('does not change its input', () => {

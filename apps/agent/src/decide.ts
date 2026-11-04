@@ -103,7 +103,7 @@ const strictnessCache = new WeakMap<Policy, Strictness>();
 /**
  * The policy's `severity` per data type id, for `mergeSpans`: when spans of two data types
  * overlap, the stricter one wins, whichever detector found it and however confident it was.
- * So a name that is both a staff name (green by default) and customer personal data (red) is
+ * So a listed customer name (yellow) inside a span tier 1 calls customer personal data (red) is
  * treated as customer personal data (issue #78). Unknown data types rank as red + block.
  */
 export function strictness(policy: Policy): Strictness {
