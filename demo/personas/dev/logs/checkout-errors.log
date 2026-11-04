@@ -1,0 +1,9 @@
+2026-11-02T09:14:03.211Z POST /checkout 402 812ms body={"accountId":"acc_7731","email":"jane.doe@northwind.com","amountPence":184900,"card":"4242 4242 4242 4242","exp":"09/28"}
+2026-11-02T09:14:09.876Z POST /checkout 402 790ms body={"accountId":"acc_7731","email":"jane.doe@northwind.com","amountPence":184900,"card":"4242 4242 4242 4242","exp":"09/28"}
+2026-11-02T09:31:44.052Z POST /checkout 500 8004ms body={"accountId":"acc_2210","email":"tom.becker@acmecorp.com","amountPence":52000,"paymentMethodId":"pm_1QxA7f"} error=StripeConnectionError: timeout after 8000ms
+2026-11-02T09:31:52.118Z POST /checkout 201 1204ms
+2026-11-02T10:02:17.640Z POST /invoices/inv_88213/send 500 31ms error=ECONNREFUSED 10.40.12.7:587 to=ap@contoso.com
+2026-11-02T10:05:51.330Z POST /checkout 402 655ms body={"accountId":"acc_5012","email":"r.okafor@fabrikam.com","phone":"+44 20 7946 0958","amountPence":9900,"card":"5555 5555 5555 4444","exp":"01/27"}
+2026-11-02T10:06:02.905Z GET /orders/ord_41120 404 4ms
+2026-11-02T10:12:39.477Z POST /checkout 500 8001ms body={"accountId":"acc_2210","email":"tom.becker@acmecorp.com","amountPence":52000,"paymentMethodId":"pm_1QxA7f"} error=StripeConnectionError: timeout after 8000ms
+2026-11-02T10:12:40.002Z POST /checkout 201 1310ms
