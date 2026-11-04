@@ -165,6 +165,14 @@ Each tier runs only if the previous one isn't sure.
 | 1. Label tagger | Spans for the admin's own data types ("Revenue figures", "Customer names") | GLiNER ONNX export run with `onnxruntime-node` in the agent's own process (no Python sidecar) | ~50–200 ms | Built (#13 model, #15 agent). Off unless `SC_TIER1_MODEL_DIR` is set. |
 | 2. Small LLM | Context-dependent judgements (roadmap vs press release) and rewriting ("$4.2M, up 18%" → "mid-teens growth") | Small open model behind an OpenAI-compatible local API, default Ollama ([decided in #14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437)). Compare current Qwen / Gemma / Llama / Phi releases, small (up to ~4B) and medium (up to ~8B); prefer Apache-2.0 licences | ~1–5 s | Built (#14 model and prompts, #16 agent). Off unless `SC_TIER2_MODEL` or `SC_TIER2_BASE_URL` is set. |
 
+**Names are not sensitive (decided on #2, built in #78).** No tier tags a person's name as such:
+*Customer personal data* is contact and account details, and tier 1 was retrained on data where
+names (staff, customers, chat handles, public datasets' name and user name entities) are not
+spans. Its label for that type is "email, phone, address, card or id number" (`labels.json`),
+not the type's name. To protect specific people, IT lists their names on a term list under any
+data type (tier 0). When spans of two data types overlap, the stricter type in the policy wins
+(red over yellow over green, then action), whichever tier found them.
+
 **Tier 1 as built (#13, #15).**
 - **Model:** `urchade/gliner_small-v2.1` (Apache-2.0), fine-tuned on our train split. Chosen in
   [#13](https://github.com/SafeContext/safecontext/issues/13#issuecomment-6461207888). The licence of its base training data (`urchade/pile-mistral-v0.1`) has not
@@ -296,8 +304,12 @@ Each item says where it was decided, or which issue holds the open question.
 3. **Data type taxonomy v0**: which green/yellow/red types ship by default. **Partly open.** The 10
    types proposed in [#2](https://github.com/SafeContext/safecontext/issues/2#issuecomment-6245163595)
    shipped in PR #28 (`packages/policy/src/defaults.ts`), but no approval or answers to that
-   comment's three questions are recorded in #2. More taxonomy questions from the dataset (staff
-   names, special-category data, public reference customers) are in PR #54.
+   comment's three questions are recorded in #2. ~~Whose names are sensitive~~: **decided** on #2
+   (Joe, 3 Nov 2026): **people's names are not sensitive**, staff or customers, chat handles
+   included. *Customer personal data* is contact and account details only (emails, phones,
+   postal addresses, card and account numbers, government IDs); *Customer names* (client
+   companies) is unchanged. IT protects specific names with a term list. Built in #78. Still
+   open: special-category data and public reference customers (PR #54).
 4. **Laptop vs central server** for the model (start on the laptop; keep the agent API identical).
    **Open:** #75 (later; Gemma on every Mac for now). Everything built so far runs on the laptop;
    tier 2's endpoint is already a setting (`SC_TIER2_BASE_URL`, `SC_TIER2_API_KEY`).

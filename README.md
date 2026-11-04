@@ -39,6 +39,22 @@ hasn't settled the result.
 it (or if its answer could give the value away) they become the data type's name, such as
 `[Revenue figures]`.
 
+**Default data types** (`packages/policy/src/defaults.ts`; IT can move any of them or add its own):
+
+| Traffic light | Data types |
+| --- | --- |
+| 🟢 Safe to share | Public docs, release notes, open-source code |
+| 🟡 Make it vague | Revenue figures, internal metrics, deal sizes, customer names (which companies are clients) |
+| 🔴 Never share | Unreleased roadmap, API keys & secrets, customer personal data |
+
+**People's names are not sensitive** (decided on
+[#2](https://github.com/SafeContext/safecontext/issues/2), built in
+[#78](https://github.com/SafeContext/safecontext/issues/78)). A colleague's or customer's name,
+or a chat handle such as `priya`, goes through unchanged. *Customer personal data* means contact
+and account details: emails, phone numbers, postal addresses, card and account numbers, and
+government IDs. To protect specific people (executives, say), IT adds their names to a word
+list under any data type. When two data types match the same text, the stricter one wins.
+
 Also working:
 
 - The plugin checks **every** tool, including subagents
