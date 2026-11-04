@@ -1,0 +1,14 @@
+{
+  "name": "safecontext",
+  "description": "Safe Context's plugin, straight from this repo. The SafeContext/MacroHard demo turns it on from here.",
+  "owner": {
+    "name": "Safe Context"
+  },
+  "plugins": [
+    {
+      "name": "safe-context",
+      "source": "./plugin",
+      "description": "Checks prompts and cleans tool output with your company's own model before Claude sees it."
+    }
+  ]
+}

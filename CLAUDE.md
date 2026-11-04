@@ -56,6 +56,9 @@ and open decisions. Scope: Claude Code only for pilot, then extend across all ag
   `scripts/agent-status.sh` for the SessionStart check, `skills/status/` for `/safe-context:status`).
   Validate with `claude plugin validate ./plugin`; try it with `claude --plugin-dir ./plugin`.
   The hook URLs are fixed at port 4747 (Claude Code doesn't expand variables there).
+- `demo/`: tools for the demo personas, which live in their own repo, `SafeContext/MacroHard`.
+  `demo/scenarios.ts` lists what each should do; `node demo/check.ts` checks them against a running
+  agent, and `--list` makes MacroHard's TRY-THESE.md. Keep expectations in step when tiers change.
 - `ml/`: Python data generation, fine-tuning, evaluation, ONNX export. `ml/models.lock.json` pins
   the hosted models and data by commit and sha256; `artifacts push` updates it.
 - `installer/`: Homebrew formula + launchd (not built yet).
