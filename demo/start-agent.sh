@@ -19,8 +19,11 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
 	nvm use --silent >/dev/null
 fi
 
-if [ ! -f "$REPO/ml/models/tier1-onnx/model.onnx" ]; then
-	echo "The tier 1 model isn't downloaded. Run 'pnpm models:pull' in $REPO first." >&2
+# The tier 1 model. Set SC_TIER1_MODEL_DIR to use one elsewhere (e.g. from a git worktree,
+# which has no models of its own).
+SC_TIER1_MODEL_DIR="${SC_TIER1_MODEL_DIR:-$REPO/ml/models/tier1-onnx}"
+if [ ! -f "$SC_TIER1_MODEL_DIR/model.onnx" ]; then
+	echo "No tier 1 model in $SC_TIER1_MODEL_DIR. Run 'pnpm models:pull' in $REPO first." >&2
 	exit 1
 fi
 
@@ -42,7 +45,7 @@ if ! curl -s -m 1 http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
 	fi
 fi
 
-export SC_TIER1_MODEL_DIR="$REPO/ml/models/tier1-onnx"
+export SC_TIER1_MODEL_DIR
 export SC_TIER2_MODEL="${SC_TIER2_MODEL:-gemma4:e4b-it-q4_K_M}"
 
 echo "Starting the agent on http://127.0.0.1:${SC_AGENT_PORT:-4747}. Wait for tier1_ready and tier2_ready. Ctrl-C stops it."
