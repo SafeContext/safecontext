@@ -3,9 +3,10 @@
 #
 #   agent-status.sh                  Status in plain words, for /safe-context:status. Always exits 0
 #                                    (a non-zero exit would abort the skill).
-#   agent-status.sh --session-start  SessionStart hook. Prints nothing when the agent is healthy.
-#                                    Otherwise prints hook JSON whose `systemMessage` is shown to the
-#                                    user, with how to fix it.
+#   agent-status.sh --session-start  SessionStart hook. When the agent is healthy, prints hook JSON
+#                                    whose `additionalContext` tells Claude how Safe Context's
+#                                    placeholders work (SPEC.md §4, issue #83). Otherwise prints hook
+#                                    JSON whose `systemMessage` is shown to the user, with how to fix it.
 #
 # Port: SC_AGENT_PORT, the same variable the agent reads (default 4747, AGENT_DEFAULT_PORT in
 # packages/policy). Only sh and curl are needed, so this works even when Node isn't installed.
@@ -45,8 +46,15 @@ case "$state" in
 	*) problem="something on 127.0.0.1:${port} answered, but it isn't the Safe Context agent." ;;
 esac
 
+# For Claude, at the start of every session (and on resume and compaction). Fixed text with no
+# quotes or backslashes, so it needs no JSON escaping.
+context='Safe Context is on. It hides sensitive values in what you read behind placeholders such as ⟪customer_name_1⟫, or ⟪revenue_figure_1: over $4M⟫ where the text after the colon is a true hint. Each placeholder stands for one real value and stays the same for the whole session, so treat it as that value and copy it exactly, brackets included, whenever you need the value. In Read, Write, Edit, MultiEdit, NotebookEdit, Glob and Grep calls, file paths included, Safe Context puts the real value back just before the tool runs and hides it again in the result: files get the real value, you keep seeing the placeholder. Real values only go into files inside the project folder, not into hidden folders such as .git or .claude. Shell commands, web and MCP tools, and subagent prompts get the placeholder exactly as you wrote it, so use the file tools rather than the shell for files whose names or contents have placeholders. Do not try to guess or work out hidden values.'
+
 if [ "$mode" = session-start ]; then
-	[ -z "$problem" ] && exit 0
+	if [ -z "$problem" ]; then
+		printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$context"
+		exit 0
+	fi
 	# Every value here is fixed text or digits, so it needs no JSON escaping.
 	printf '{"systemMessage":"Safe Context: %s Until it is fixed, Claude Code blocks your prompts and tool calls. %s"}\n' "$problem" "$fix"
 	exit 0

@@ -24,14 +24,22 @@ import {
 import { Hono, type Context } from 'hono';
 import type { Classifier, ClassifyResult } from './classifier/types.ts';
 import { DEFAULT_CHECK_BUDGET_MS } from './config.ts';
-import { decide, failDecision, type Decision, type Failure } from './decide.ts';
+import { decide, failDecision, strictness, type Decision, type Failure } from './decide.ts';
 import { countHits, noopEventSink, type EventSink } from './events.ts';
 import { promptResponse, toolInputResponse, toolOutputResponse } from './hooks.ts';
 import { silentLogger, type Logger, type Outcome } from './log.ts';
 import type { PolicySource } from './policy-source.ts';
 import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
-import { createPseudonymStore, type PseudonymStore } from './transform/pseudonyms.ts';
+import { mergeSpans } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
+import { knownValueFinder } from './transform/known.ts';
+import {
+	createPlaceholderStore,
+	dropPlaceholderSpans,
+	type PlaceholderStore,
+	type SessionKey
+} from './transform/placeholders.ts';
+import { restoreToolInput, type Restored } from './transform/restore.ts';
 import { createRewriter } from './transform/rewrite.ts';
 
 export interface AppDeps {
@@ -39,8 +47,8 @@ export interface AppDeps {
 	classifier: Classifier;
 	logger?: Logger;
 	events?: EventSink;
-	/** Per-session pseudonyms (in memory). Default: a new store with the default bounds. */
-	pseudonyms?: PseudonymStore;
+	/** Per-session placeholder keys (in memory). Default: a new store with the default bounds. */
+	placeholders?: PlaceholderStore;
 	/** Tier 2's generalize call (#16). Without it, only number values get a vague rewrite. */
 	generalizer?: GeneralizeModel;
 	/**
@@ -70,12 +78,13 @@ interface Handled<O> {
 	result?: ClassifyResult;
 	fields?: number;
 	chars?: number;
+	restored?: Restored;
 }
 
 export function createApp(deps: AppDeps): Hono {
 	const { policy: policySource, classifier, logger = silentLogger, events = noopEventSink } = deps;
 	const now = deps.now ?? (() => performance.now());
-	const pseudonyms = deps.pseudonyms ?? createPseudonymStore();
+	const placeholders = deps.placeholders ?? createPlaceholderStore();
 	const { generalizer, checkBudgetMs = DEFAULT_CHECK_BUDGET_MS } = deps;
 	const app = new Hono();
 
@@ -83,17 +92,30 @@ export function createApp(deps: AppDeps): Hono {
 		c.json({ ok: true, policyVersion: policySource.current().version } satisfies HealthResponse)
 	);
 
-	/** Classify `texts` and decide. Never throws (the classifier doesn't). */
-	async function check(texts: string[], policy: Policy, hook: HookEventName) {
+	/**
+	 * Classify `texts` and decide. Never throws (the classifier doesn't). Placeholders already in
+	 * the text are never flagged again. With `key` (tool output), every value the session's key
+	 * holds is flagged too, wherever it appears (transform/known.ts).
+	 */
+	async function check(texts: string[], policy: Policy, hook: HookEventName, key?: SessionKey) {
 		const deadline = now() + checkBudgetMs;
-		const result = await classifier.classify(texts, policy, { hook });
+		const classified = await classifier.classify(texts, policy, { hook });
+		let result: ClassifyResult = classified;
+		if (classified.ok) {
+			const known = key ? knownValueFinder(key) : undefined;
+			const rank = strictness(policy);
+			const spans = texts.map((text, i) =>
+				mergeSpans(dropPlaceholderSpans(text, [...(classified.spans[i] ?? []), ...(known?.(text) ?? [])]), rank)
+			);
+			result = { ...classified, spans };
+		}
 		const chars = texts.reduce((n, t) => n + t.length, 0);
 		return { result, decision: decide(result, policy), fields: texts.length, chars, deadline };
 	}
 
 	/**
 	 * Each text with its flagged spans transformed, or undefined if nothing needs transforming.
-	 * Pseudonyms are per Claude Code session. Generalize may call tier 2 within the check's
+	 * Placeholders come from the Claude Code session's key. Generalize may call tier 2 within the check's
 	 * `deadline`; texts go one at a time (the model server answers one call at a time).
 	 */
 	async function rewrite(
@@ -105,7 +127,7 @@ export function createApp(deps: AppDeps): Hono {
 	): Promise<string[] | undefined> {
 		if (decision.cause !== 'policy') return undefined;
 		const generalize = createGeneralize({ model: generalizer, policy, deadline });
-		const rewriter = createRewriter(decision.hits, pseudonyms.session(sessionId), generalize);
+		const rewriter = createRewriter(decision.hits, placeholders.session(sessionId), generalize);
 		const out: string[] = [];
 		for (const [i, text] of texts.entries()) out.push(await rewriter(text, decision.spans[i] ?? []));
 		return out;
@@ -176,6 +198,8 @@ export function createApp(deps: AppDeps): Hono {
 				...(result && { tiers: result.tiers.map((t) => t.id), classifyMs: round(result.ms) }),
 				...(result?.ok && result.cleared && { cleared: result.cleared }),
 				...(handled.fields !== undefined && { fields: handled.fields, chars: handled.chars }),
+				...(handled.restored?.kind === 'restored' && { restored: handled.restored.count }),
+				...(handled.restored?.kind === 'refused' && { restoreRefused: handled.restored.reason }),
 				spans: decision.hits.reduce((n, h) => n + h.count, 0),
 				totalMs: round(totalMs)
 			});
@@ -203,7 +227,7 @@ export function createApp(deps: AppDeps): Hono {
 			'UserPromptSubmit',
 			async (input, policy) => {
 				const checked = await check([input.prompt], policy, 'UserPromptSubmit');
-				// Only a blocked prompt needs a safe version (and only then are pseudonyms handed out).
+				// Only a blocked prompt needs a safe version (and only then are placeholders handed out).
 				const safe =
 					checked.decision.verdict === 'block'
 						? await rewrite([input.prompt], checked.decision, input.session_id, policy, checked.deadline)
@@ -221,7 +245,17 @@ export function createApp(deps: AppDeps): Hono {
 			'PreToolUse',
 			async (input, policy) => {
 				const checked = await check(toolInputTexts(input.tool_input), policy, 'PreToolUse');
-				return { ...checked, toolName: input.tool_name, output: toolInputResponse(checked.decision) };
+				// Swap-back (#83): only for a call that isn't blocked, and only into local file tools.
+				const restored =
+					checked.decision.verdict === 'block'
+						? undefined
+						: restoreToolInput(input.tool_name, input.tool_input, placeholders.session(input.session_id), input.cwd);
+				return {
+					...checked,
+					restored,
+					toolName: input.tool_name,
+					output: toolInputResponse(checked.decision, restored)
+				};
 			},
 			(decision, body) => ({ decision, toolName: toolNameOf(body), output: toolInputResponse(decision) })
 		)
@@ -234,7 +268,7 @@ export function createApp(deps: AppDeps): Hono {
 			'PostToolUse',
 			async (input, policy) => {
 				const texts = toolOutputTexts(input.tool_name, input.tool_response);
-				const checked = await check(texts, policy, 'PostToolUse');
+				const checked = await check(texts, policy, 'PostToolUse', placeholders.session(input.session_id));
 				const rewritten = await rewrite(texts, checked.decision, input.session_id, policy, checked.deadline);
 				return {
 					...checked,

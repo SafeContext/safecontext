@@ -14,7 +14,7 @@ import { decide } from '../../decide.ts';
 import { memoryLogger } from '../../log.ts';
 import { policyWith } from '../../test-helpers.ts';
 import { createGeneralize } from '../../transform/generalize.ts';
-import { createPseudonymStore } from '../../transform/pseudonyms.ts';
+import { createPlaceholderStore } from '../../transform/placeholders.ts';
 import { createRewriter } from '../../transform/rewrite.ts';
 import { summarize } from '../../decide.ts';
 import { createClassifier } from '../classifier.ts';
@@ -93,10 +93,12 @@ describe.skipIf(!real)('tier 2 with the real model (SC_TIER2_REAL=1)', () => {
 				policy: vague,
 				deadline: performance.now() + 8_000
 			});
-			const rewrite = createRewriter(summarize(spans, vague), createPseudonymStore().session('s'), generalize);
+			const rewrite = createRewriter(summarize(spans, vague), createPlaceholderStore().session('s'), generalize);
 			const out = await rewrite(text, spans);
-			expect(out.startsWith('Q3 revenue was over $4M, up high teens. ')).toBe(true);
-			for (const v of ['4.2', '18', 'Heron', 'March', '[Revenue figures]', '[Unreleased roadmap]']) {
+			expect(out.startsWith('Q3 revenue was ⟪revenue_figure_1: over $4M⟫, up ⟪revenue_figure_2: high teens⟫. ')).toBe(
+				true
+			);
+			for (const v of ['4.2', '18', 'Heron', 'March', '⟪revenue_figure_3⟫', '⟪unreleased_roadmap_1⟫']) {
 				expect(out).not.toContain(v);
 			}
 		}

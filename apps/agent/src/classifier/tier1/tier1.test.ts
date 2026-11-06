@@ -293,7 +293,7 @@ describe('tier 1 end to end', () => {
 		expect(preTool.response.parse(denied.json).hookSpecificOutput?.permissionDecision).toBe('deny');
 		const res = await post(postTool.path, toolOutput('Bash', { stdout: 'Globex renewed', stderr: '' }));
 		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
-			stdout: 'customer_name_1 renewed',
+			stdout: '⟪customer_name_1⟫ renewed',
 			stderr: ''
 		});
 	});

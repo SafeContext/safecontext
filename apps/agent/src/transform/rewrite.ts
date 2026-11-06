@@ -1,49 +1,48 @@
 /**
- * Applies each span's action to the text (SPEC.md §4):
+ * Applies each span's action to the text (SPEC.md §4, issue #83). Every hidden value becomes a
+ * labelled placeholder from the session's key (placeholders.ts), so Claude can see that it was
+ * hidden, what kind of data it was and which one. Actions differ only in the hint after the colon:
  * - allow: unchanged
- * - mask: `****4242` (mask.ts)
- * - pseudonymize: `customer_name_1`, consistent within the session (pseudonyms.ts)
- * - generalize: a vague but true version ("$4.2M" → "over $4M", generalize.ts). When no safe
- *   rewrite can be made, `[Revenue figures]` (the data type's name).
- * - block: `[Safe Context removed: API keys & secrets]`
+ * - pseudonymize, block: `⟪customer_name_1⟫`, `⟪secret_1⟫`
+ * - mask: `⟪customer_personal_data_1: ****4242⟫` (mask.ts; no hint when too short to show any)
+ * - generalize: `⟪revenue_figure_1: over $4M⟫`, a vague but true hint (generalize.ts); no hint
+ *   when no safe one can be made
  *
  * Only the spans change; the text around them is kept exactly.
  */
 import type { Span } from '@safecontext/detectors';
 import type { Hit } from '../decide.ts';
-import { messages } from '../messages.ts';
 import { createGeneralize, type Generalize } from './generalize.ts';
-import { mask } from './mask.ts';
-import type { SessionPseudonyms } from './pseudonyms.ts';
+import { MASK, mask } from './mask.ts';
+import { formatPlaceholder, type SessionKey } from './placeholders.ts';
 
 /** Rewrites one text, given that text's spans. */
 export type Rewriter = (text: string, spans: readonly Span[]) => Promise<string>;
 
 /**
  * `hits` give each data type's action and name (summarize() already maps data types missing from
- * the policy to `block`). A span whose type isn't in `hits` is removed, to be safe.
+ * the policy to `block`). A span whose type isn't in `hits` is hidden, to be safe.
  */
 export function createRewriter(
 	hits: readonly Hit[],
-	pseudonyms: SessionPseudonyms,
+	key: SessionKey,
 	generalize: Generalize = createGeneralize()
 ): Rewriter {
 	const byId = new Map(hits.map((h) => [h.dataTypeId, h]));
 
 	const replace = (span: Span, value: string, vague: ReadonlyMap<Span, string>): string => {
 		const hit = byId.get(span.dataTypeId);
-		if (!hit) return messages.removed(span.dataTypeId);
-		switch (hit.action) {
-			case 'allow':
-				return value;
-			case 'mask':
-				return mask(value);
-			case 'pseudonymize':
-				return pseudonyms.get(hit.dataTypeId, value);
+		if (hit?.action === 'allow') return value;
+		const id = key.idFor(span.dataTypeId, value);
+		switch (hit?.action) {
+			case 'mask': {
+				const masked = mask(value);
+				return formatPlaceholder(id, masked === MASK ? undefined : masked);
+			}
 			case 'generalize':
-				return vague.get(span) ?? messages.generalized(hit.name);
-			case 'block':
-				return messages.removed(hit.name);
+				return formatPlaceholder(id, vague.get(span));
+			default:
+				return formatPlaceholder(id);
 		}
 	};
 

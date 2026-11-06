@@ -14,9 +14,12 @@ Safe Context has three parts:
 - **A Claude Code plugin.** It sends every prompt the user types, and every tool Claude uses, to
   a small program on the same Mac before Claude sees it.
 - **The agent.** That small program. It looks for sensitive data, such as API keys, customer
-  emails or project codenames. It blocks a prompt that holds "never share" data, and it cleans
-  what Claude reads from files and commands: a card number becomes `****4242`, a customer email
-  becomes `customer_personal_data_1`, a secret becomes `[Safe Context removed: API keys & secrets]`.
+  emails or project codenames. It blocks a prompt that holds "never share" data, and it hides
+  what Claude reads from files and commands behind labelled placeholders: a customer email becomes
+  `⟪customer_personal_data_1⟫`, a secret `⟪secret_1⟫`, a card number `⟪customer_personal_data_2: ****4242⟫`.
+  The agent keeps the real values on the Mac and puts them back when Claude reads or writes a file
+  in the project, so a file Claude writes holds the real email address even though Claude only ever
+  saw the placeholder ([#83](https://github.com/SafeContext/safecontext/issues/83)).
 - **The dashboard.** A website where IT sets the rules (the "policy") and sees counts of what was
   checked. The agent never sends it any text, only counts and timings.
 
@@ -34,10 +37,10 @@ hasn't settled the result.
 | 1. Tagger | The company's own kinds of data, such as customer names or revenue figures, that fixed rules miss. A small AI model (GLiNER) fine-tuned on our own example data. | Built ([#13](https://github.com/SafeContext/safecontext/issues/13), [#15](https://github.com/SafeContext/safecontext/issues/15)). Off unless you point the agent at the model. On our held-out test set it finds 97.8% of "never share" items and wrongly flags 7.7% of harmless texts. On realistic Claude-written documents it flags 38% of safe ones (was 83% before names stopped counting as sensitive, [#78](https://github.com/SafeContext/safecontext/issues/78)). |
 | 2. Small local LLM | Judgements that need context: a codename in a launch plan is secret, the same codename in a press release isn't. It also rewrites names and dates to be vague ("an upcoming project"). | Built ([#14](https://github.com/SafeContext/safecontext/issues/14) chose Gemma 4 E4B on Ollama, [#16](https://github.com/SafeContext/safecontext/issues/16) wired it in). Off unless you turn it on. It can only *un-flag* tier 1 finds for roadmap, revenue, metrics and deal sizes. It never un-flags secrets or IT's word lists. If it's slow or down, everything stays flagged. |
 
-"Make it vague" works without tier 2 for numbers: `$4.2M` becomes `over $4M` and `18%` becomes
-`high teens`. These are always true and never repeat the value. Names and dates need tier 2. Without
-it (or if its answer could give the value away) they become the data type's name, such as
-`[Revenue figures]`.
+"Make it vague" adds a true hint to the placeholder. Numbers don't need tier 2: `$4.2M` becomes
+`⟪revenue_figure_1: over $4M⟫` and `18%` gets `high teens`. These are always true and never repeat
+the value. Names and dates need tier 2. Without it (or if its answer could give the value away) the
+placeholder has no hint.
 
 **Default data types** (`packages/policy/src/defaults.ts`; IT can move any of them or add its own):
 

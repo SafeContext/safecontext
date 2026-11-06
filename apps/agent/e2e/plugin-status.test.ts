@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.ts';
 import { createClassifier } from '../src/classifier/classifier.ts';
 import { createTier0 } from '../src/classifier/tier0.ts';
+import { RESTORE_TOOLS } from '../src/transform/restore.ts';
 import { staticPolicySource } from '../src/policy-source.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { policyWith } from '../src/test-helpers.ts';
@@ -82,8 +83,24 @@ describe('agent-status.sh (/safe-context:status)', () => {
 });
 
 describe('agent-status.sh --session-start (SessionStart hook)', () => {
-	it('prints nothing when the agent is healthy, so nothing is added to the session', async () => {
-		expect(await status(agent.port, '--session-start')).toBe('');
+	it('tells Claude how placeholders work when the agent is healthy, and nothing for the user', async () => {
+		const out = JSON.parse(await status(agent.port, '--session-start'));
+		expect(Object.keys(out)).toEqual(['hookSpecificOutput']);
+		expect(out.hookSpecificOutput.hookEventName).toBe('SessionStart');
+		const context: string = out.hookSpecificOutput.additionalContext;
+		expect(context).toContain('⟪customer_name_1⟫');
+		expect(context).toContain('⟪revenue_figure_1: over $4M⟫');
+		// Lists exactly the tools that get real values back (apps/agent/src/transform/restore.ts).
+		expect(context).toContain('In Read, Write, Edit, MultiEdit, NotebookEdit, Glob and Grep calls');
+		expect(Object.keys(RESTORE_TOOLS).sort()).toEqual([
+			'Edit',
+			'Glob',
+			'Grep',
+			'MultiEdit',
+			'NotebookEdit',
+			'Read',
+			'Write'
+		]);
 	});
 
 	it('prints hook JSON with a systemMessage for the user when the agent is down', async () => {
