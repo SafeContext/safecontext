@@ -31,6 +31,8 @@ let agent: RunningServer;
 let notAgent: Server;
 let notAgentPort: number;
 let unhealthy: Server;
+let healthOnly: Server;
+let healthOnlyPort: number;
 let unhealthyPort: number;
 beforeAll(async () => {
 	const app = createApp({
@@ -42,6 +44,13 @@ beforeAll(async () => {
 	notAgent = createServer((_req, res) => res.end('<html>hello</html>'));
 	await new Promise<void>((resolve) => notAgent.listen(0, AGENT_HOST, resolve));
 	notAgentPort = (notAgent.address() as AddressInfo).port;
+	// A healthy health check, but no session-start note (e.g. an older agent).
+	healthOnly = createServer((req, res) => {
+		if (req.url === '/health') res.end('{"ok":true,"policyVersion":7}');
+		else res.writeHead(404).end();
+	});
+	await new Promise<void>((resolve) => healthOnly.listen(0, AGENT_HOST, resolve));
+	healthOnlyPort = (healthOnly.address() as AddressInfo).port;
 	// The agent's health JSON, but reporting a problem. Today's agent always says ok: true.
 	unhealthy = createServer((_req, res) => res.end('{"ok":false,"policyVersion":7}'));
 	await new Promise<void>((resolve) => unhealthy.listen(0, AGENT_HOST, resolve));
@@ -51,6 +60,7 @@ afterAll(async () => {
 	await agent.close();
 	await new Promise((resolve) => notAgent.close(resolve));
 	await new Promise((resolve) => unhealthy.close(resolve));
+	await new Promise((resolve) => healthOnly.close(resolve));
 });
 
 describe('agent-status.sh (/safe-context:status)', () => {
@@ -82,8 +92,15 @@ describe('agent-status.sh (/safe-context:status)', () => {
 });
 
 describe('agent-status.sh --session-start (SessionStart hook)', () => {
-	it('prints nothing when the agent is healthy, so nothing is added to the session', async () => {
-		expect(await status(agent.port, '--session-start')).toBe('');
+	it("passes on the agent's note for Claude when the agent is healthy, and shows the user nothing", async () => {
+		const out = JSON.parse(await status(agent.port, '--session-start'));
+		expect(AGENT_API.sessionStart.response.parse(out)).toEqual(out);
+		expect(out.hookSpecificOutput.additionalContext).toContain('⟪customer_name_1⟫');
+		expect(Object.keys(out)).toEqual(['hookSpecificOutput']);
+	});
+
+	it('prints nothing if the agent answers its health check but not the note', async () => {
+		expect(await status(healthOnlyPort, '--session-start')).toBe('');
 	});
 
 	it('prints hook JSON with a systemMessage for the user when the agent is down', async () => {

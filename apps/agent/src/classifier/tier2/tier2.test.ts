@@ -12,7 +12,7 @@ import { memoryLogger } from '../../log.ts';
 import { staticPolicySource } from '../../policy-source.ts';
 import { CANARY, policyWith, SECRET, termTier, toolOutput } from '../../test-helpers.ts';
 import { createGeneralize } from '../../transform/generalize.ts';
-import { createPseudonymStore } from '../../transform/pseudonyms.ts';
+import { createPlaceholderStore } from '../../transform/placeholders.ts';
 import { createRewriter } from '../../transform/rewrite.ts';
 import { createClassifier } from '../classifier.ts';
 import { createTier0 } from '../tier0.ts';
@@ -290,14 +290,14 @@ describe('generalize', () => {
 	async function rewriteWith(chat: ChatAnswer) {
 		const { generalizer, server, logger } = await setup(chat);
 		const generalize = createGeneralize({ model: generalizer, policy, deadline: performance.now() + 5000 });
-		const out = await createRewriter(hits, createPseudonymStore().session('s'), generalize)(text, spans());
+		const out = await createRewriter(hits, createPlaceholderStore().session('s'), generalize)(text, spans());
 		return { out, server, logger };
 	}
 
 	it('rewrites numbers with the rule and other values with the model', async () => {
 		const { out, server } = await rewriteWith(generalizeAnswer(() => 'early next quarter'));
 		expect(out).toBe(
-			'Q3 revenue was over $4M, up high teens, thanks to customer_name_1 and the Quill launch on early next quarter.'
+			'Q3 revenue was ⟪revenue_figure_1: over $4M⟫, up ⟪revenue_figure_2: high teens⟫, thanks to ⟪customer_name_1⟫ and the Quill launch on ⟪revenue_figure_3: early next quarter⟫.'
 		);
 		// Only the value the rule can't handle went to the model.
 		expect(server.chats()).toHaveLength(1);
@@ -311,16 +311,16 @@ describe('generalize', () => {
 		['names another flagged value', 'when Bluefin signed'],
 		['is not plain text', '[a date]'],
 		['is too long', 'a date that is some time in the next quarter']
-	])('falls back to the stub when the model rewrite %s', async (_why, rewrite) => {
+	])('gives no hint when the model rewrite %s', async (_why, rewrite) => {
 		const { out } = await rewriteWith(generalizeAnswer(() => rewrite));
-		expect(out).toContain('on [Revenue figures].');
+		expect(out).toContain('on ⟪revenue_figure_3⟫.');
 		expect(out).not.toContain(rewrite);
 	});
 
-	it('falls back to the stub when the model fails, and keeps the rule rewrites', async () => {
+	it('gives no hint when the model fails, and keeps the rule rewrites', async () => {
 		const { out, logger } = await rewriteWith(() => ({ status: 503, body: 'busy' }));
 		expect(out).toBe(
-			'Q3 revenue was over $4M, up high teens, thanks to customer_name_1 and the Quill launch on [Revenue figures].'
+			'Q3 revenue was ⟪revenue_figure_1: over $4M⟫, up ⟪revenue_figure_2: high teens⟫, thanks to ⟪customer_name_1⟫ and the Quill launch on ⟪revenue_figure_3⟫.'
 		);
 		expect(logger.records).toContainEqual({
 			level: 'warn',
@@ -330,18 +330,18 @@ describe('generalize', () => {
 		});
 	});
 
-	it('without tier 2: numbers by the rule, everything else the stub', async () => {
-		const out = await createRewriter(hits, createPseudonymStore().session('s'))(text, spans());
+	it('without tier 2: numbers by the rule, everything else no hint', async () => {
+		const out = await createRewriter(hits, createPlaceholderStore().session('s'))(text, spans());
 		expect(out).toBe(
-			'Q3 revenue was over $4M, up high teens, thanks to customer_name_1 and the Quill launch on [Revenue figures].'
+			'Q3 revenue was ⟪revenue_figure_1: over $4M⟫, up ⟪revenue_figure_2: high teens⟫, thanks to ⟪customer_name_1⟫ and the Quill launch on ⟪revenue_figure_3⟫.'
 		);
 	});
 
 	it("doesn't call the model without enough time left", async () => {
 		const { generalizer, server } = await setup(generalizeAnswer(() => 'soon'));
 		const generalize = createGeneralize({ model: generalizer, policy, deadline: performance.now() + 500 });
-		const out = await createRewriter(hits, createPseudonymStore().session('s'), generalize)(text, spans());
-		expect(out).toContain('on [Revenue figures].');
+		const out = await createRewriter(hits, createPlaceholderStore().session('s'), generalize)(text, spans());
+		expect(out).toContain('on ⟪revenue_figure_3⟫.');
 		expect(server.chats()).toHaveLength(0);
 	});
 });
@@ -521,7 +521,7 @@ describe('the agent end to end, model mocked', () => {
 			)
 		);
 		expect(out.hookSpecificOutput?.updatedToolOutput).toMatchObject({
-			stdout: 'Q3 revenue was over $4M, up high teens'
+			stdout: 'Q3 revenue was ⟪revenue_figure_1: over $4M⟫, up ⟪revenue_figure_2: high teens⟫'
 		});
 
 		const prompt = { session_id: 's', cwd: '/w', hook_event_name: 'UserPromptSubmit', prompt: PRESS };

@@ -5,7 +5,7 @@
  * Costs model usage, so it is NOT part of `pnpm test`. Run it with `pnpm test:e2e`. Needs
  * `claude` on PATH, signed in, v2.1.295+ (for `onFailure`).
  *
- * Six `claude -p` runs on haiku (six of seven with `E2E_TIERS=1`); only four reach the model (the blocked ones cost nothing):
+ * Seven `claude -p` runs on haiku (seven of eight with `E2E_TIERS=1`); only five reach the model (the blocked ones cost nothing):
  *   1. no plugin:   a prompt with a fake secret and email asks Claude to read a file holding
  *                   them → the prompt reaches Claude and Read/Bash return the raw values.
  *   2. plugin:      the same prompt → blocked by the agent before Claude sees it.
@@ -15,16 +15,18 @@
  *   5. plugin, foreground subagent: the subagent writes a fake email into its report itself (so
  *                   no Read hook sees it) → the hook on the Agent tool cleans the report.
  *   6. plugin, agent down: SessionStart warns how to fix it, and the prompt is blocked.
- *   7. plugin, tiers 1+2 (only with `E2E_TIERS=1`, which skips 5): a file with revenue figures comes back vague
- *                   but true ("over $4M, up high teens"), issue #16. Uses the developer's
+ *   7. plugin, tiers 1+2 (only with `E2E_TIERS=1`, which skips 5): a file with revenue figures comes back
+ *                   with true hints ("⟪revenue_figure_1: over $4M⟫"), issues #16 and #83. Uses the developer's
  *                   `SC_TIER1_MODEL_DIR` and `SC_TIER2_*` settings and a running Ollama.
+ *   8. plugin, swap-back (#83): Claude reads the email as a placeholder and writes it into a new
+ *                   file → the file on disk holds the real email, and nothing Claude sees does.
  *
  * All data is fake. Isolation: a temp working folder, `--setting-sources local` (no user or
  * project settings, so no other hooks or plugins), `--strict-mcp-config`, no session saved.
  * Port: the agent runs on a free port and the test points a copy of the plugin at it.
  */
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -46,6 +48,11 @@ const SUBAGENT_WRITES =
 	'Use the Agent tool (subagent_type "general-purpose") and tell the subagent: "Use the Read tool to read ' +
 	`notes.txt. Reply with its exact contents, then one last line: Owner: followed by ${EMAIL_USER} and ` +
 	`@${EMAIL_DOMAIN} joined with no space." Then reply with just DONE.`;
+
+const SWAP_BACK =
+	'Use the Read tool to read notes.txt. Then use the Write tool to create reply.txt with exactly one line: ' +
+	'"Reply to: " followed by the contact exactly as notes.txt shows it. Then use the Read tool to read reply.txt, ' +
+	'and reply with just DONE.';
 
 /** Made-up internal figures, for the generalize case (7). It must not say "fake": tier 2 rightly clears made-up values. */
 const REVENUE_NOTES = 'Weekly business review (internal only, do not share)\nQ3 revenue was $4.2M, up 18%\n';
@@ -132,6 +139,7 @@ function claude(
 		'--no-session-persistence',
 		'--allowedTools',
 		'Read',
+		'Write',
 		'Bash(cat notes.txt)'
 	];
 	if (opts.plugin) args.push('--plugin-dir', opts.plugin);
@@ -200,12 +208,12 @@ function summarise(events: StreamEvent[]): Run {
 	};
 }
 
-/** Cleaned by the agent with the default policy: the email pseudonymized, the token removed. */
+/** Cleaned by the agent with the default policy: the email and the token are labelled placeholders. */
 function expectCleaned(text: string) {
 	expect(text).not.toContain(EMAIL);
 	expect(text).not.toContain(SECRET);
-	expect(text).toMatch(/customer_personal_data_\d+/);
-	expect(text).toContain('[Safe Context removed: API keys & secrets]');
+	expect(text).toMatch(/⟪customer_personal_data_\d+⟫/);
+	expect(text).toMatch(/⟪secret_\d+⟫/);
 }
 
 function textOf(content: unknown): string {
@@ -234,11 +242,15 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 			'Safe Context blocked this prompt because it contains: API keys & secrets, Customer personal data.'
 		);
 		// The message offers a safe version, with the values already swapped out.
-		expect(run.promptBlock?.content).toMatch(/my contact is customer_personal_data_\d+ and the deploy token is \[Safe/);
+		expect(run.promptBlock?.content).toMatch(
+			/my contact is ⟪customer_personal_data_\d+⟫ and the deploy token is ⟪secret_\d+⟫/
+		);
 		expect(run.promptBlock?.content).not.toContain(EMAIL);
 		expect(run.promptBlock?.content).not.toContain(SECRET);
-		// The healthy agent adds nothing at session start.
-		expect(run.sessionStart.every((o) => o.trim() === '')).toBe(true);
+		// The healthy agent tells Claude how placeholders work, and shows the user nothing.
+		const start = run.sessionStart.map((o) => JSON.parse(o));
+		expect(start.map((o) => Object.keys(o))).toEqual([['hookSpecificOutput']]);
+		expect(start[0].hookSpecificOutput.additionalContext).toContain('Safe Context is on.');
 	});
 
 	it('with the plugin, what Claude reads is cleaned', async () => {
@@ -248,8 +260,7 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		for (const text of run.toolResults) {
 			expect(text).not.toContain(EMAIL);
 			expect(text).not.toContain(SECRET);
-			expect(text).toMatch(/customer_personal_data_\d+/);
-			expect(text).toContain('[Safe Context removed: API keys & secrets]');
+			expectCleaned(text);
 			expect(text).toContain('Macrohard launch notes'); // the rest is untouched
 		}
 	});
@@ -290,7 +301,7 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		expect(report).toContain('Macrohard launch notes');
 		expectCleaned(report);
 		// The email the subagent wrote itself was replaced by the PostToolUse hook on Agent.
-		expect(report).toMatch(/Owner: customer_personal_data_\d+/);
+		expect(report).toMatch(/Owner: ⟪customer_personal_data_\d+⟫/);
 		expect(
 			run.events.some(
 				(e) =>
@@ -313,7 +324,7 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		expect(run.promptBlock?.content).toContain('blocking because onFailure is "block"');
 	});
 
-	it.skipIf(!withModelTiers)('with tiers 1+2, revenue Claude reads comes back vague but true', async () => {
+	it.skipIf(!withModelTiers)('with tiers 1+2, revenue Claude reads comes back with true hints', async () => {
 		const run = await claude('Use the Read tool to read revenue.txt, then reply with just DONE.', {
 			plugin: pluginUp,
 			port: agent.port
@@ -321,9 +332,24 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 		expect(run.reachedModel).toBe(true);
 		expect(run.toolResults.length).toBeGreaterThanOrEqual(1);
 		for (const text of run.toolResults) {
-			expect(text).toContain('Q3 revenue was over $4M, up high teens');
+			// Tier 1 may call the growth rate revenue or an internal metric; the hint is the same.
+			expect(text).toMatch(/Q3 revenue was ⟪revenue_figure_1: over \$4M⟫, up ⟪[a-z_]+_\d+: high teens⟫/);
 			expect(text).not.toContain('4.2');
 			expect(text).not.toContain('18%');
 		}
+	});
+
+	it('with the plugin, a value Claude only saw as a placeholder is written to disk for real (#83)', async () => {
+		const run = await claude(SWAP_BACK, { plugin: pluginUp, port: agent.port });
+		expect(run.reachedModel).toBe(true);
+		const reply = readFileSync(join(work, 'project/reply.txt'), 'utf8');
+		expect(reply).toContain(EMAIL);
+		// The Write call went out with the real value in place of the placeholder.
+		const pre = run.events.filter((e) => e.subtype === 'hook_response' && e.hook_name === 'PreToolUse:Write');
+		expect(pre.some((e) => String(e.output).includes('updatedInput'))).toBe(true);
+		// Claude only ever saw the placeholder, including when it read the new file back.
+		const seen = [...run.mainResults.map((r) => r.text), ...run.mainText, String(run.result?.result ?? '')];
+		expect(seen.join('\n')).toMatch(/Reply to: ⟪customer_personal_data_\d+⟫/);
+		for (const text of seen) expect(text).not.toContain(EMAIL);
 	});
 });

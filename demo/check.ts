@@ -9,7 +9,7 @@
  *
  * Needs Node 24 (runs TypeScript directly).
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { SCENARIOS, type Persona, type Scenario } from './scenarios.ts';
@@ -80,18 +80,36 @@ function printGuide() {
 			const what =
 				s.kind === 'prompt'
 					? `Type: “${s.text.replace('__FAKE_STRIPE_KEY__', '<the STRIPE_SECRET_KEY from .env>')}”`
-					: s.kind === 'read'
-						? `Claude reads \`${s.file}\``
-						: `Claude runs \`${s.command.replace('__FAKE_STRIPE_KEY__', '<key>')}\``;
-			const expected = { allow: '✅ goes through', block: '⛔ blocked', clean: '🧹 cleaned', unchanged: '✅ unchanged' }[
-				s.expect
-			];
+					: describe(s).replace('__FAKE_STRIPE_KEY__', '<key>');
+			const expected = {
+				allow: '✅ goes through',
+				block: '⛔ blocked',
+				clean: '🧹 cleaned',
+				unchanged: '✅ unchanged',
+				restored: '🔁 real values put back',
+				refused: '⛔ refused'
+			}[s.expect];
 			const why = s.gap ? `${s.why}<br>⚠️ **Known gap:** ${s.gap}` : s.why;
 			out.push(`| ${what.replaceAll('|', '\\|')} | ${expected} | ${why.replaceAll('|', '\\|')} |`);
 		}
 		out.push('');
 	}
 	console.log(out.join('\n'));
+}
+
+function describe(s: Scenario): string {
+	switch (s.kind) {
+		case 'prompt':
+			return s.text;
+		case 'read':
+			return `Claude reads \`${s.file}\``;
+		case 'bash':
+			return `Claude runs \`${s.command}\``;
+		case 'write':
+			return `Claude reads \`${s.file}\`, then writes \`${s.to}\` from it`;
+		case 'open':
+			return `Claude lists \`${s.folder}/\`, then opens \`${s.opens}\` by the name it saw`;
+	}
 }
 
 async function post(path: string, body: unknown): Promise<Record<string, unknown>> {
@@ -127,7 +145,42 @@ async function run(s: Scenario, keys: Record<string, string>): Promise<{ got: st
 		if (unchecked(reason)) return { got: 'check failed', detail: reason };
 		return { got: hso?.permissionDecision === 'deny' ? 'block' : 'allow', detail: reason };
 	}
-	const filePath = join(dir, FOLDERS[s.persona], s.file);
+	const folder = join(dir, FOLDERS[s.persona]);
+	const preTool = async (tool_name: string, tool_input: Record<string, unknown>) => {
+		const out = await post('/v1/tool-input', {
+			...common,
+			hook_event_name: 'PreToolUse',
+			tool_name,
+			tool_input,
+			tool_use_id: toolUseId
+		});
+		return out['hookSpecificOutput'] as
+			| { permissionDecision?: string; permissionDecisionReason?: string; updatedInput?: Record<string, unknown> }
+			| undefined;
+	};
+
+	if (s.kind === 'open') {
+		// What `ls` shows Claude, then a Read of the name Claude saw.
+		const names = readdirSync(join(folder, s.folder)).sort();
+		const out = await post('/v1/tool-output', {
+			...common,
+			hook_event_name: 'PostToolUse',
+			tool_name: 'Bash',
+			tool_input: { command: `ls ${s.folder}` },
+			tool_use_id: toolUseId,
+			tool_response: { stdout: names.join('\n'), stderr: '', interrupted: false, isImage: false, noOutputExpected: false }
+		});
+		const updated = out['hookSpecificOutput'] as { updatedToolOutput?: { stdout?: string } } | undefined;
+		const shown = updated?.updatedToolOutput?.stdout;
+		if (shown === undefined) return { got: 'listing unchanged' };
+		const seen = shown.split('\n')[names.indexOf(s.opens)] ?? '';
+		const hso = await preTool('Read', { file_path: join(folder, s.folder, seen) });
+		const opened = hso?.updatedInput?.['file_path'];
+		const ok = opened === join(folder, s.folder, s.opens);
+		return { got: ok ? 'restored' : `opened ${String(opened ?? seen)}`, detail: `Claude saw ${s.folder}/${seen}` };
+	}
+
+	const filePath = join(folder, s.file);
 	const content = readFileSync(filePath, 'utf8');
 	const out = await post('/v1/tool-output', {
 		...common,
@@ -142,6 +195,18 @@ async function run(s: Scenario, keys: Record<string, string>): Promise<{ got: st
 	});
 	const hso = out['hookSpecificOutput'] as { updatedToolOutput?: { file?: { content?: string } } } | undefined;
 	const cleaned = hso?.updatedToolOutput?.file?.content;
+
+	if (s.kind === 'write') {
+		// Claude writes back every placeholder it saw (here: the whole cleaned file).
+		if (cleaned === undefined || unchecked(cleaned)) return { got: 'nothing hidden to write back', detail: cleaned };
+		const pre = await preTool('Write', { file_path: join(folder, s.to), content: cleaned });
+		if (pre?.permissionDecision === 'deny') return { got: 'refused', detail: pre.permissionDecisionReason };
+		const written = pre?.updatedInput?.['content'];
+		if (typeof written !== 'string') return { got: 'placeholders written as they are' };
+		const missing = (s.restores ?? []).filter((v) => !written.includes(v));
+		return { got: missing.length ? `restored, but missing ${missing.join(', ')}` : 'restored' };
+	}
+
 	if (cleaned === undefined) return { got: 'unchanged' };
 	if (unchecked(cleaned)) return { got: 'check failed', detail: cleaned };
 	const leaked = (s.hides ?? []).filter((h) => cleaned.includes(h));
@@ -152,7 +217,7 @@ async function runChecks(): Promise<number> {
 	const keys = fakeKeys();
 	let failed = 0;
 	for (const s of SCENARIOS) {
-		const label = s.kind === 'prompt' ? s.text : s.kind === 'read' ? `Read ${s.file}` : `Bash ${s.command}`;
+		const label = describe(s);
 		const started = performance.now();
 		let result: { got: string; detail?: string };
 		try {

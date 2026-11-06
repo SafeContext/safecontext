@@ -55,6 +55,10 @@ model Organization {
   slug                   String    @unique
   /// Draft setting. Copied into each PolicyVersion when published.
   failMode               FailMode  @default(block)
+  /// Draft setting: tools whose input gets real values put back in place of placeholders
+  /// (`Policy.swapBack.tools`, issue #83). Defaults to `LOCAL_SWAP_BACK_TOOLS`; keep them in step.
+  /// Copied into each PolicyVersion when published.
+  swapBackTools          String[]  @default(["Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep"])
   /// SHA-256 (hex) of the enrollment key a device presents to `POST /api/devices` to join this
   /// organisation. The key itself is never stored. Null = devices can't register.
   enrollmentKeyHash      String?   @unique @db.Char(64)

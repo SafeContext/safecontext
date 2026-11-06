@@ -95,3 +95,16 @@ export const PostToolUseOutput = z.strictObject({
 		.optional()
 });
 export type PostToolUseOutput = z.infer<typeof PostToolUseOutput>;
+
+/**
+ * SessionStart: `additionalContext` reaches Claude as a system reminder at the start of a session
+ * (and on resume and compaction). The plugin's `command` hook prints what `GET /v1/session-start`
+ * returns, so what Claude is told follows the policy (issue #83).
+ */
+export const SessionStartOutput = z.strictObject({
+	hookSpecificOutput: z.strictObject({
+		hookEventName: z.literal('SessionStart'),
+		additionalContext: z.string().max(10_000)
+	})
+});
+export type SessionStartOutput = z.infer<typeof SessionStartOutput>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DATA_TYPES, defaultPolicy } from './defaults.ts';
-import { DataType, isNewerPolicy, Policy } from './policy.ts';
+import { DataType, isNewerPolicy, LOCAL_SWAP_BACK_TOOLS, Policy, swapsBackInto } from './policy.ts';
 
 const base = () => ({
 	version: 1,
@@ -66,5 +66,39 @@ describe('defaults', () => {
 	it('has every tier represented and valid data types', () => {
 		const tiers = new Set(DEFAULT_DATA_TYPES.map((d) => DataType.parse(d).tier));
 		expect([...tiers].sort()).toEqual(['green', 'red', 'yellow']);
+	});
+});
+
+describe('swapBack (issue #83)', () => {
+	const minimal = { version: 1, updatedAt: '2026-11-06T00:00:00.000Z', dataTypes: defaultPolicy().dataTypes };
+
+	it('defaults to the local file tools', () => {
+		expect(Policy.parse(minimal).swapBack).toEqual({ tools: [...LOCAL_SWAP_BACK_TOOLS] });
+		expect(Policy.parse({ ...minimal, swapBack: {} }).swapBack.tools).toEqual([...LOCAL_SWAP_BACK_TOOLS]);
+	});
+
+	it('takes tool names and prefixes ending in *', () => {
+		const tools = ['Read', 'mcp__slack__*', 'mcp__github__create_issue', 'Bash'];
+		expect(Policy.parse({ ...minimal, swapBack: { tools } }).swapBack.tools).toEqual(tools);
+		expect(Policy.parse({ ...minimal, swapBack: { tools: [] } }).swapBack.tools).toEqual([]);
+	});
+
+	it.each(['Agent', 'Task', 'WebFetch', 'WebSearch', 'Web*', 'A*', '*'])(
+		'rejects %s: its input would go to an Anthropic model',
+		(pattern) => {
+			const r = Policy.safeParse({ ...minimal, swapBack: { tools: ['Read', pattern] } });
+			expect(r.success).toBe(false);
+		}
+	);
+
+	it.each(['mcp__x__*a', 'two words', '', 'a'.repeat(129)])('rejects the malformed pattern %j', (pattern) => {
+		expect(Policy.safeParse({ ...minimal, swapBack: { tools: [pattern] } }).success).toBe(false);
+	});
+
+	it('matches exact names and prefixes, and never the tools that reach a model', () => {
+		expect(swapsBackInto(['mcp__slack__*'], 'mcp__slack__send_message')).toBe(true);
+		expect(swapsBackInto(['mcp__slack__*'], 'mcp__github__x')).toBe(false);
+		expect(swapsBackInto(['Read'], 'ReadMany')).toBe(false);
+		expect(swapsBackInto(['Agent'], 'Agent')).toBe(false);
 	});
 });

@@ -2,6 +2,8 @@
  * The local agent's HTTP API. Claude Code calls it through `http` hooks
  * (`plugin/hooks/hooks.json` must use these exact paths; a test checks this).
  * Each hook endpoint takes the hook's input JSON and returns the hook's output JSON.
+ * `GET /v1/session-start` is read by the plugin's SessionStart script (a `command` hook, which
+ * can't be `http`) and returns that hook's output JSON.
  */
 import * as z from 'zod';
 import {
@@ -9,6 +11,7 @@ import {
 	PostToolUseOutput,
 	PreToolUseInput,
 	PreToolUseOutput,
+	SessionStartOutput,
 	UserPromptSubmitInput,
 	UserPromptSubmitOutput
 } from './hooks.ts';
@@ -29,5 +32,7 @@ export const AGENT_API = {
 	health: { method: 'GET', path: '/health', response: HealthResponse },
 	prompt: { method: 'POST', path: '/v1/prompt', request: UserPromptSubmitInput, response: UserPromptSubmitOutput },
 	toolInput: { method: 'POST', path: '/v1/tool-input', request: PreToolUseInput, response: PreToolUseOutput },
-	toolOutput: { method: 'POST', path: '/v1/tool-output', request: PostToolUseInput, response: PostToolUseOutput }
+	toolOutput: { method: 'POST', path: '/v1/tool-output', request: PostToolUseInput, response: PostToolUseOutput },
+	/** For the plugin's SessionStart script: what to tell Claude about placeholders, from the policy (#83). */
+	sessionStart: { method: 'GET', path: '/v1/session-start', response: SessionStartOutput }
 } as const;

@@ -102,6 +102,40 @@
         "block",
         "allow"
       ]
+    },
+    "swapBack": {
+      "default": {
+        "tools": [
+          "Read",
+          "Write",
+          "Edit",
+          "MultiEdit",
+          "NotebookEdit",
+          "Glob",
+          "Grep"
+        ]
+      },
+      "type": "object",
+      "properties": {
+        "tools": {
+          "default": [
+            "Read",
+            "Write",
+            "Edit",
+            "MultiEdit",
+            "NotebookEdit",
+            "Glob",
+            "Grep"
+          ],
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}\\*?$"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [

@@ -7,7 +7,7 @@
  *    prompt, when tier 2 is on and there is time left.
  * 3. Every rewrite, from the rule or the model, must pass `isSafeRewrite` (no leak of the value
  *    or of another flagged value in the text, short, plain). Anything that fails, or gets no
- *    answer, falls back to the caller's stub (`[Revenue figures]`).
+ *    answer, gets no hint: the caller shows the bare placeholder (`⟪revenue_figure_1⟫`).
  */
 import type { Span } from '@safecontext/detectors';
 import type { Policy } from '@safecontext/policy';
@@ -102,7 +102,7 @@ export interface GeneralizeModel {
 /**
  * Rewrites `targets` (spans of `text` whose action is `generalize`). `all` is every flagged span
  * in the text, targets included (the leak check keeps the other values out of each rewrite).
- * Returns a rewrite per target it could make safely; the caller stubs the rest.
+ * Returns a rewrite per target it could make safely; the rest get no hint.
  */
 export type Generalize = (
 	text: string,

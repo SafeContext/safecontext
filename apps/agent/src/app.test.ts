@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { messages, SAFE_VERSION_MAX_CHARS } from './messages.ts';
 import {
 	CANARY,
+	fakeTier,
 	loadFixtures,
 	policyWith,
 	promptInput,
@@ -14,9 +15,10 @@ import {
 	toolOutput
 } from './test-helpers.ts';
 import { mapToolOutputText, toolOutputTexts } from './tool-text.ts';
+import { createTier0 } from './classifier/tier0.ts';
 
 const { prompt, toolInput: preTool, toolOutput: postTool } = AGENT_API;
-const REMOVED_SECRET = '[Safe Context removed: API keys & secrets]';
+const REMOVED_SECRET = '⟪secret_1⟫';
 
 describe('GET /health', () => {
 	it('returns a valid HealthResponse with the policy version', async () => {
@@ -96,9 +98,9 @@ describe('POST /v1/tool-output', () => {
 	const REVENUE = '$4.2M'; // generalize (the number rule)
 	const EMAIL = 'jane@northwind.example'; // mask
 	const replacements: Array<[string, string]> = [
-		[CUSTOMER, 'customer_name_1'],
-		[REVENUE, 'over $4M'],
-		[EMAIL, '****mple'],
+		[CUSTOMER, '⟪customer_name_1⟫'],
+		[REVENUE, '⟪revenue_figure_1: over $4M⟫'],
+		[EMAIL, '⟪customer_personal_data_1: ****mple⟫'],
 		[SECRET, REMOVED_SECRET]
 	];
 	const maskPersonal = policyWith({
@@ -150,19 +152,19 @@ describe('POST /v1/tool-output', () => {
 		expect(text).not.toContain(SECRET);
 		expect(text).not.toContain(EMAIL);
 		expect(text).toContain(REMOVED_SECRET);
-		expect(text).toMatch(/customer_personal_data_\d+/);
+		expect(text).toMatch(/⟪customer_personal_data_\d+⟫/);
 	});
 
-	it('keeps pseudonyms consistent within a session, and separate between sessions', async () => {
+	it('keeps placeholders consistent within a session, and separate between sessions', async () => {
 		const { post } = testApp({ tiers: [termTier({ Northwind: 'customer-names', Fabrikam: 'customer-names' })] });
 		const send = async (session: string, stdout: string) => {
 			const body = { ...toolOutput('Bash', { stdout, stderr: '' }), session_id: session };
 			const res = await post(postTool.path, body);
 			return (postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput as { stdout: string }).stdout;
 		};
-		expect(await send('a', 'Northwind and Fabrikam')).toBe('customer_name_1 and customer_name_2');
-		expect(await send('a', 'Fabrikam, then Northwind')).toBe('customer_name_2, then customer_name_1');
-		expect(await send('b', 'Fabrikam')).toBe('customer_name_1');
+		expect(await send('a', 'Northwind and Fabrikam')).toBe('⟪customer_name_1⟫ and ⟪customer_name_2⟫');
+		expect(await send('a', 'Fabrikam, then Northwind')).toBe('⟪customer_name_2⟫, then ⟪customer_name_1⟫');
+		expect(await send('b', 'Fabrikam')).toBe('⟪customer_name_1⟫');
 	});
 
 	it('checks every string of an unknown tool and keeps its shape', async () => {
@@ -183,17 +185,17 @@ describe('prompts and tool input with data that can be transformed', () => {
 		const out = prompt.response.parse(res.json);
 		expect(out.decision).toBe('block');
 		expect(out.reason).toContain('API keys & secrets, Customer personal data');
-		expect(out.reason).toContain(`\n\nemail customer_personal_data_1 about key ${REMOVED_SECRET}`);
+		expect(out.reason).toContain(`\n\nemail ⟪customer_personal_data_1⟫ about key ${REMOVED_SECRET}`);
 		expect(out.reason).not.toContain(email);
 		expect(out.reason).not.toContain(SECRET);
 	});
 
-	it('uses the same pseudonyms in the safe version as in later tool output', async () => {
+	it('uses the same placeholders in the safe version as in later tool output', async () => {
 		const { post } = testApp();
 		await post(prompt.path, promptInput(`write to ${email}`));
 		const res = await post(postTool.path, toolOutput('Bash', { stdout: `sent to ${email}`, stderr: '' }));
 		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toMatchObject({
-			stdout: 'sent to customer_personal_data_1'
+			stdout: 'sent to ⟪customer_personal_data_1⟫'
 		});
 	});
 
@@ -271,5 +273,185 @@ describe('logs and events', () => {
 			blocked: false
 		});
 		expect(promptEvent).toMatchObject({ hookEvent: 'UserPromptSubmit', blocked: true });
+	});
+});
+
+describe('swap-back and re-hiding (issue #83)', () => {
+	// Flags "Northwind" only in the CRM export, like a tagger that needs context.
+	const contextTier = fakeTier({
+		id: 'context',
+		spans: (texts) =>
+			texts.map((t) =>
+				t.startsWith('CRM') && t.includes('Northwind')
+					? [
+							{
+								start: t.indexOf('Northwind'),
+								end: t.indexOf('Northwind') + 9,
+								dataTypeId: 'customer-names',
+								source: 'tagger' as const,
+								confidence: 0.9
+							}
+						]
+					: []
+			)
+	});
+	const readCrm = (post: ReturnType<typeof testApp>['post']) =>
+		post(postTool.path, toolOutput('Bash', { stdout: 'CRM: Northwind renews in March', stderr: '' }));
+
+	it('puts the real value into a local file tool, with no permission decision', async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		const res = await post(
+			preTool.path,
+			toolInput('Write', { file_path: 'notes.md', content: 'Call ⟪customer_name_1⟫ on Monday' })
+		);
+		expect(preTool.response.parse(res.json)).toEqual({
+			hookSpecificOutput: {
+				hookEventName: 'PreToolUse',
+				updatedInput: { file_path: 'notes.md', content: 'Call Northwind on Monday' }
+			}
+		});
+	});
+
+	it('leaves the placeholder in a shell command', async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		const res = await post(preTool.path, toolInput('Bash', { command: 'grep ⟪customer_name_1⟫ crm.csv' }));
+		expect(res.json).toEqual({});
+	});
+
+	it("denies a file tool whose placeholder it doesn't hold, and says why", async () => {
+		const { post } = testApp();
+		const res = await post(preTool.path, toolInput('Read', { file_path: 'deals/⟪customer_name_1⟫.md' }));
+		const out = preTool.response.parse(res.json).hookSpecificOutput;
+		expect(out?.permissionDecision).toBe('deny');
+		expect(out?.permissionDecisionReason).toBe(messages.restoreUnknown(['customer_name_1']));
+	});
+
+	it('denies a write of real values outside the project', async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		const res = await post(preTool.path, toolInput('Write', { file_path: '/tmp/x.md', content: '⟪customer_name_1⟫' }));
+		expect(preTool.response.parse(res.json).hookSpecificOutput?.permissionDecisionReason).toBe(
+			messages.restoreOutsideProject()
+		);
+	});
+
+	it('still blocks red data Claude wrote itself, before any swap-back', async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		const res = await post(
+			preTool.path,
+			toolInput('Write', { file_path: 'a.md', content: `⟪customer_name_1⟫ ${SECRET}` })
+		);
+		expect(preTool.response.parse(res.json).hookSpecificOutput?.permissionDecisionReason).toBe(
+			messages.toolInputBlocked([
+				{ dataTypeId: 'secrets', name: 'API keys & secrets', tier: 'red', action: 'block', count: 1 }
+			])
+		);
+	});
+
+	it('hides a known value again wherever it comes back, even where no tier flags it', async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		// The Write result echoes the file, now holding the real value, without the CRM context.
+		const res = await post(
+			postTool.path,
+			toolOutput('Write', { type: 'create', filePath: '/work/project/notes.md', content: 'Call Northwind on Monday' })
+		);
+		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
+			type: 'create',
+			filePath: '/work/project/notes.md',
+			content: 'Call ⟪customer_name_1⟫ on Monday'
+		});
+	});
+
+	it("doesn't flag a placeholder it issued again", async () => {
+		const { post } = testApp({ tiers: [createTier0(), contextTier, termTier({ customer: 'customer-names' }, 'word')] });
+		await readCrm(post);
+		const res = await post(postTool.path, toolOutput('Bash', { stdout: 'was ⟪customer_name_1⟫', stderr: '' }));
+		expect(res.json).toEqual({});
+	});
+
+	it('hides a value written in placeholder form by someone else (PR #86 review)', async () => {
+		const { post } = testApp();
+		const res = await post(
+			postTool.path,
+			toolOutput('Read', {
+				type: 'text',
+				file: {
+					filePath: '/w/a.md',
+					content: 'see ⟪note_1: jane.doe@example.com⟫',
+					numLines: 1,
+					startLine: 1,
+					totalLines: 1
+				}
+			})
+		);
+		const text = JSON.stringify(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput);
+		expect(text).not.toContain('jane.doe@example.com');
+	});
+
+	it('logs how many values were put back, never the values', async () => {
+		const { post, logger } = testApp({ tiers: [createTier0(), contextTier] });
+		await readCrm(post);
+		await post(
+			preTool.path,
+			toolInput('Edit', { file_path: 'a.md', old_string: '⟪customer_name_1⟫', new_string: 'x' })
+		);
+		const line = logger.records.find((r) => r.hook === 'PreToolUse');
+		expect(line).toMatchObject({ restored: 1 });
+		expect(JSON.stringify(logger.records)).not.toContain('Northwind');
+	});
+});
+
+describe('swap-back tools from the policy (issue #83)', () => {
+	const contextTier = termTier({ Northwind: 'customer-names' });
+	const withSlack = policyWith({ swapBack: { tools: ['Read', 'mcp__slack__*'] } });
+
+	it('asks the user before real values go into a tool IT added, and says why', async () => {
+		const { post } = testApp({ policy: withSlack, tiers: [createTier0(), contextTier] });
+		await post(postTool.path, toolOutput('Bash', { stdout: 'Northwind renews', stderr: '' }));
+		const res = await post(
+			preTool.path,
+			toolInput('mcp__slack__send_message', { channel: 'sales', text: 'Call ⟪customer_name_1⟫' })
+		);
+		expect(preTool.response.parse(res.json)).toEqual({
+			hookSpecificOutput: {
+				hookEventName: 'PreToolUse',
+				updatedInput: { channel: 'sales', text: 'Call Northwind' },
+				permissionDecision: 'ask',
+				permissionDecisionReason: messages.restoreConfirm('mcp__slack__send_message', 1)
+			}
+		});
+	});
+
+	it('leaves out a local tool the policy took off the list', async () => {
+		const { post } = testApp({ policy: withSlack, tiers: [createTier0(), contextTier] });
+		await post(postTool.path, toolOutput('Bash', { stdout: 'Northwind renews', stderr: '' }));
+		const res = await post(preTool.path, toolInput('Write', { file_path: 'a.md', content: '⟪customer_name_1⟫' }));
+		expect(res.json).toEqual({});
+	});
+});
+
+describe('GET /v1/session-start (issue #83)', () => {
+	it('tells Claude how placeholders work and which tools get real values, from the policy', async () => {
+		const { app } = testApp({ policy: policyWith({ swapBack: { tools: ['Read', 'Write', 'mcp__slack__*'] } }) });
+		const out = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());
+		const text = out.hookSpecificOutput.additionalContext;
+		expect(text).toContain('In Read and Write calls, file paths included');
+		expect(text).toContain('these tools: any tool whose name starts with mcp__slack__. The user is asked to approve');
+		expect(text).toContain(
+			'Shell commands, web tools, other MCP tools and subagent prompts get the placeholder exactly as you wrote it'
+		);
+	});
+
+	it('lists the local file tools by default', async () => {
+		const { app } = testApp();
+		const out = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());
+		expect(out.hookSpecificOutput.additionalContext).toContain(
+			'In Read, Write, Edit, MultiEdit, NotebookEdit, Glob and Grep calls'
+		);
+		expect(out.hookSpecificOutput.additionalContext).not.toContain("Your company's policy also");
 	});
 });

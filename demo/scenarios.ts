@@ -33,6 +33,13 @@ export type Scenario = Base &
 		  }
 		/** Claude runs a shell command. `block` stops the tool call before it runs. */
 		| { kind: 'bash'; command: string; expect: 'allow' | 'block' }
+		/**
+		 * Claude reads `file`, then writes `to` using the placeholders it saw (#83). `restored`: the
+		 * written file gets the real values in `restores`; `refused`: the write is denied.
+		 */
+		| { kind: 'write'; file: string; to: string; restores?: string[]; expect: 'restored' | 'refused' }
+		/** Claude lists `folder` (`ls`), then opens `opens` by the name it saw there (#83). */
+		| { kind: 'open'; folder: string; opens: string; expect: 'restored' }
 	);
 
 export const SCENARIOS: Scenario[] = [
@@ -50,8 +57,8 @@ export const SCENARIOS: Scenario[] = [
 		file: 'logs/checkout-errors.log',
 		expect: 'clean',
 		hides: ['jane.doe@northwind.com', '4242 4242 4242 4242', '+44 20 7946 0958'],
-		why: 'Ask Claude to "read the checkout error log and work out why payments fail". The log has customer emails, card numbers and a phone number; Claude gets placeholders instead.',
-		gap: 'Tier 1 reads "404 4ms" as a metric and rewrites it as "a few hundred ms", which is wrong, and it tags one account id as personal data.'
+		why: 'Ask Claude to "read the checkout error log and work out why payments fail". The log has customer emails, card numbers and a phone number; Claude gets labelled placeholders such as ⟪customer_personal_data_1⟫ instead.',
+		gap: 'Tier 1 tags "404 4ms" as a metric, so Claude sees a placeholder with the hint "a few hundred ms", which is wrong (it is at least marked as hidden now). It also tags one account id as personal data.'
 	},
 	{
 		persona: 'dev',
@@ -59,7 +66,7 @@ export const SCENARIOS: Scenario[] = [
 		file: '.env',
 		expect: 'clean',
 		hides: ['sk_live_', 'AKIA', 'ghp_', 'hooks.slack.com/services/'],
-		why: 'Ask "why can\'t the app connect to Stripe? check .env". The keys are removed before Claude sees the file.'
+		why: 'Ask "why can\'t the app connect to Stripe? check .env". The keys are hidden before Claude sees the file.'
 	},
 	{
 		persona: 'dev',
@@ -67,7 +74,24 @@ export const SCENARIOS: Scenario[] = [
 		file: 'scripts/notify-deploy.sh',
 		expect: 'clean',
 		hides: ['hooks.slack.com/services/'],
-		why: 'Ask Claude to "make notify-deploy.sh read the webhook from the environment". The hard-coded Slack webhook is removed from what Claude reads.'
+		why: 'Ask Claude to "make notify-deploy.sh read the webhook from the environment". The hard-coded Slack webhook is hidden from what Claude reads.'
+	},
+	{
+		persona: 'dev',
+		kind: 'write',
+		file: 'scripts/notify-deploy.sh',
+		to: '.env.local',
+		restores: ['hooks.slack.com/services/'],
+		expect: 'restored',
+		why: 'Then ask "move the webhook into .env.local". Claude writes SLACK_WEBHOOK_URL=⟪secret_1⟫, and the file gets the real webhook, which Claude never sees.'
+	},
+	{
+		persona: 'dev',
+		kind: 'write',
+		file: 'scripts/notify-deploy.sh',
+		to: '.claude/notes.md',
+		expect: 'refused',
+		why: 'Real values never go into hidden folders such as .claude or .git: in auto mode Claude Code would send that write to Anthropic for a safety check. Claude is told why and can write elsewhere.'
 	},
 	{
 		persona: 'dev',
@@ -149,9 +173,10 @@ export const SCENARIOS: Scenario[] = [
 		persona: 'pm',
 		kind: 'read',
 		file: 'launches/lumen-launch-plan.md',
-		expect: 'unchanged',
-		why: 'Ask Claude to "tighten up the Lumen launch plan".',
-		gap: 'The whole unannounced launch plan goes through: tier 1 doesn\'t pick out "Lumen" on its own, and it isn\'t on the word list. IT adding "Lumen" to the list fixes it.'
+		expect: 'clean',
+		hides: ['Lumen'],
+		why: 'Ask Claude to "tighten up the Lumen launch plan". "Lumen" is hidden here because Safe Context flagged it in the teaser prompt above, earlier in the same session: a value hidden once stays hidden for the rest of the session (#83).',
+		gap: 'In a fresh session the whole unannounced plan goes through: tier 1 doesn\'t pick out "Lumen" on its own, and it isn\'t on the word list. IT adding "Lumen" to the list fixes it.'
 	},
 	{
 		persona: 'pm',
@@ -159,8 +184,8 @@ export const SCENARIOS: Scenario[] = [
 		file: 'metrics/weekly-update-2026-w44.md',
 		expect: 'clean',
 		hides: ['$4.2M', '48,200'],
-		why: 'Ask "turn this week\'s update into three bullet points". Revenue and metrics are "make it vague": Claude sees "over $4M" rather than the exact figure.',
-		gap: 'Some vague versions lose the point: "churn rose to 2.9% from 2.4%" becomes "rose to single digits, from single digits".'
+		why: 'Ask "turn this week\'s update into three bullet points". Revenue and metrics are "make it vague": Claude sees ⟪revenue_figure_1: over $4M⟫ rather than the exact figure, and a file it writes gets the exact figures back.',
+		gap: 'Some hints say little: in "churn rose to 2.9% from 2.4%" both values get "single digits". Claude can still tell they are two different values.'
 	},
 	{
 		persona: 'pm',
@@ -210,6 +235,23 @@ export const SCENARIOS: Scenario[] = [
 		expect: 'clean',
 		hides: ['Northwind', 'procurement@northwind.com'],
 		why: 'Ask "help me plan Thursday\'s call". The customer, their procurement email and the deal size are hidden or made vague.'
+	},
+	{
+		persona: 'sales',
+		kind: 'open',
+		folder: 'deals',
+		opens: 'northwind-renewal.md',
+		expect: 'restored',
+		why: 'Ask "what\'s in my deals folder?". Claude sees ⟪customer_name_1⟫-renewal.md, and opening that name opens the real file (#83). Before, Claude saw customer_name_1-renewal.md and couldn\'t open it.'
+	},
+	{
+		persona: 'sales',
+		kind: 'write',
+		file: 'emails/acme-followup-draft.md',
+		to: 'emails/acme-followup-v2.md',
+		restores: ['tom.becker@acmecorp.com', '+44 20 7946 0777'],
+		expect: 'restored',
+		why: 'Ask "make this email shorter and save it as acme-followup-v2.md". Claude only sees placeholders for Tom\'s address and the phone number, but the saved email has the real ones.'
 	},
 	{
 		persona: 'sales',

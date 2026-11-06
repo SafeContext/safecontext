@@ -41,9 +41,9 @@ What `plugin/hooks/hooks.json` registers today:
 | Hook | Matcher | Type | `onFailure` | Our use | What it can do |
 | --- | --- | --- | --- | --- | --- |
 | `UserPromptSubmit` | none | `http` → `/v1/prompt` | `block` | Check what the user types | **Block** (`decision: "block"` + `reason` shown to the user; `hookSpecificOutput.suppressOriginalPrompt: true` so the prompt isn't echoed back). **Cannot rewrite the prompt**, so a prompt is either blocked or let through unchanged (see #50). Default timeout 30 s; on timeout the prompt proceeds unless `onFailure: "block"`. |
-| `PreToolUse` | `*` (every tool, #41) | `http` → `/v1/tool-input` | `block` | Stop data leaving through any tool's input; also the fail-closed gate for tools that read (see §2a) | `permissionDecision` allow/deny/ask/defer; `updatedInput` replaces the **whole** input object. The agent only ever **denies** or passes with no decision. It never answers `allow`, so the user's normal permission prompts still appear, and it doesn't use `updatedInput`. |
+| `PreToolUse` | `*` (every tool, #41) | `http` → `/v1/tool-input` | `block` | Stop data leaving through any tool's input; also the fail-closed gate for tools that read (see §2a); swap placeholders back into local file tools (#83, §4) | `permissionDecision` allow/deny/ask/defer; `updatedInput` replaces the **whole** input object. The agent only ever **denies**, passes with no decision, or returns `updatedInput` with **no decision**. That still goes through the user's normal permission flow, checked against the new input. It never answers `allow`, so the user's normal permission prompts still appear. |
 | `PostToolUse` | `*` (every tool, #41) | `http` → `/v1/tool-output` | none (can't help, §2a) | Clean what Claude reads from any tool, subagent reports included | `updatedToolOutput` replaces what Claude sees. **Must match the tool's output shape**; for built-in tools a mismatch is **silently ignored** (raw data gets through). Known shapes: `docs/hook-shapes.md` and `apps/agent/src/tool-text.ts` (Read, Bash, Grep, WebFetch, WebSearch, MCP, Agent). Other tools: every string in the result is checked. |
-| `SessionStart` | none | `command` | none | Health check: warn if the agent isn't running (#17) | Only `command` and `mcp_tool` hooks (no `http`), so the plugin runs `plugin/scripts/agent-status.sh` (sh + curl). Can't block. `systemMessage` is shown to the user; plain stdout would go to Claude, so it prints nothing when healthy. |
+| `SessionStart` | none | `command` | none | Health check: warn if the agent isn't running (#17). When it is, tell Claude how placeholders work (#83) | Only `command` and `mcp_tool` hooks (no `http`), so the plugin runs `plugin/scripts/agent-status.sh` (sh + curl). Can't block. `systemMessage` is shown to the user. `hookSpecificOutput.additionalContext` goes to Claude as a system reminder (also on resume and compaction). The script prints that when the agent is healthy, and the warning when it isn't. |
 
 `http` hooks: Claude Code POSTs the hook's JSON input to the agent and reads the same JSON output
 schema from a 2xx response body. Non-2xx, connection failure or a non-JSON body = non-blocking
@@ -61,6 +61,22 @@ Facts found while building (PRs #59, #62, issues #44, #61):
 - **Background subagent reports arrive through `UserPromptSubmit`**, as a completion notice, so
   they can be blocked but not cleaned. Foreground reports are the `Agent` tool result and are
   cleaned by `PostToolUse`. Open: #61.
+- **What `updatedInput` changes, and what it doesn't** (spike for #83 on 2.1.302: a hook swapped a
+  placeholder for a canary, and a logging proxy recorded every request Claude Code sent to Anthropic):
+  - The tool runs with the new input. The conversation keeps **Claude's own** call, so the canary
+    never reached Anthropic, not even on the next turn; asked, Claude quoted the placeholder.
+  - `PostToolUse` gets the new input and a `tool_response` holding the canary, so the output must
+    be cleaned again (§4, "re-hiding").
+  - **Auto mode's safety check sees the new input.** When the swapped call itself goes to the check
+    (a Bash command, a write outside the working folder or to a protected path such as `.claude/`),
+    the canary was in the check's request to Anthropic. Calls the check doesn't review (reads, and
+    writes inside the working folder) and later checks (which see Claude's own earlier calls) never
+    carried it. With server-side review, the docs say a changed call is denied instead
+    (`a hook changed this call's input after auto mode reviewed it`).
+  - An `ask` decision keeps a Bash call out of the check (it goes to the user's prompt), but not a
+    protected-path write.
+  - Claude Code's own transcript on disk (`~/.claude/projects/…`) stores the new input. It stays on
+    the Mac, like the rest of that transcript.
 
 `onFailure` needs Claude Code **v2.1.295+**. As of Oct 2026 that's only on the `latest` release channel
 (Homebrew cask `claude-code@latest`); `stable` is 2.1.292. CI validates the plugin with 2.1.302.
@@ -118,8 +134,9 @@ Source of truth: `packages/policy` (v1). JSON Schema copies for Python: `package
 Every request and response on both APIs is checked against these schemas.
 
 - **Policy** (`policy.ts`): `version`, data types (each with id, name, description, examples, tier
-  green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists and
-  `failMode` (default `block`). Only green types may `allow`. `defaultPolicy()` has version 0
+  green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists,
+  `failMode` (default `block`) and `swapBack.tools` (the tools that get real values back, default
+  the local file tools; §4, #83). Only green types may `allow`. `defaultPolicy()` has version 0
   ("never published") and the 10 default data types in `defaults.ts`. The dashboard writes it; the
   agent pulls it, keeps the highest version it has seen, caches it on disk and works offline.
 - **Agent API** (`api.ts`; binds `127.0.0.1` only; port from `SC_AGENT_PORT`, default 4747, but
@@ -128,6 +145,8 @@ Every request and response on both APIs is checked against these schemas.
   - `POST /v1/prompt`: body = `UserPromptSubmit` input, response = its hook output
   - `POST /v1/tool-input`: body = `PreToolUse` input, response = its hook output
   - `POST /v1/tool-output`: body = `PostToolUse` input, response = its hook output
+  - `GET /v1/session-start`: the `SessionStart` hook output for the plugin's script: what to tell
+    Claude about placeholders under the current policy (#83)
 - **Dashboard API for the agent** (`dashboard-api.ts`, built in #21, used by the agent's sync in #22).
   JSON bodies; errors are `ApiError` with a code (`unauthorized`, `device_mismatch`, `no_policy`,
   `bad_request`, `invalid_body`, `rate_limited`) and never echo request values back.
@@ -220,25 +239,87 @@ data type (tier 0). When spans of two data types overlap, the stricter type in t
 - **Latency** (M3 Max, tiers 0+1+2, per check that needs tier 2): p50 ~0.5 s, p95 ~0.85 s with
   the GPU free; 3–5 s when another app was using the GPU. Not yet measured on a base Mac.
 
-**Transformations** (built in #10, `apps/agent/src/transform/`):
-- **generalize** (vague but true, #16). A span that is one number gets a deterministic rewrite
+**Transformations** (built in #10, `apps/agent/src/transform/`; placeholders and swap-back decided and
+built in #83):
+
+Every hidden value becomes a **labelled placeholder**: `⟪customer_name_1⟫`, or `⟪revenue_figure_1: over
+$4M⟫` when a true hint can be shown. A placeholder says that Safe Context hid something, what kind of
+data it was (from the data type id) and which one: the same value gets the same placeholder for the
+whole Claude Code session. The actions differ only in the hint:
+- **block** and **pseudonymize**: no hint, `⟪secret_1⟫`, `⟪customer_name_1⟫`. (They still differ for
+  prompts and tool inputs, below.)
+- **mask**: the safe fragment, `⟪customer_personal_data_1: ****4242⟫`. The last 4 characters show only
+  if the value is at least 12 long; otherwise there is no hint.
+- **generalize** (vague but true, #16): a span that is one number gets a deterministic hint
   (`transform/numbers.ts`, a port of `ml/.../tier2/numbers.py`): `$4.2M` → `over $4M`, `18%` →
   `high teens`. It is true by construction and scored 100% clean in #14. Other values (names,
-  codenames, dates) go to tier 2's generalize prompt ("an upcoming project"). Every rewrite must
-  pass a leak check: it can't repeat the value, a distinctive word of it, or another flagged
-  value in the text, and it must be short and plain. Otherwise, or without tier 2, the value
-  becomes its data type's name in brackets, e.g. `[Revenue figures]`.
-- **pseudonymize**: a stand-in named after the data type id, e.g. `customer_name_1` or
-  `customer_personal_data_1`, consistent within a Claude Code session so Claude can still tell
-  items apart. Stand-ins are not mapped back in tool input (#50).
-- **mask**: `****4242`. The last 4 characters show only if the value is at least 12 long.
-- **block**: `[Safe Context removed: <data type name>]`.
+  codenames, dates) go to tier 2's generalize prompt ("an upcoming project"). Every hint must pass a
+  leak check: it can't repeat the value, a distinctive word of it, or another flagged value in the
+  text, and it must be short and plain. Otherwise, or without tier 2, there is no hint.
 
-Tool output is always cleaned span by span. Prompts and tool inputs can't be edited (§2), so they
-are blocked or passed whole. **Temporary rule (#50):** only red data, or a data type whose action
-is `block`, stops them; yellow data goes through unchanged. The rule is one function,
+Why (#83): unmarked stand-ins (`customer_name_1`) could pass for real data, a vague rewrite that
+replaced the value outright (`404 4ms` → `a few hundred ms`) was read as fact, and renamed file
+names (`customer_name_1-renewal.md`) broke simple tasks. Now nothing changes without a visible marker,
+and the marker works as a key.
+
+**The key.** Per Claude Code session, the agent keeps placeholder ↔ real value in memory only
+(`transform/placeholders.ts`): never logged, never sent to the dashboard, never written to disk.
+Bounded to 256 sessions, 4,096 values per session and 12 hours idle. An agent restart forgets
+every key. A placeholder the key doesn't hold is never guessed at (below).
+
+**Swap-back** (`transform/restore.ts`). Before a tool runs, the agent puts the real values back into
+its input, so a file Claude writes holds the real email address and `Read
+deals/⟪customer_name_1⟫-renewal.md` opens the real file. Claude still never sees the values (§2:
+the conversation keeps Claude's own call). The rules follow from §2's spike:
+- **Which tools: the policy's `swapBack.tools`, set by IT.** The default is the local file tools:
+  Read, Write, Edit, MultiEdit, NotebookEdit, Glob, Grep (Grep's pattern gets the value escaped, so
+  it matches as plain text). Every other tool gets the placeholder as Claude wrote it unless IT adds
+  it: by name, or by a prefix ending in `*` (`mcp__slack__*`). By default Bash is left out (auto
+  mode's check, a model at Anthropic, would see the command, and a command can send data off the
+  Mac), and so are MCP tools (they send their input off the Mac).
+- **A tool IT adds asks first.** Its swap-back answers `ask` with the new input, so the user sees the
+  real values in the permission prompt and approves the call. That also keeps it out of auto mode's
+  check (§2's spike, for Bash). A Bash call with `dangerouslyDisableSandbox` is refused: auto mode
+  checks those even when the hook asks.
+- **Never:** Agent, Task, WebFetch and WebSearch, whose input goes to an Anthropic model. The policy
+  schema rejects any pattern that would include them, and the agent skips them whatever the list says.
+- **Writes only inside the project folder:** for Write, Edit, MultiEdit and NotebookEdit, the target,
+  with symlinks resolved, must be inside the hook's `cwd`, not inside a hidden folder and not a hidden
+  file other than `.env` files, and not one of Claude Code's other protected files (`lefthook.yml`,
+  `bunfig.toml`, …). Auto mode sends writes anywhere else to its check. The rule is broader than
+  Claude Code's protected list, so it stays safe if that list grows, and it is the same in every
+  permission mode. Otherwise the call is denied, telling Claude why. Reads have no such limit:
+  auto mode never sends a read to its check.
+- **Unknown placeholder:** if the key doesn't hold one (agent restarted, session too old, or made
+  up), a swap-back tool is denied, telling Claude to read the source again. Running it would open
+  the wrong file, or write the placeholder into a file as if it were the value.
+- The reply is `updatedInput` with no `permissionDecision` (§2), so permission prompts still appear.
+- Red data Claude wrote itself is still checked first and denied as before.
+
+**Re-hiding.** Swapped-back values return in tool output (an Edit result, reading the file again),
+often without the context that got them flagged. So in tool output the agent also flags every value
+the session's key holds, wherever it appears (`transform/known.ts`, the term-list matcher: whole
+words, any case, values of 3+ characters), as its own data type, so it gets the same placeholder.
+Text already in placeholder form is never flagged again.
+
+**Claude is told the convention** at session start: the plugin's script passes on what the agent's
+`GET /v1/session-start` returns, built from the policy. It says what placeholders mean, to copy
+them exactly, which tools put real values back (and which ask the user first), and which don't.
+
+**On the dashboard** the Policy page shows the published list (read-only). Editing it, and
+publishing, comes with the policy editor (#23). The draft list is `Organization.swapBackTools`,
+copied into each published version like `failMode`.
+
+Not done (#83 follow-ups): a local record of what was swapped where (the key is the only record, in
+memory), keeping placeholders across agent restarts or sessions, and a usefulness benchmark.
+
+Tool output is always cleaned span by span. Prompts can't be edited (§2), and the agent never
+cleans what Claude itself wrote in a tool input (it only swaps placeholders back), so both are
+blocked or passed whole. **Temporary rule (#50):** only red data, or a data type whose action is
+`block`, stops them; yellow data goes through unchanged. The rule is one function,
 `stopsPromptsAndToolCalls` in `apps/agent/src/decide.ts`. A blocked prompt's message offers a
-cleaned version the user can send instead.
+cleaned version the user can send instead. Its placeholders are in the session's key, so they work
+like any other.
 
 **Evaluation (`ml/`, harness built in #12, dataset in #11):**
 - Per-label precision/recall; **red recall ≥ 95%** (the pitch's riskiest-claim target)
@@ -329,8 +410,9 @@ Each item says where it was decided, or which issue holds the open question.
 9. ~~Tier 1 model~~: **decided** in
    [#13](https://github.com/SafeContext/safecontext/issues/13#issuecomment-6461207888), GLiNER
    small v2.1 fine-tuned. See §4.
-10. **Yellow data in prompts and tool inputs** (allow or block?), and mapping stand-ins back in tool
-    input. **Open:** #50. Temporary rule in §4.
+10. **Yellow data in prompts and tool inputs** (allow or block?). **Open:** #50. Temporary rule in §4.
+    ~~Mapping stand-ins back in tool input~~: **decided** in #83, labelled placeholders with swap-back
+    into local file tools only. See §4.
 11. **How devices join an organisation** (enrollment key is a placeholder). **Open:** #51.
 12. **Hook coverage gaps.** **Open:** `@file` mentions #38, CLAUDE.md and memory files #39, images
     and PDFs #40, slash commands and skills #42, failed tool calls #44, background subagent

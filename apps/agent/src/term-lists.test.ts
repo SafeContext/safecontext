@@ -44,7 +44,7 @@ describe('admin term lists in tier 0', () => {
 		const stdout = 'NORTHWIND renewed; Fabrikam and northwind are both on the call.';
 		const res = await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }));
 		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
-			stdout: 'customer_name_1 renewed; customer_name_2 and customer_name_1 are both on the call.',
+			stdout: '⟪customer_name_1⟫ renewed; ⟪customer_name_2⟫ and ⟪customer_name_1⟫ are both on the call.',
 			stderr: ''
 		});
 	});
@@ -113,7 +113,7 @@ describe('specific names on a term list', () => {
 		const stdout = 'PRIYA RAMAN asked dan.k to call Northwind.';
 		const res = await post(postTool.path, toolOutput('Bash', { stdout, stderr: '' }));
 		expect(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput).toEqual({
-			stdout: 'customer_personal_data_1 asked customer_personal_data_2 to call customer_name_1.',
+			stdout: '⟪customer_personal_data_1⟫ asked ⟪customer_personal_data_2⟫ to call ⟪customer_name_1⟫.',
 			stderr: ''
 		});
 		expect(reports[0]).toMatchObject({ counts: { 'customer-personal-data': 2, 'customer-names': 1 } });

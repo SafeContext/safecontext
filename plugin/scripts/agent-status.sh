@@ -3,9 +3,11 @@
 #
 #   agent-status.sh                  Status in plain words, for /safe-context:status. Always exits 0
 #                                    (a non-zero exit would abort the skill).
-#   agent-status.sh --session-start  SessionStart hook. Prints nothing when the agent is healthy.
-#                                    Otherwise prints hook JSON whose `systemMessage` is shown to the
-#                                    user, with how to fix it.
+#   agent-status.sh --session-start  SessionStart hook. When the agent is healthy, prints the hook
+#                                    JSON from its GET /v1/session-start, whose `additionalContext`
+#                                    tells Claude how placeholders work under the policy (SPEC.md §4,
+#                                    issue #83). Otherwise prints hook JSON whose `systemMessage` is
+#                                    shown to the user, with how to fix it.
 #
 # Port: SC_AGENT_PORT, the same variable the agent reads (default 4747, AGENT_DEFAULT_PORT in
 # packages/policy). Only sh and curl are needed, so this works even when Node isn't installed.
@@ -46,7 +48,13 @@ case "$state" in
 esac
 
 if [ "$mode" = session-start ]; then
-	[ -z "$problem" ] && exit 0
+	if [ -z "$problem" ]; then
+		# The agent says what to tell Claude, from the policy. Passed on only if it looks like the hook
+		# JSON; otherwise Claude just isn't told how placeholders work this time.
+		context=$(curl --silent --fail --max-time 2 "http://127.0.0.1:${port}/v1/session-start" 2>/dev/null)
+		case "$context" in '{"hookSpecificOutput":{"hookEventName":"SessionStart"'*) printf '%s\n' "$context" ;; esac
+		exit 0
+	fi
 	# Every value here is fixed text or digits, so it needs no JSON escaping.
 	printf '{"systemMessage":"Safe Context: %s Until it is fixed, Claude Code blocks your prompts and tool calls. %s"}\n' "$problem" "$fix"
 	exit 0
