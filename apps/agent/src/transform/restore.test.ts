@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { knownValueFinder } from './known.ts';
 import { createPlaceholderStore, type SessionKey } from './placeholders.ts';
 import { isSafeWriteTarget, restoreToolInput } from './restore.ts';
+import { LOCAL_SWAP_BACK_TOOLS } from '@safecontext/policy';
+
+const LOCAL = [...LOCAL_SWAP_BACK_TOOLS];
 
 const project = realpathSync(mkdtempSync(join(tmpdir(), 'sc-restore-')));
 mkdirSync(join(project, 'deals'));
@@ -27,11 +30,13 @@ describe('restoreToolInput', () => {
 			'Write',
 			{ file_path: 'deals/⟪customer_name_1⟫-renewal.md', content: 'Dear ⟪customer_personal_data_1: ****mple⟫' },
 			key(),
-			project
+			project,
+			LOCAL
 		);
 		expect(r).toEqual({
 			kind: 'restored',
 			count: 2,
+			confirm: false,
 			input: { file_path: 'deals/Northwind-renewal.md', content: 'Dear jane@northwind.example' }
 		});
 	});
@@ -44,7 +49,8 @@ describe('restoreToolInput', () => {
 				edits: [{ old_string: 'paid ⟪revenue_figure_1⟫', new_string: 'x', replace_all: false }]
 			},
 			key(),
-			project
+			project,
+			LOCAL
 		);
 		expect(r).toMatchObject({
 			kind: 'restored',
@@ -53,28 +59,30 @@ describe('restoreToolInput', () => {
 	});
 
 	it('escapes values put into a Grep pattern, so they match as plain text', () => {
-		const r = restoreToolInput('Grep', { pattern: 'paid ⟪revenue_figure_1⟫', path: '.' }, key(), project);
+		const r = restoreToolInput('Grep', { pattern: 'paid ⟪revenue_figure_1⟫', path: '.' }, key(), project, LOCAL);
 		expect(r).toMatchObject({ kind: 'restored', input: { pattern: 'paid \\$4\\.2M', path: '.' } });
 	});
 
 	it('reads anywhere: reading sends nothing off the Mac', () => {
-		const r = restoreToolInput('Read', { file_path: '/elsewhere/⟪customer_name_1⟫.md' }, key(), project);
+		const r = restoreToolInput('Read', { file_path: '/elsewhere/⟪customer_name_1⟫.md' }, key(), project, LOCAL);
 		expect(r).toMatchObject({ kind: 'restored', input: { file_path: '/elsewhere/Northwind.md' } });
 	});
 
 	it.each(['Bash', 'WebFetch', 'WebSearch', 'Agent', 'mcp__slack__send', 'SomeNewTool'])(
-		'never puts real values into %s',
+		'by default, never puts real values into %s',
 		(tool) => {
-			expect(restoreToolInput(tool, { command: 'echo ⟪customer_name_1⟫' }, key(), project)).toEqual({ kind: 'none' });
+			expect(restoreToolInput(tool, { command: 'echo ⟪customer_name_1⟫' }, key(), project, LOCAL)).toEqual({
+				kind: 'none'
+			});
 		}
 	);
 
 	it('does nothing without a placeholder', () => {
-		expect(restoreToolInput('Read', { file_path: 'a.md' }, key(), project)).toEqual({ kind: 'none' });
+		expect(restoreToolInput('Read', { file_path: 'a.md' }, key(), project, LOCAL)).toEqual({ kind: 'none' });
 	});
 
 	it("refuses a placeholder the key doesn't hold, naming it", () => {
-		const r = restoreToolInput('Read', { file_path: '⟪customer_name_1⟫/⟪customer_name_9⟫.md' }, key(), project);
+		const r = restoreToolInput('Read', { file_path: '⟪customer_name_1⟫/⟪customer_name_9⟫.md' }, key(), project, LOCAL);
 		expect(r).toEqual({ kind: 'refused', reason: 'unknown_placeholder', ids: ['customer_name_9'] });
 	});
 
@@ -87,7 +95,7 @@ describe('restoreToolInput', () => {
 		['into a hidden file', '.bashrc'],
 		['into a protected file', 'lefthook.yml']
 	])('refuses to write real values %s', (_why, path) => {
-		const r = restoreToolInput('Write', { file_path: path, content: '⟪customer_name_1⟫' }, key(), project);
+		const r = restoreToolInput('Write', { file_path: path, content: '⟪customer_name_1⟫' }, key(), project, LOCAL);
 		expect(r).toEqual({ kind: 'refused', reason: 'outside_project', ids: [] });
 	});
 
@@ -98,9 +106,66 @@ describe('restoreToolInput', () => {
 					'Edit',
 					{ file_path: name, old_string: 'X=1', new_string: 'X=⟪customer_name_1⟫' },
 					key(),
-					project
+					project,
+					LOCAL
 				).kind
 			).toBe('restored');
+		}
+	});
+});
+
+describe('tools the policy adds', () => {
+	const tools = [...LOCAL, 'mcp__slack__*', 'Bash'];
+
+	it('puts real values into an added MCP tool, and asks the user to confirm', () => {
+		const r = restoreToolInput(
+			'mcp__slack__send_message',
+			{ channel: 'sales', text: 'Renewal: ⟪customer_name_1⟫' },
+			key(),
+			project,
+			tools
+		);
+		expect(r).toEqual({
+			kind: 'restored',
+			count: 1,
+			confirm: true,
+			input: { channel: 'sales', text: 'Renewal: Northwind' }
+		});
+	});
+
+	it('local file tools keep the normal permission flow', () => {
+		const r = restoreToolInput('Read', { file_path: '⟪customer_name_1⟫.md' }, key(), project, tools);
+		expect(r).toMatchObject({ kind: 'restored', confirm: false });
+	});
+
+	it('puts real values into Bash when added, but never into a command outside the sandbox', () => {
+		expect(
+			restoreToolInput('Bash', { command: 'grep ⟪customer_name_1⟫ crm.csv' }, key(), project, tools)
+		).toMatchObject({
+			kind: 'restored',
+			confirm: true,
+			input: { command: 'grep Northwind crm.csv' }
+		});
+		expect(
+			restoreToolInput(
+				'Bash',
+				{ command: 'grep ⟪customer_name_1⟫ x', dangerouslyDisableSandbox: true },
+				key(),
+				project,
+				tools
+			)
+		).toEqual({ kind: 'refused', reason: 'sandbox_escape', ids: [] });
+	});
+
+	it('leaves a tool the policy no longer lists alone, even a local one', () => {
+		expect(restoreToolInput('Read', { file_path: '⟪customer_name_1⟫.md' }, key(), project, ['Write'])).toEqual({
+			kind: 'none'
+		});
+	});
+
+	it('never puts real values into a tool whose input reaches an Anthropic model, whatever the list says', () => {
+		for (const tool of ['Agent', 'Task', 'WebFetch', 'WebSearch']) {
+			expect(restoreToolInput(tool, { prompt: '⟪customer_name_1⟫' }, key(), project, [tool])).toEqual({ kind: 'none' });
 		}
 	});
 });
@@ -116,7 +181,7 @@ describe('spellings', () => {
 	writeFileSync(join(project, 'deals', 'northwind-renewal.md'), 'Renewal for northwind: 3 years\n');
 
 	it('opens the file by the spelling it has on disk, even on a disk that ignores case', () => {
-		const r = restoreToolInput('Read', { file_path: 'deals/⟪customer_name_1⟫-renewal.md' }, spelled(), project);
+		const r = restoreToolInput('Read', { file_path: 'deals/⟪customer_name_1⟫-renewal.md' }, spelled(), project, LOCAL);
 		expect(r).toMatchObject({ kind: 'restored', input: { file_path: 'deals/northwind-renewal.md' } });
 	});
 
@@ -129,7 +194,8 @@ describe('spellings', () => {
 				new_string: 'for ⟪customer_name_1⟫ Ltd:'
 			},
 			spelled(),
-			project
+			project,
+			LOCAL
 		);
 		expect(r).toMatchObject({
 			kind: 'restored',
@@ -142,7 +208,8 @@ describe('spellings', () => {
 			'Write',
 			{ file_path: 'deals/⟪customer_name_1⟫-notes.md', content: 'x' },
 			spelled(),
-			project
+			project,
+			LOCAL
 		);
 		expect(r).toMatchObject({ kind: 'restored', input: { file_path: 'deals/Northwind-notes.md' } });
 	});

@@ -18,6 +18,7 @@ import {
 	type PostToolUseOutput,
 	type PreToolUseInput,
 	type PreToolUseOutput,
+	type SessionStartOutput,
 	type UserPromptSubmitInput,
 	type UserPromptSubmitOutput
 } from '@safecontext/policy';
@@ -27,6 +28,7 @@ import { DEFAULT_CHECK_BUDGET_MS } from './config.ts';
 import { decide, failDecision, strictness, type Decision, type Failure } from './decide.ts';
 import { countHits, noopEventSink, type EventSink } from './events.ts';
 import { promptResponse, toolInputResponse, toolOutputResponse } from './hooks.ts';
+import { messages } from './messages.ts';
 import { silentLogger, type Logger, type Outcome } from './log.ts';
 import type { PolicySource } from './policy-source.ts';
 import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
@@ -90,6 +92,16 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get(AGENT_API.health.path, (c) =>
 		c.json({ ok: true, policyVersion: policySource.current().version } satisfies HealthResponse)
+	);
+
+	// For the plugin's SessionStart script: how placeholders work under the current policy (#83).
+	app.get(AGENT_API.sessionStart.path, (c) =>
+		c.json({
+			hookSpecificOutput: {
+				hookEventName: 'SessionStart',
+				additionalContext: messages.sessionContext(policySource.current().swapBack.tools)
+			}
+		} satisfies SessionStartOutput)
 	);
 
 	/**
@@ -245,16 +257,22 @@ export function createApp(deps: AppDeps): Hono {
 			'PreToolUse',
 			async (input, policy) => {
 				const checked = await check(toolInputTexts(input.tool_input), policy, 'PreToolUse');
-				// Swap-back (#83): only for a call that isn't blocked, and only into local file tools.
+				// Swap-back (#83): only for a call that isn't blocked, and only into the policy's tools.
 				const restored =
 					checked.decision.verdict === 'block'
 						? undefined
-						: restoreToolInput(input.tool_name, input.tool_input, placeholders.session(input.session_id), input.cwd);
+						: restoreToolInput(
+								input.tool_name,
+								input.tool_input,
+								placeholders.session(input.session_id),
+								input.cwd,
+								policy.swapBack.tools
+							);
 				return {
 					...checked,
 					restored,
 					toolName: input.tool_name,
-					output: toolInputResponse(checked.decision, restored)
+					output: toolInputResponse(checked.decision, restored, input.tool_name)
 				};
 			},
 			(decision, body) => ({ decision, toolName: toolNameOf(body), output: toolInputResponse(decision) })

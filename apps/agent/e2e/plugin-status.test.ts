@@ -14,7 +14,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.ts';
 import { createClassifier } from '../src/classifier/classifier.ts';
 import { createTier0 } from '../src/classifier/tier0.ts';
-import { RESTORE_TOOLS } from '../src/transform/restore.ts';
 import { staticPolicySource } from '../src/policy-source.ts';
 import { startServer, type RunningServer } from '../src/server.ts';
 import { policyWith } from '../src/test-helpers.ts';
@@ -32,6 +31,8 @@ let agent: RunningServer;
 let notAgent: Server;
 let notAgentPort: number;
 let unhealthy: Server;
+let healthOnly: Server;
+let healthOnlyPort: number;
 let unhealthyPort: number;
 beforeAll(async () => {
 	const app = createApp({
@@ -43,6 +44,13 @@ beforeAll(async () => {
 	notAgent = createServer((_req, res) => res.end('<html>hello</html>'));
 	await new Promise<void>((resolve) => notAgent.listen(0, AGENT_HOST, resolve));
 	notAgentPort = (notAgent.address() as AddressInfo).port;
+	// A healthy health check, but no session-start note (e.g. an older agent).
+	healthOnly = createServer((req, res) => {
+		if (req.url === '/health') res.end('{"ok":true,"policyVersion":7}');
+		else res.writeHead(404).end();
+	});
+	await new Promise<void>((resolve) => healthOnly.listen(0, AGENT_HOST, resolve));
+	healthOnlyPort = (healthOnly.address() as AddressInfo).port;
 	// The agent's health JSON, but reporting a problem. Today's agent always says ok: true.
 	unhealthy = createServer((_req, res) => res.end('{"ok":false,"policyVersion":7}'));
 	await new Promise<void>((resolve) => unhealthy.listen(0, AGENT_HOST, resolve));
@@ -52,6 +60,7 @@ afterAll(async () => {
 	await agent.close();
 	await new Promise((resolve) => notAgent.close(resolve));
 	await new Promise((resolve) => unhealthy.close(resolve));
+	await new Promise((resolve) => healthOnly.close(resolve));
 });
 
 describe('agent-status.sh (/safe-context:status)', () => {
@@ -83,24 +92,15 @@ describe('agent-status.sh (/safe-context:status)', () => {
 });
 
 describe('agent-status.sh --session-start (SessionStart hook)', () => {
-	it('tells Claude how placeholders work when the agent is healthy, and nothing for the user', async () => {
+	it("passes on the agent's note for Claude when the agent is healthy, and shows the user nothing", async () => {
 		const out = JSON.parse(await status(agent.port, '--session-start'));
+		expect(AGENT_API.sessionStart.response.parse(out)).toEqual(out);
+		expect(out.hookSpecificOutput.additionalContext).toContain('⟪customer_name_1⟫');
 		expect(Object.keys(out)).toEqual(['hookSpecificOutput']);
-		expect(out.hookSpecificOutput.hookEventName).toBe('SessionStart');
-		const context: string = out.hookSpecificOutput.additionalContext;
-		expect(context).toContain('⟪customer_name_1⟫');
-		expect(context).toContain('⟪revenue_figure_1: over $4M⟫');
-		// Lists exactly the tools that get real values back (apps/agent/src/transform/restore.ts).
-		expect(context).toContain('In Read, Write, Edit, MultiEdit, NotebookEdit, Glob and Grep calls');
-		expect(Object.keys(RESTORE_TOOLS).sort()).toEqual([
-			'Edit',
-			'Glob',
-			'Grep',
-			'MultiEdit',
-			'NotebookEdit',
-			'Read',
-			'Write'
-		]);
+	});
+
+	it('prints nothing if the agent answers its health check but not the note', async () => {
+		expect(await status(healthOnlyPort, '--session-start')).toBe('');
 	});
 
 	it('prints hook JSON with a systemMessage for the user when the agent is down', async () => {

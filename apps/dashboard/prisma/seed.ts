@@ -142,7 +142,8 @@ async function main() {
 			updatedAt: now.toISOString(),
 			dataTypes: DEFAULT_DATA_TYPES,
 			lists: DEMO_LISTS,
-			failMode: org.failMode
+			failMode: org.failMode,
+			swapBack: { tools: org.swapBackTools }
 		});
 		version = await prisma.policyVersion.create({
 			data: {

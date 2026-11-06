@@ -4,12 +4,17 @@
  * and Claude never sees the value: Claude Code keeps Claude's own version of the call in the
  * conversation, and PostToolUse hides the value again in what the tool returns.
  *
- * Only for tools that run on this Mac without a model: Read, Write, Edit, MultiEdit,
- * NotebookEdit, Glob and Grep. Everything else gets the placeholder exactly as Claude wrote it:
+ * Which tools: the policy's `swapBack.tools` (packages/policy). By default the local file tools,
+ * which run on this Mac without a model: Read, Write, Edit, MultiEdit, NotebookEdit, Glob, Grep.
+ * Every other tool gets the placeholder exactly as Claude wrote it, unless IT adds it:
  * - Bash: in auto mode its safety check is a model call to Anthropic and it sees the changed
  *   command (tested on Claude Code 2.1.302); a command can also send data off the Mac.
- * - WebFetch, WebSearch, MCP tools: they send their input off the Mac.
- * - Agent: its prompt goes to another Claude.
+ * - MCP tools: they send their input off the Mac.
+ * A tool IT adds gets `confirm`: the hook answers `ask`, so the user sees the real values and
+ * approves the call, and auto mode's check never sees it (tested for Bash). A Bash call that
+ * asks to run outside the sandbox is refused: auto mode checks those even when the hook asks.
+ * Agent, Task, WebFetch and WebSearch never get real values: their input goes to an Anthropic
+ * model (`NEVER_SWAP_BACK_TOOLS`).
  *
  * Writes (Write, Edit, MultiEdit, NotebookEdit) get real values only inside the project folder
  * (the hook's `cwd`, symlinks resolved), and not inside a hidden folder or into a hidden file
@@ -28,6 +33,7 @@
  */
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { swapsBackInto } from '@safecontext/policy';
 import { OPEN, PLACEHOLDER, type SessionKey } from './placeholders.ts';
 
 interface RestoreTool {
@@ -39,6 +45,7 @@ interface RestoreTool {
 	regex?: readonly string[];
 }
 
+/** The local file tools: what their fields mean. Any other tool IT adds is treated as `OTHER_TOOL`. */
 export const RESTORE_TOOLS: Readonly<Record<string, RestoreTool>> = {
 	Read: { paths: ['file_path'], writes: false },
 	Glob: { paths: ['path'], writes: false },
@@ -48,6 +55,7 @@ export const RESTORE_TOOLS: Readonly<Record<string, RestoreTool>> = {
 	MultiEdit: { paths: ['file_path'], writes: true },
 	NotebookEdit: { paths: ['notebook_path'], writes: true }
 };
+const OTHER_TOOL: RestoreTool = { paths: [], writes: false };
 
 /** Files outside hidden folders that Claude Code protects too (docs: permission modes, protected paths). */
 const PROTECTED_FILES = new Set([
@@ -65,17 +73,21 @@ const ENV_FILE = /^\.env(?:\.[A-Za-z0-9_-]+)*$/;
 export type Restored =
 	/** No placeholder to put back, or a tool that never gets real values. */
 	| { kind: 'none' }
-	| { kind: 'restored'; input: Record<string, unknown>; count: number }
-	| { kind: 'refused'; reason: 'unknown_placeholder' | 'outside_project'; ids: string[] };
+	/** `confirm`: not a local file tool, so the user approves the call first (the hook answers `ask`). */
+	| { kind: 'restored'; input: Record<string, unknown>; count: number; confirm: boolean }
+	| { kind: 'refused'; reason: 'unknown_placeholder' | 'outside_project' | 'sandbox_escape'; ids: string[] };
 
 export function restoreToolInput(
 	toolName: string,
 	input: Record<string, unknown>,
 	key: SessionKey,
-	cwd: string
+	cwd: string,
+	/** The policy's `swapBack.tools`. */
+	tools: readonly string[]
 ): Restored {
-	const tool = RESTORE_TOOLS[toolName];
-	if (!tool || !JSON.stringify(input).includes(OPEN)) return { kind: 'none' };
+	if (!swapsBackInto(tools, toolName) || !JSON.stringify(input).includes(OPEN)) return { kind: 'none' };
+	const local = RESTORE_TOOLS[toolName];
+	const tool = local ?? OTHER_TOOL;
 
 	let count = 0;
 	const unknown = new Set<string>();
@@ -143,6 +155,9 @@ export function restoreToolInput(
 
 	if (unknown.size > 0) return { kind: 'refused', reason: 'unknown_placeholder', ids: [...unknown] };
 	if (count === 0) return { kind: 'none' };
+	if (toolName === 'Bash' && input['dangerouslyDisableSandbox'] === true) {
+		return { kind: 'refused', reason: 'sandbox_escape', ids: [] };
+	}
 	if (tool.writes) {
 		for (const field of tool.paths) {
 			const target = restored[field];
@@ -151,7 +166,7 @@ export function restoreToolInput(
 			}
 		}
 	}
-	return { kind: 'restored', input: restored, count };
+	return { kind: 'restored', input: restored, count, confirm: local === undefined };
 }
 
 const PERFECT = 2;

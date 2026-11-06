@@ -384,3 +384,54 @@ describe('swap-back and re-hiding (issue #83)', () => {
 		expect(JSON.stringify(logger.records)).not.toContain('Northwind');
 	});
 });
+
+describe('swap-back tools from the policy (issue #83)', () => {
+	const contextTier = termTier({ Northwind: 'customer-names' });
+	const withSlack = policyWith({ swapBack: { tools: ['Read', 'mcp__slack__*'] } });
+
+	it('asks the user before real values go into a tool IT added, and says why', async () => {
+		const { post } = testApp({ policy: withSlack, tiers: [createTier0(), contextTier] });
+		await post(postTool.path, toolOutput('Bash', { stdout: 'Northwind renews', stderr: '' }));
+		const res = await post(
+			preTool.path,
+			toolInput('mcp__slack__send_message', { channel: 'sales', text: 'Call ⟪customer_name_1⟫' })
+		);
+		expect(preTool.response.parse(res.json)).toEqual({
+			hookSpecificOutput: {
+				hookEventName: 'PreToolUse',
+				updatedInput: { channel: 'sales', text: 'Call Northwind' },
+				permissionDecision: 'ask',
+				permissionDecisionReason: messages.restoreConfirm('mcp__slack__send_message', 1)
+			}
+		});
+	});
+
+	it('leaves out a local tool the policy took off the list', async () => {
+		const { post } = testApp({ policy: withSlack, tiers: [createTier0(), contextTier] });
+		await post(postTool.path, toolOutput('Bash', { stdout: 'Northwind renews', stderr: '' }));
+		const res = await post(preTool.path, toolInput('Write', { file_path: 'a.md', content: '⟪customer_name_1⟫' }));
+		expect(res.json).toEqual({});
+	});
+});
+
+describe('GET /v1/session-start (issue #83)', () => {
+	it('tells Claude how placeholders work and which tools get real values, from the policy', async () => {
+		const { app } = testApp({ policy: policyWith({ swapBack: { tools: ['Read', 'Write', 'mcp__slack__*'] } }) });
+		const out = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());
+		const text = out.hookSpecificOutput.additionalContext;
+		expect(text).toContain('In Read and Write calls, file paths included');
+		expect(text).toContain('these tools: any tool whose name starts with mcp__slack__. The user is asked to approve');
+		expect(text).toContain(
+			'Shell commands, web tools, other MCP tools and subagent prompts get the placeholder exactly as you wrote it'
+		);
+	});
+
+	it('lists the local file tools by default', async () => {
+		const { app } = testApp();
+		const out = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());
+		expect(out.hookSpecificOutput.additionalContext).toContain(
+			'In Read, Write, Edit, MultiEdit, NotebookEdit, Glob and Grep calls'
+		);
+		expect(out.hookSpecificOutput.additionalContext).not.toContain("Your company's policy also");
+	});
+});

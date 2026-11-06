@@ -134,8 +134,9 @@ Source of truth: `packages/policy` (v1). JSON Schema copies for Python: `package
 Every request and response on both APIs is checked against these schemas.
 
 - **Policy** (`policy.ts`): `version`, data types (each with id, name, description, examples, tier
-  green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists and
-  `failMode` (default `block`). Only green types may `allow`. `defaultPolicy()` has version 0
+  green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists,
+  `failMode` (default `block`) and `swapBack.tools` (the tools that get real values back, default
+  the local file tools; §4, #83). Only green types may `allow`. `defaultPolicy()` has version 0
   ("never published") and the 10 default data types in `defaults.ts`. The dashboard writes it; the
   agent pulls it, keeps the highest version it has seen, caches it on disk and works offline.
 - **Agent API** (`api.ts`; binds `127.0.0.1` only; port from `SC_AGENT_PORT`, default 4747, but
@@ -144,6 +145,8 @@ Every request and response on both APIs is checked against these schemas.
   - `POST /v1/prompt`: body = `UserPromptSubmit` input, response = its hook output
   - `POST /v1/tool-input`: body = `PreToolUse` input, response = its hook output
   - `POST /v1/tool-output`: body = `PostToolUse` input, response = its hook output
+  - `GET /v1/session-start`: the `SessionStart` hook output for the plugin's script: what to tell
+    Claude about placeholders under the current policy (#83)
 - **Dashboard API for the agent** (`dashboard-api.ts`, built in #21, used by the agent's sync in #22).
   JSON bodies; errors are `ApiError` with a code (`unauthorized`, `device_mismatch`, `no_policy`,
   `bad_request`, `invalid_body`, `rate_limited`) and never echo request values back.
@@ -268,11 +271,18 @@ every key. A placeholder the key doesn't hold is never guessed at (below).
 its input, so a file Claude writes holds the real email address and `Read
 deals/⟪customer_name_1⟫-renewal.md` opens the real file. Claude still never sees the values (§2:
 the conversation keeps Claude's own call). The rules follow from §2's spike:
-- **Only local file tools:** Read, Write, Edit, MultiEdit, NotebookEdit, Glob, Grep (Grep's pattern
-  gets the value escaped, so it matches as plain text). Every other tool gets the placeholder as
-  Claude wrote it: Bash (auto mode's check, a model at Anthropic, would see the command, and a
-  command can send data off the Mac), WebFetch, WebSearch and MCP tools (they send their input off
-  the Mac), Agent (its prompt goes to another Claude).
+- **Which tools: the policy's `swapBack.tools`, set by IT.** The default is the local file tools:
+  Read, Write, Edit, MultiEdit, NotebookEdit, Glob, Grep (Grep's pattern gets the value escaped, so
+  it matches as plain text). Every other tool gets the placeholder as Claude wrote it unless IT adds
+  it: by name, or by a prefix ending in `*` (`mcp__slack__*`). By default Bash is left out (auto
+  mode's check, a model at Anthropic, would see the command, and a command can send data off the
+  Mac), and so are MCP tools (they send their input off the Mac).
+- **A tool IT adds asks first.** Its swap-back answers `ask` with the new input, so the user sees the
+  real values in the permission prompt and approves the call. That also keeps it out of auto mode's
+  check (§2's spike, for Bash). A Bash call with `dangerouslyDisableSandbox` is refused: auto mode
+  checks those even when the hook asks.
+- **Never:** Agent, Task, WebFetch and WebSearch, whose input goes to an Anthropic model. The policy
+  schema rejects any pattern that would include them, and the agent skips them whatever the list says.
 - **Writes only inside the project folder:** for Write, Edit, MultiEdit and NotebookEdit, the target,
   with symlinks resolved, must be inside the hook's `cwd`, not inside a hidden folder and not a hidden
   file other than `.env` files, and not one of Claude Code's other protected files (`lefthook.yml`,
@@ -292,9 +302,13 @@ the session's key holds, wherever it appears (`transform/known.ts`, the term-lis
 words, any case, values of 3+ characters), as its own data type, so it gets the same placeholder.
 Text already in placeholder form is never flagged again.
 
-**Claude is told the convention** at session start (`plugin/scripts/agent-status.sh`): what
-placeholders mean, to copy them exactly, which tools put real values back, and that the shell, web
-and MCP tools and subagent prompts don't.
+**Claude is told the convention** at session start: the plugin's script passes on what the agent's
+`GET /v1/session-start` returns, built from the policy. It says what placeholders mean, to copy
+them exactly, which tools put real values back (and which ask the user first), and which don't.
+
+**On the dashboard** the Policy page shows the published list (read-only). Editing it, and
+publishing, comes with the policy editor (#23). The draft list is `Organization.swapBackTools`,
+copied into each published version like `failMode`.
 
 Not done (#83 follow-ups): a local record of what was swapped where (the key is the only record, in
 memory), keeping placeholders across agent restarts or sessions, and a usefulness benchmark.
