@@ -29,6 +29,11 @@ export function createRewriter(
 	generalize: Generalize = createGeneralize()
 ): Rewriter {
 	const byId = new Map(hits.map((h) => [h.dataTypeId, h]));
+	/** The placeholder, with its hint noted in the key so this exact text isn't checked again. */
+	const show = (id: string, hint?: string) => {
+		if (hint) key.noteHint(id, hint);
+		return formatPlaceholder(id, hint);
+	};
 
 	const replace = (span: Span, value: string, vague: ReadonlyMap<Span, string>): string => {
 		const hit = byId.get(span.dataTypeId);
@@ -37,12 +42,12 @@ export function createRewriter(
 		switch (hit?.action) {
 			case 'mask': {
 				const masked = mask(value);
-				return formatPlaceholder(id, masked === MASK ? undefined : masked);
+				return show(id, masked === MASK ? undefined : masked);
 			}
 			case 'generalize':
-				return formatPlaceholder(id, vague.get(span));
+				return show(id, vague.get(span));
 			default:
-				return formatPlaceholder(id);
+				return show(id);
 		}
 	};
 

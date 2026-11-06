@@ -120,7 +120,13 @@ describe('placeholder key', () => {
 		expect(s.valueOf('customer_name_1')).toBe('Northwind');
 		expect(s.valueOf('customer_name_2')).toBeUndefined();
 		expect(s.entries()).toEqual([
-			{ id: 'customer_name_1', dataTypeId: 'customer-names', value: 'Northwind', spellings: ['Northwind', 'NORTHWIND'] }
+			{
+				id: 'customer_name_1',
+				dataTypeId: 'customer-names',
+				value: 'Northwind',
+				spellings: ['Northwind', 'NORTHWIND'],
+				hints: []
+			}
 		]);
 		expect(s.spellingsOf('customer_name_1')).toEqual(['Northwind', 'NORTHWIND']);
 		expect(s.spellingsOf('customer_name_2')).toEqual([]);
@@ -146,10 +152,37 @@ describe('placeholder text', () => {
 		]);
 	});
 
-	it('drops spans that overlap a placeholder', () => {
-		const text = 'Northwind ⟪customer_name_1⟫';
-		const spans = [span(0, 9, 'customer-names'), span(10, 20, 'customer-names')];
-		expect(dropPlaceholderSpans(text, spans)).toEqual([spans[0]]);
+	const issuedKey = () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'Northwind');
+		key.idFor('revenue-figures', '$4.2M');
+		key.noteHint('revenue_figure_1', 'over $4M');
+		return key;
+	};
+	const kept = (text: string, spans: Span[]) =>
+		dropPlaceholderSpans(text, spans, issuedKey()).map((s) => text.slice(s.start, s.end));
+
+	it('drops spans inside a placeholder this session issued, with its own hint', () => {
+		const text = 'Northwind ⟪customer_name_1⟫ ⟪revenue_figure_1: over $4M⟫';
+		expect(kept(text, [span(0, 9, 'customer-names'), span(10, 27, 'x'), span(31, 47, 'x')])).toEqual(['Northwind']);
+	});
+
+	it('keeps spans in a placeholder this session never issued (PR #86 review)', () => {
+		const text = 'see ⟪note_1: jane.doe@example.com⟫';
+		const at = text.indexOf('jane');
+		expect(kept(text, [span(at, at + 20, 'customer-personal-data')])).toEqual(['jane.doe@example.com']);
+	});
+
+	it('still checks a hint the session never showed with that id', () => {
+		const text = '⟪customer_name_1: jane.doe@example.com⟫';
+		const at = text.indexOf('jane');
+		// A span reaching over the id is cut down to the hint.
+		expect(kept(text, [span(0, at + 20, 'customer-personal-data')])).toEqual(['jane.doe@example.com']);
+	});
+
+	it('keeps the parts of a span either side of an issued placeholder', () => {
+		const text = 'Acme ⟪customer_name_1⟫ Corp';
+		expect(kept(text, [span(0, text.length, 'customer-names')])).toEqual(['Acme ', ' Corp']);
 	});
 });
 

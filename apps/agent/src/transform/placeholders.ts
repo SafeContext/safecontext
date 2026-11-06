@@ -24,16 +24,40 @@ export const CLOSE = '⟫';
  */
 export const PLACEHOLDER = /⟪([a-z0-9]+(?:_[a-z0-9]+)*_[1-9][0-9]*)(?::[^⟪⟫\n]{0,100})?⟫/g;
 
-/** `⟪id⟫`, or `⟪id: hint⟫`. The hint loses any bracket or line break so it can't end the placeholder early. */
+/** A hint as it appears in a placeholder: no bracket or line break, so it can't end the placeholder early. */
+export function cleanHint(hint: string | undefined): string {
+	return (hint ?? '').replace(/[⟪⟫\r\n]+/g, ' ').trim();
+}
+
+/** `⟪id⟫`, or `⟪id: hint⟫`. */
 export function formatPlaceholder(id: string, hint?: string): string {
-	const clean = hint?.replace(/[⟪⟫\r\n]+/g, ' ').trim();
+	const clean = cleanHint(hint);
 	return clean ? `${OPEN}${id}: ${clean}${CLOSE}` : `${OPEN}${id}${CLOSE}`;
 }
 
-/** [start, end) of every placeholder in `text`, in order. */
-export function placeholderRanges(text: string): Array<{ start: number; end: number; id: string }> {
+/**
+ * Every placeholder in `text`, in order: [start, end) of the whole placeholder, and [hintStart,
+ * hintEnd) of its hint (empty when it has none).
+ */
+export function placeholderRanges(
+	text: string
+): Array<{ start: number; end: number; id: string; hintStart: number; hintEnd: number; hint: string }> {
 	if (!text.includes(OPEN)) return [];
-	return [...text.matchAll(PLACEHOLDER)].map((m) => ({ start: m.index, end: m.index + m[0].length, id: m[1]! }));
+	return [...text.matchAll(PLACEHOLDER)].map((m) => {
+		const start = m.index;
+		const end = start + m[0].length;
+		const afterId = start + OPEN.length + m[1]!.length;
+		let hintStart = afterId < end - CLOSE.length ? afterId + 1 : afterId; // skip the ":"
+		while (hintStart < end - CLOSE.length && text[hintStart] === ' ') hintStart++;
+		return {
+			start,
+			end,
+			id: m[1]!,
+			hintStart,
+			hintEnd: end - CLOSE.length,
+			hint: text.slice(hintStart, end - CLOSE.length)
+		};
+	});
 }
 
 export interface PlaceholderStoreOptions {
@@ -58,6 +82,8 @@ export interface KeyEntry {
 	 * file name). They share one placeholder, so swap-back picks the one that fits (restore.ts).
 	 */
 	spellings: string[];
+	/** Every hint shown with this placeholder (cleaned, see `cleanHint`). */
+	hints: string[];
 }
 
 /** Spellings remembered per value. */
@@ -71,6 +97,10 @@ export interface SessionKey {
 	valueOf(id: string): string | undefined;
 	/** Every spelling seen behind `id`, first seen first. Empty if the key doesn't hold it. */
 	spellingsOf(id: string): readonly string[];
+	/** Records that `id` was shown with `hint`, so that exact placeholder isn't checked again. */
+	noteHint(id: string, hint: string): void;
+	/** True if this session issued `id`, shown with `hint` (`''` for no hint). */
+	issued(id: string, hint: string): boolean;
 	/** Every value held, oldest first, so the caller can hide them wherever they come back. */
 	entries(): readonly KeyEntry[];
 }
@@ -130,7 +160,7 @@ export function createPlaceholderStore({
 					const prefix = prefixFor(dataTypeId);
 					const n = (s.counters.get(prefix) ?? 0) + 1;
 					s.counters.set(prefix, n);
-					const entry = { id: `${prefix}_${n}`, dataTypeId, value, spellings: [value] };
+					const entry = { id: `${prefix}_${n}`, dataTypeId, value, spellings: [value], hints: [] as string[] };
 					s.byValue.set(k, entry);
 					s.byId.set(entry.id, entry);
 					if (s.byValue.size > maxPerSession) {
@@ -142,6 +172,18 @@ export function createPlaceholderStore({
 				},
 				valueOf: (id) => s.byId.get(id)?.value,
 				spellingsOf: (id) => s.byId.get(id)?.spellings ?? [],
+				noteHint(id, hint) {
+					const entry = s.byId.get(id);
+					const clean = cleanHint(hint);
+					if (entry && clean && !entry.hints.includes(clean) && entry.hints.length < MAX_SPELLINGS) {
+						entry.hints.push(clean);
+					}
+				},
+				issued(id, hint) {
+					const entry = s.byId.get(id);
+					const clean = cleanHint(hint);
+					return entry !== undefined && (clean === '' || entry.hints.includes(clean));
+				},
 				entries: () => [...s.byValue.values()]
 			};
 		}
@@ -167,9 +209,44 @@ export function prefixFor(dataTypeId: string): string {
 	return words.join('_') || 'item';
 }
 
-/** Spans that overlap a placeholder already in the text are dropped: it was hidden before, and is safe as it is. */
-export function dropPlaceholderSpans<S extends { start: number; end: number }>(text: string, spans: readonly S[]): S[] {
-	const ranges = placeholderRanges(text);
-	if (ranges.length === 0) return [...spans];
-	return spans.filter((s) => !ranges.some((r) => s.start < r.end && r.start < s.end));
+/**
+ * Placeholders already in a text aren't flagged again, but only ones this session issued: text in
+ * placeholder form can come from a file or web page too (`⟪note_1: jane@example.com⟫`, PR #86 review).
+ * - Issued, with the hint it was issued with (or none): the whole placeholder is cut out of spans.
+ * - Issued id, any other hint: only `⟪id:` and `⟫` are cut out; the hint text is still checked.
+ * - Not issued: ordinary text, nothing is cut out.
+ * Whatever is left of a span (text either side, hint text) stays flagged.
+ */
+export function dropPlaceholderSpans<S extends { start: number; end: number }>(
+	text: string,
+	spans: readonly S[],
+	key: Pick<SessionKey, 'issued' | 'spellingsOf'>
+): S[] {
+	const prot = placeholderRanges(text).flatMap((r) => {
+		if (key.issued(r.id, r.hint)) return [{ start: r.start, end: r.end }];
+		if (key.spellingsOf(r.id).length > 0) {
+			return [
+				{ start: r.start, end: r.hintStart },
+				{ start: r.hintEnd, end: r.end }
+			];
+		}
+		return [];
+	});
+	if (prot.length === 0) return [...spans];
+	const out: S[] = [];
+	for (const span of spans) {
+		let pieces = [{ start: span.start, end: span.end }];
+		for (const p of prot) {
+			pieces = pieces.flatMap((q) =>
+				q.end <= p.start || p.end <= q.start
+					? [q]
+					: [
+							{ start: q.start, end: p.start },
+							{ start: p.end, end: q.end }
+						].filter((x) => x.end > x.start)
+			);
+		}
+		for (const q of pieces) if (/\S/.test(text.slice(q.start, q.end))) out.push({ ...span, ...q });
+	}
+	return out;
 }

@@ -105,19 +105,19 @@ export function createApp(deps: AppDeps): Hono {
 	);
 
 	/**
-	 * Classify `texts` and decide. Never throws (the classifier doesn't). Placeholders already in
-	 * the text are never flagged again. With `key` (tool output), every value the session's key
-	 * holds is flagged too, wherever it appears (transform/known.ts).
+	 * Classify `texts` and decide. Never throws (the classifier doesn't). Placeholders the
+	 * session's key issued aren't flagged again (dropPlaceholderSpans). With `findKnown` (tool
+	 * output), every value the key holds is flagged too, wherever it appears (transform/known.ts).
 	 */
-	async function check(texts: string[], policy: Policy, hook: HookEventName, key?: SessionKey) {
+	async function check(texts: string[], policy: Policy, hook: HookEventName, key: SessionKey, findKnown = false) {
 		const deadline = now() + checkBudgetMs;
 		const classified = await classifier.classify(texts, policy, { hook });
 		let result: ClassifyResult = classified;
 		if (classified.ok) {
-			const known = key ? knownValueFinder(key) : undefined;
+			const known = findKnown ? knownValueFinder(key) : undefined;
 			const rank = strictness(policy);
 			const spans = texts.map((text, i) =>
-				mergeSpans(dropPlaceholderSpans(text, [...(classified.spans[i] ?? []), ...(known?.(text) ?? [])]), rank)
+				mergeSpans(dropPlaceholderSpans(text, [...(classified.spans[i] ?? []), ...(known?.(text) ?? [])], key), rank)
 			);
 			result = { ...classified, spans };
 		}
@@ -238,7 +238,7 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.prompt,
 			'UserPromptSubmit',
 			async (input, policy) => {
-				const checked = await check([input.prompt], policy, 'UserPromptSubmit');
+				const checked = await check([input.prompt], policy, 'UserPromptSubmit', placeholders.session(input.session_id));
 				// Only a blocked prompt needs a safe version (and only then are placeholders handed out).
 				const safe =
 					checked.decision.verdict === 'block'
@@ -256,7 +256,12 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.toolInput,
 			'PreToolUse',
 			async (input, policy) => {
-				const checked = await check(toolInputTexts(input.tool_input), policy, 'PreToolUse');
+				const checked = await check(
+					toolInputTexts(input.tool_input),
+					policy,
+					'PreToolUse',
+					placeholders.session(input.session_id)
+				);
 				// Swap-back (#83): only for a call that isn't blocked, and only into the policy's tools.
 				const restored =
 					checked.decision.verdict === 'block'
@@ -286,7 +291,7 @@ export function createApp(deps: AppDeps): Hono {
 			'PostToolUse',
 			async (input, policy) => {
 				const texts = toolOutputTexts(input.tool_name, input.tool_response);
-				const checked = await check(texts, policy, 'PostToolUse', placeholders.session(input.session_id));
+				const checked = await check(texts, policy, 'PostToolUse', placeholders.session(input.session_id), true);
 				const rewritten = await rewrite(texts, checked.decision, input.session_id, policy, checked.deadline);
 				return {
 					...checked,
