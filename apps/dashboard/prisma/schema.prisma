@@ -73,11 +73,11 @@ model Organization {
   events         Event[]
 }
 
-/// An admin who can sign in to the dashboard.
+/// An admin of one organisation. Signing in to the dashboard (issue #19) needs a Member row: it
+/// decides which organisation's data the admin sees (`src/lib/server/current-org.ts`).
 ///
-/// Better Auth (issue #19) will add its own `user` table. To link them later, `userId` holds
-/// Better Auth's `user.id`: #19 adds a foreign key from `Member.userId` to that table and fills it
-/// in at first sign-in by matching on `email`. Nothing here depends on Better Auth until then.
+/// `userId` links the sign-in account (`User`). It is filled in at first sign-in by matching
+/// `email` (`src/lib/server/auth.ts`), so a Member can be added before its account exists.
 model Member {
   id             String   @id @default(uuid(7)) @db.Uuid
   organizationId String   @db.Uuid
@@ -89,9 +89,81 @@ model Member {
   updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   published    PolicyVersion[]
 
   @@unique([organizationId, email])
+}
+
+// ---------------------------------------------------------------------------
+// Sign-in (Better Auth, issue #19). Fields follow Better Auth's core schema
+// (https://www.better-auth.com/docs/concepts/database#core-schema); Better Auth reads and writes
+// these tables itself, so don't rename fields. Ids are Better Auth's own strings, not uuids.
+// ---------------------------------------------------------------------------
+
+/// A person who can sign in. Their organisation comes from `Member`.
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  sessions Session[]
+  accounts Account[]
+  member   Member?
+}
+
+/// A signed-in browser. `token` is what the session cookie carries.
+model Session {
+  id        String   @id
+  expiresAt DateTime @db.Timestamptz(3)
+  token     String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// How a user signs in. Email + password is `providerId = "credential"`, with the password hash
+/// in `password`. The token columns are for sign-in providers we don't use yet (Google, SSO).
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Short-lived codes (e.g. password reset). Unused by email + password sign-in today.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
 }
 
 /// The editable (draft) data types. Moving a card between columns on the dashboard changes

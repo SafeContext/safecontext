@@ -1,6 +1,7 @@
-// Seeds a demo organisation: the default data types from @safecontext/policy, a published policy
-// v1, two sample term lists and some demo events. Safe to re-run: it never overwrites rows that
-// already exist (so it won't undo an admin's edits) and only adds events to an organisation that has none.
+// Seeds a demo organisation: a demo admin who can sign in (`prisma/demo-admin.ts`), the default
+// data types from @safecontext/policy, a published policy v1, two sample term lists and some demo
+// events. Safe to re-run: it never overwrites rows that already exist (so it won't undo an admin's
+// edits or change their password) and only adds events to an organisation that has none.
 //
 // Run with: pnpm --filter @safecontext/dashboard db:seed
 import 'dotenv/config';
@@ -13,7 +14,9 @@ import {
 	type DataType,
 	type TermList
 } from '@safecontext/policy';
+import { ensureAdmin } from '../src/lib/server/admin-accounts.ts';
 import { PrismaClient } from '../src/lib/server/generated/prisma/client.ts';
+import { DEMO_ADMIN } from './demo-admin.ts';
 
 const connectionString = process.env['DATABASE_URL'];
 if (!connectionString) throw new Error('DATABASE_URL is not set (see apps/dashboard/.env.example)');
@@ -94,11 +97,8 @@ async function main() {
 		create: { slug: ORG_SLUG, name: 'Macrohard (demo)' }
 	});
 
-	await prisma.member.upsert({
-		where: { organizationId_email: { organizationId: org.id, email: 'admin@macrohard.example' } },
-		update: {},
-		create: { organizationId: org.id, email: 'admin@macrohard.example', name: 'Demo Admin' }
-	});
+	// Keeps a password the admin already has (resetPassword is off).
+	await ensureAdmin(prisma, { organizationId: org.id, ...DEMO_ADMIN });
 
 	// Data types: one row per default, ordered within their column.
 	const positionInTier: Record<string, number> = {};
@@ -212,7 +212,7 @@ async function main() {
 		prisma.event.count({ where: { organizationId: org.id } })
 	]);
 	console.log(
-		`Seeded "${org.name}": ${dataTypes} data types, ${lists} term lists, ${policies} policy version(s), ${devices} devices, ${events} events.`
+		`Seeded "${org.name}": demo admin ${DEMO_ADMIN.email} (password in prisma/demo-admin.ts), ${dataTypes} data types, ${lists} term lists, ${policies} policy version(s), ${devices} devices, ${events} events.`
 	);
 }
 

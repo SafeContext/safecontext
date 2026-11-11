@@ -38,6 +38,8 @@ jobs:
     env:
       # The `postgres` service above. Used by Prisma (generate, migrate) and the dashboard tests.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # Throwaway value for the dashboard's sign-in tests (Better Auth). Not used anywhere real.
+      BETTER_AUTH_SECRET: ci-only-not-secret-0123456789abcdefghijklmnop
     steps:
       - uses: actions/checkout@v7
 

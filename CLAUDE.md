@@ -107,7 +107,10 @@ Use explicit `.ts` extensions in relative imports inside `packages/`.
   only** (`+page.server.ts`, `+server.ts`, `hooks.server.ts`, `src/lib/server/`).
 - `DATABASE_URL` is in `apps/dashboard/.env` (local DB: `safecontext` on native Postgres 18.6).
 - Pin `prisma`, `@prisma/client` and `@prisma/adapter-pg` to the **same exact version**.
-- Auth (not installed yet): Better Auth with its Prisma adapter. See SPEC.md §7.
+- Auth: Better Auth with its Prisma adapter, email + password (`src/lib/server/auth.ts`, #19).
+  `hooks.server.ts` guards every page; read the organisation with `currentOrganization()`
+  (`src/lib/server/current-org.ts`), never from a request parameter. The agent API (`/api/devices`,
+  `/api/policy`, `/api/events`) uses device tokens instead. Needs `BETTER_AUTH_SECRET` in `.env`.
 
 ## Agent (Hono)
 

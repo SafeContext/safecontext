@@ -5,6 +5,6 @@ import { liveFeedResponse } from '#lib/server/live-feed.ts';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ request }) => {
-	const org = await currentOrganization();
+	const org = currentOrganization();
 	return liveFeedResponse(org.id, request.signal);
 };

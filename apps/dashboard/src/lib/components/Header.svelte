@@ -1,8 +1,7 @@
 <script lang="ts">
-	// Placeholder until auth exists and the real org name is known.
-	const orgName = 'Macrohard';
+	type Admin = { email: string; name: string | null; organizationName: string };
 
-	let { navOpen, onmenu }: { navOpen: boolean; onmenu: () => void } = $props();
+	let { admin, navOpen, onmenu }: { admin: Admin; navOpen: boolean; onmenu: () => void } = $props();
 </script>
 
 <header
@@ -20,13 +19,26 @@
 			<path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round" />
 		</svg>
 	</button>
-	<div class="ml-auto flex items-center gap-3">
-		<span class="text-sm text-ink/60">Organisation</span>
-		<span class="flex items-center gap-2 font-semibold" data-testid="org-name">
-			<span class="grid size-8 place-items-center rounded-full bg-mint text-sm" aria-hidden="true">
-				{orgName[0]}
+	<div class="ml-auto flex min-w-0 items-center gap-3">
+		<span class="hidden text-sm text-ink/60 sm:inline">Organisation</span>
+		<span class="flex min-w-0 items-center gap-2 font-semibold" data-testid="org-name">
+			<span
+				class="grid size-8 shrink-0 place-items-center rounded-full bg-mint text-sm"
+				aria-hidden="true"
+			>
+				{admin.organizationName[0]}
 			</span>
-			{orgName}
+			<span class="truncate">{admin.organizationName}</span>
 		</span>
+		<!-- A plain form post so signing out works without JavaScript and reloads the page. -->
+		<form method="POST" action="/sign-out">
+			<button
+				type="submit"
+				class="rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-ink/5"
+				title={`Signed in as ${admin.name ? `${admin.name} (${admin.email})` : admin.email}`}
+			>
+				Sign out
+			</button>
+		</form>
 	</div>
 </header>

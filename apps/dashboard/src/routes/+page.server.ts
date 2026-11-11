@@ -4,7 +4,7 @@ import { recentEvents, statsSince } from '#lib/server/overview.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const org = await currentOrganization();
+	const org = currentOrganization();
 	const asOf = new Date();
 	const since = new Date(asOf.getTime() - STATS_WINDOW_MS);
 	const [stats, events] = await Promise.all([statsSince(org.id, since), recentEvents(org.id)]);

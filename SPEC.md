@@ -381,9 +381,9 @@ All four were checked in spikes. Results:
 Each item says where it was decided, or which issue holds the open question.
 
 1. ~~Fail mode~~: **decided**, block by default, IT-controlled. See §2a.
-2. ~~Auth library~~: **decided**, Better Auth with its Prisma 7 adapter (not installed yet). Still
-   **open:** sign-in methods for v1 (email/password, Google, company SSO via Better Auth's SSO
-   plugin): #19.
+2. ~~Auth library~~: **decided**, Better Auth with its Prisma 7 adapter. Built in #19 with
+   **email + password only**; admins are created by a script, not by signing up. Still **open:**
+   whether to add Google or company SSO (Better Auth's SSO plugin), asked in #19.
 3. **Data type taxonomy v0**: which green/yellow/red types ship by default. **Partly open.** The 10
    types proposed in [#2](https://github.com/SafeContext/safecontext/issues/2#issuecomment-6245163595)
    shipped in PR #28 (`packages/policy/src/defaults.ts`), but no approval or answers to that
