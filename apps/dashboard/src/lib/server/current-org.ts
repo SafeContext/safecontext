@@ -1,23 +1,15 @@
-// TEMPORARY, replaced by admin sign-in (#19).
+// The organisation whose data a dashboard page may see: the signed-in admin's (issue #19).
 //
-// There is no signed-in admin yet, so every dashboard page shows the seeded demo organisation.
-// This is the ONLY place that decides which organisation's data a page sees: #19 should replace
-// `currentOrganization` with "the signed-in admin's organisation" (and reject requests without one).
+// This is the ONLY place that decides it. `hooks.server.ts` signs the admin in and redirects
+// signed-out visitors, so on dashboard pages there is always one; anywhere else (e.g. the agent
+// API, which has no session) this refuses rather than guess.
+import { getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { prisma } from '#lib/server/prisma.ts';
-
-/** The organisation `pnpm --filter @safecontext/dashboard db:seed` creates. */
-export const DEMO_ORG_SLUG = 'macrohard-demo';
 
 export type CurrentOrganization = { id: string; name: string };
 
-export async function currentOrganization(): Promise<CurrentOrganization> {
-	const org = await prisma.organization.findUnique({
-		where: { slug: DEMO_ORG_SLUG },
-		select: { id: true, name: true }
-	});
-	if (!org) {
-		error(503, 'No organisation yet. Run `pnpm --filter @safecontext/dashboard db:seed`.');
-	}
-	return org;
+export function currentOrganization(): CurrentOrganization {
+	const { admin } = getRequestEvent().locals;
+	if (!admin) error(401, 'Sign in to see this organisation');
+	return admin.organization;
 }

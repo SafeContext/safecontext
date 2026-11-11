@@ -75,8 +75,9 @@ Also working:
 
 ## Known gaps
 
-- **No sign-in on the dashboard yet** ([#19](https://github.com/SafeContext/safecontext/issues/19)).
-  It always shows the demo organisation and is open to anyone who can reach it.
+- **Dashboard sign-in is email + password only** ([#19](https://github.com/SafeContext/safecontext/issues/19)).
+  Admins are added with a script (`create-admin`), not from the dashboard. Google and company SSO
+  are not decided yet.
 - **No policy editor** ([#23](https://github.com/SafeContext/safecontext/issues/23)) and **no
   "Deploy to Claude Code" page** ([#25](https://github.com/SafeContext/safecontext/issues/25)).
 - **No installer** ([#26](https://github.com/SafeContext/safecontext/issues/26)). You run the agent
@@ -111,7 +112,7 @@ plugin's `onFailure: "block"` needs it).
 nvm use
 pnpm install
 createdb safecontext                                  # local database
-cp apps/dashboard/.env.example apps/dashboard/.env    # then set DATABASE_URL
+cp apps/dashboard/.env.example apps/dashboard/.env    # then set DATABASE_URL and BETTER_AUTH_SECRET
 pnpm --filter @safecontext/dashboard db:generate
 ```
 
@@ -187,10 +188,15 @@ latency, with the variables above).
 
 ```bash
 pnpm --filter @safecontext/dashboard db:migrate              # create the tables
-pnpm --filter @safecontext/dashboard db:seed                 # demo org "macrohard-demo", policy v1, demo events
+pnpm --filter @safecontext/dashboard db:seed                 # demo org "macrohard-demo", demo admin, policy v1, demo events
 pnpm --filter @safecontext/dashboard enrollment-key          # prints a new key for macrohard-demo, once
 pnpm --filter @safecontext/dashboard dev                     # dashboard on http://localhost:5173
 ```
+
+Sign in as the seeded demo admin; the email and password are in
+`apps/dashboard/prisma/demo-admin.ts` (local demo only). To add a real admin:
+`pnpm --filter @safecontext/dashboard create-admin <org-slug> <email> [name]` prints a new
+password once.
 
 Then start the agent pointed at the dashboard:
 

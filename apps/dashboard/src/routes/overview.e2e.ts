@@ -1,9 +1,9 @@
 // The Overview page end to end (issue #24): a check uploaded through the real agent API shows up
 // in the open page's live feed within ~1 s.
 //
-// The page shows the seeded demo organisation (see src/lib/server/current-org.ts), so the test
-// adds a throwaway device to it with a token it knows, and deletes the device (and with it, its
-// events) afterwards. Needs the local database with `db:seed` applied.
+// Runs signed in as the seeded demo admin (auth.setup.ts), so the page shows the demo
+// organisation. The test adds a throwaway device to it with a token it knows, and deletes the
+// device (and with it, its events) afterwards. Needs the local database with `db:seed` applied.
 import 'dotenv/config';
 import { createHash, randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';

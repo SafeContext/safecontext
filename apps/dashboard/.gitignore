@@ -30,3 +30,6 @@ dist/
 
 # Prisma 7 generated client
 /src/lib/server/generated/
+
+# Playwright sign-in state (auth.setup.ts)
+playwright/.auth

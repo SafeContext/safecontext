@@ -5,7 +5,7 @@ import type { PageServerLoad } from './$types';
 
 /** The published policy's swap-back tools (issue #83). Editing comes with the policy editor (#23). */
 export const load: PageServerLoad = async () => {
-	const org = await currentOrganization();
+	const org = currentOrganization();
 	const policy = await latestPolicy(org.id);
 	const local: readonly string[] = LOCAL_SWAP_BACK_TOOLS;
 	return {

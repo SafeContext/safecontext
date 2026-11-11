@@ -43,7 +43,8 @@ type were found. It never shows the text itself, which never leaves the Mac.
 Set the database up first (main README, "Dashboard and sync"). Then:
 
 1. **Start the dashboard:** `pnpm --filter @safecontext/dashboard dev`, then open
-   http://localhost:5173.
+   http://localhost:5173 and sign in as the demo admin (email and password in
+   `apps/dashboard/prisma/demo-admin.ts`; run `db:seed` first if it says they don't match).
 2. **Get an enrollment key**, the first time only: `pnpm --filter @safecontext/dashboard enrollment-key`.
    It prints a key once. Running it again replaces the key.
 3. **Start the agent pointed at the dashboard:**
