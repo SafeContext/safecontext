@@ -4,9 +4,10 @@
  * skill. No Claude Code here, so this runs in the default `pnpm test`.
  */
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { AGENT_API, AGENT_DEFAULT_PORT, AGENT_HOST } from '@safecontext/policy';
@@ -23,7 +24,11 @@ const script = join(pluginDir, 'scripts/agent-status.sh');
 const run = promisify(execFile);
 
 async function status(port: number | string, ...args: string[]) {
-	const { stdout } = await run('sh', [script, ...args], { env: { ...process.env, SC_AGENT_PORT: String(port) } });
+	return statusAt(script, port, ...args);
+}
+
+async function statusAt(scriptPath: string, port: number | string, ...args: string[]) {
+	const { stdout } = await run('sh', [scriptPath, ...args], { env: { ...process.env, SC_AGENT_PORT: String(port) } });
 	return stdout;
 }
 
@@ -89,6 +94,119 @@ describe('agent-status.sh (/safe-context:status)', () => {
 	it('rejects a port that is not a number', async () => {
 		expect(await status('4747; echo hi')).toContain('SC_AGENT_PORT must be a port number');
 	});
+
+	it('runs from a plugin path with spaces and non-ASCII characters', async () => {
+		const directory = mkdtempSync(join(tmpdir(), 'Safe Context Jos\u00e9 '));
+		try {
+			const copiedScript = join(directory, 'agent-status.sh');
+			copyFileSync(script, copiedScript);
+			expect(await statusAt(copiedScript, agent.port)).toContain('enforcing policy version 7.');
+			expect(JSON.parse(await statusAt(copiedScript, agent.port, '--session-start')).hookSpecificOutput).toHaveProperty(
+				'hookEventName',
+				'SessionStart'
+			);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it.skipIf(process.platform !== 'win32')(
+		'prepares an inherited Windows hook PATH from a checkout with spaces and non-ASCII characters',
+		async () => {
+			const directory = mkdtempSync(join(tmpdir(), 'Safe Context Jos\u00e9 '));
+			try {
+				mkdirSync(join(directory, 'scripts'));
+				const helper = join(directory, 'scripts/windows-dev.ps1');
+				copyFileSync(join(pluginDir, '../scripts/windows-dev.ps1'), helper);
+				copyFileSync(join(pluginDir, '../package.json'), join(directory, 'package.json'));
+				const { stdout } = await run(
+					'pwsh',
+					[
+						'-NoProfile',
+						'-NonInteractive',
+						'-Command',
+						'& $env:WINDOWS_HELPER; if ($env:SC_AGENT_PORT -ne $env:EXPECTED_PORT) { throw "Settings changed" }; & sh.exe $env:STATUS_SCRIPT'
+					],
+					{
+						env: {
+							...process.env,
+							WINDOWS_HELPER: helper,
+							STATUS_SCRIPT: script,
+							EXPECTED_PORT: String(agent.port),
+							SC_AGENT_PORT: String(agent.port)
+						}
+					}
+				);
+				expect(stdout).toContain('Windows prerequisites ready');
+				expect(stdout).toContain('enforcing policy version 7.');
+			} finally {
+				rmSync(directory, { recursive: true, force: true });
+			}
+		}
+	);
+
+	it.skipIf(process.platform !== 'win32')(
+		'restores existing settings when the isolated demo fails to start',
+		async () => {
+			const directory = mkdtempSync(join(tmpdir(), 'Safe Context demo failure '));
+			try {
+				mkdirSync(join(directory, 'scripts'));
+				mkdirSync(join(directory, 'apps/agent/node_modules/tsx'), { recursive: true });
+				const helper = join(directory, 'scripts/windows-dev.ps1');
+				copyFileSync(join(pluginDir, '../scripts/windows-dev.ps1'), helper);
+				copyFileSync(join(pluginDir, '../package.json'), join(directory, 'package.json'));
+				// Stand in for a failed agent process: no server, dependencies or model calls.
+				writeFileSync(
+					join(directory, 'pnpm.cmd'),
+					'@echo off\r\nif "%1"=="--version" (\r\n echo 12.14.0\r\n exit /b 0\r\n)\r\nexit /b 9\r\n'
+				);
+				const { stdout } = await run(
+					'pwsh',
+					[
+						'-NoProfile',
+						'-NonInteractive',
+						'-Command',
+						'$env:PATH = $env:FAKE_TOOLS + ";" + $env:PATH; try { & $env:WINDOWS_HELPER -StartAgent; throw "Unexpected success" } catch { if ($_.Exception.Message -notlike "*exit code 9*") { throw } }; if ($env:SC_AGENT_PORT -ne "12345" -or $env:SC_TIER2_BASE_URL -ne "demo-sentinel") { throw "Settings were not restored" }; "Settings restored after failed startup"'
+					],
+					{
+						env: {
+							...process.env,
+							FAKE_TOOLS: directory,
+							WINDOWS_HELPER: helper,
+							SC_AGENT_PORT: '12345',
+							SC_TIER2_BASE_URL: 'demo-sentinel'
+						}
+					}
+				);
+				expect(stdout).toContain('Settings restored after failed startup');
+			} finally {
+				rmSync(directory, { recursive: true, force: true });
+			}
+		}
+	);
+
+	it.skipIf(process.platform !== 'win32')(
+		'rejects a missing Git installation without changing the caller PATH',
+		async () => {
+			const { stdout } = await run(
+				'pwsh',
+				[
+					'-NoProfile',
+					'-NonInteractive',
+					'-Command',
+					'$before = $env:PATH; try { & $env:WINDOWS_HELPER -GitRoot $env:MISSING_GIT; throw "Unexpected success" } catch { if ($env:PATH -cne $before) { throw "PATH changed" }; if ($_.Exception.Message -eq "Unexpected success") { throw }; "Rejected missing Git; PATH unchanged" }'
+				],
+				{
+					env: {
+						...process.env,
+						WINDOWS_HELPER: join(pluginDir, '../scripts/windows-dev.ps1'),
+						MISSING_GIT: join(tmpdir(), 'Safe Context missing Git', 'does-not-exist')
+					}
+				}
+			);
+			expect(stdout).toContain('Rejected missing Git; PATH unchanged');
+		}
+	);
 });
 
 describe('agent-status.sh --session-start (SessionStart hook)', () => {

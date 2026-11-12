@@ -1,0 +1,8 @@
+# These bytes are executed by sh, compared with generated schemas, or rendered
+# into model prompts. Keep them identical even with core.autocrlf=true.
+*.sh text eol=lf
+/packages/policy/schema/*.json text eol=lf
+/ml/prompts/tier2/** text eol=lf
+# The agent's existing formatter requires LF too.
+/apps/agent/src/** text eol=lf
+/apps/agent/e2e/** text eol=lf

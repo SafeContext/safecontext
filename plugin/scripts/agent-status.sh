@@ -10,7 +10,7 @@
 #                                    shown to the user, with how to fix it.
 #
 # Port: SC_AGENT_PORT, the same variable the agent reads (default 4747, AGENT_DEFAULT_PORT in
-# packages/policy). Only sh and curl are needed, so this works even when Node isn't installed.
+# packages/policy). Only sh, curl and sed are needed, so this works even when Node isn't installed.
 # It never reads or prints prompt or tool text.
 
 mode=status
