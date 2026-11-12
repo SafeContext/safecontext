@@ -1,6 +1,6 @@
 /** Path checks for local placeholder restoration, not a filesystem sandbox (issue #93). */
 import { lstatSync, readlinkSync, realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, parse, relative, resolve, sep, win32 } from 'node:path';
 
 const WINDOWS = process.platform === 'win32';
 const PROTECTED_FILES = new Set([
@@ -37,6 +37,11 @@ export function supportedRestorationPath(path: string, cwd: string): boolean {
 		!path.includes('\0') &&
 		(!WINDOWS || (ordinaryWindowsPath(cwd) && ordinaryWindowsPath(path)))
 	);
+}
+
+/** Lexical only: a restored write cannot belong to a project on a different drive. */
+export function sameWindowsDrive(path: string, cwd: string): boolean {
+	return win32.parse(win32.resolve(cwd, path)).root.toLowerCase() === win32.parse(cwd).root.toLowerCase();
 }
 
 /**
@@ -112,6 +117,7 @@ function inside(path: string): boolean {
 /** Restore writes only to an established project, through an ordinary, unprotected target. */
 export function isSafeWriteTarget(path: string, cwd: string): boolean {
 	if (!supportedRestorationPath(path, cwd)) return false;
+	if (WINDOWS && !sameWindowsDrive(path, cwd)) return false;
 	// Avoid a link/.. spelling being interpreted differently by the eventual tool.
 	if (WINDOWS && path.split(/[\\/]/).includes('..')) return false;
 	const root = resolveRestorationPath(cwd, cwd);

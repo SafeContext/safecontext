@@ -26,7 +26,7 @@ remain unsupported and unverified; this code does not classify drive types.
 | Spaces, Unicode, either slash style, drive-letter case variations | Covered on Windows |
 | New file or missing normal subfolders | Allowed when the existing ancestor resolves inside the project |
 | Ordinary local read outside the project | Keeps the existing read policy; no new project-only read restriction |
-| Restored write outside the resolved project, including a similar-prefix sibling or another drive | Refused |
+| Restored write outside the resolved project, including a similar-prefix sibling or another drive | Refused; a different drive is rejected before filesystem probing |
 | Hidden folder, hidden file or protected filename | Refused; Windows protected filename comparisons ignore case |
 | `.env`, `.env.local`, similar existing policy exceptions | Allowed inside the project; a hidden parent folder is still refused |
 | Trailing space/period, reserved device name, stream such as `file:stream`, recognizable DOS short-name spelling such as `PROTEC~1` | Refused on Windows |

@@ -193,7 +193,27 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem restoration', 
 			)
 		).toBe(true);
 		const otherDrive = parse(project).root[0]!.toUpperCase() === 'Z' ? 'Y' : 'Z';
+		vi.clearAllMocks();
 		expect(isSafeWriteTarget(`${otherDrive}:\\note.md`, project)).toBe(false);
+		expect(
+			restoreToolInput(
+				'Write',
+				{ file_path: `${otherDrive}:\\note.md`, content: '\u27eacustomer_name_1\u27eb' },
+				key(),
+				project,
+				local
+			)
+		).toMatchObject({ kind: 'refused', reason: 'outside_project' });
+		expect(
+			restoreToolInput(
+				'Write',
+				{ file_path: '\u27eacustomer_name_1\u27eb', content: 'synthetic' },
+				key(`${otherDrive}:\\note.md`),
+				project,
+				local
+			)
+		).toMatchObject({ kind: 'refused', reason: 'outside_project' });
+		for (const call of filesystemCalls) expect(call).not.toHaveBeenCalled();
 	});
 
 	const filesystemCalls = [lstatSync, realpathSync, readlinkSync, statSync, existsSync, readFileSync, readdirSync];

@@ -35,7 +35,12 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { swapsBackInto } from '@safecontext/policy';
 import { OPEN, PLACEHOLDER, type SessionKey } from './placeholders.ts';
-import { isSafeWriteTarget, resolveRestorationPath, supportedRestorationPath } from './restore-paths.ts';
+import {
+	isSafeWriteTarget,
+	resolveRestorationPath,
+	sameWindowsDrive,
+	supportedRestorationPath
+} from './restore-paths.ts';
 export { isSafeWriteTarget } from './restore-paths.ts';
 
 interface RestoreTool {
@@ -90,8 +95,12 @@ export function restoreToolInput(
 		if (!supportedRestorationPath('.', cwd)) return unsupported();
 		for (const field of tool.paths) {
 			const path = input[field];
-			if (typeof path === 'string' && !supportedRestorationPath(path.replace(PLACEHOLDER, 'placeholder'), cwd)) {
-				return unsupported();
+			if (typeof path === 'string') {
+				const masked = path.replace(PLACEHOLDER, 'placeholder');
+				if (!supportedRestorationPath(masked, cwd)) return unsupported();
+				if (tool.writes && !sameWindowsDrive(masked, cwd)) {
+					return { kind: 'refused', reason: 'outside_project', ids: [] };
+				}
 			}
 		}
 	}
@@ -141,12 +150,16 @@ export function restoreToolInput(
 				v,
 				(candidate) => {
 					if (!supportedRestorationPath(candidate, cwd)) return -1;
+					if (process.platform === 'win32' && tool.writes && !sameWindowsDrive(candidate, cwd)) return -1;
 					const path = process.platform === 'win32' ? resolveRestorationPath(candidate, cwd) : resolve(cwd, candidate);
 					return path ? pathScore(path) : -1;
 				},
 				plain
 			);
 			const candidate = restored[field] as string;
+			if (process.platform === 'win32' && tool.writes && !sameWindowsDrive(candidate, cwd)) {
+				return { kind: 'refused', reason: 'outside_project', ids: [] };
+			}
 			if (
 				process.platform === 'win32' &&
 				(!supportedRestorationPath(candidate, cwd) || !resolveRestorationPath(candidate, cwd))
