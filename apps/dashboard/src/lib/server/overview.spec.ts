@@ -7,7 +7,13 @@ import type { AuthedDevice } from '#lib/server/agent-api/auth.ts';
 import { storeEvents } from '#lib/server/agent-api/events.ts';
 import { closeListener, subscriberCount } from '#lib/server/event-listener.ts';
 import { liveFeedResponse } from '#lib/server/live-feed.ts';
-import { recentEvents, statsSince } from '#lib/server/overview.ts';
+import {
+	dailyCounts,
+	policyRollout,
+	protectedByType,
+	recentEvents,
+	statsSince
+} from '#lib/server/overview.ts';
 import { prisma } from '#lib/server/prisma.ts';
 
 const run = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -91,6 +97,64 @@ describe('stats and feed rows', () => {
 		for (const e of events) expect(Object.keys(e).sort()).toEqual(keys);
 		const prompt = events.find((e) => e.hookEvent === 'UserPromptSubmit');
 		expect(prompt).toMatchObject({ toolName: null, result: 'blocked', deviceId: 'dev-overview' });
+	});
+
+	it('counts checks per UTC day for the last 7 days, today last (#96)', async () => {
+		const now = new Date();
+		const days = await dailyCounts(mine.organizationId, now);
+		expect(days).toHaveLength(7);
+		expect(days.at(-1)).toEqual({
+			day: now.toISOString().slice(0, 10),
+			safe: 1,
+			vague: 2,
+			blocked: 1
+		});
+		// The 8-day-old check is before the first day shown.
+		expect(days.slice(0, -1).every((d) => d.safe + d.vague + d.blocked === 0)).toBe(true);
+	});
+
+	it('counts items found per data type in the window, counts only (#96)', async () => {
+		const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+		// This organisation has no data type rows, so the name falls back to the id.
+		expect(await protectedByType(mine.organizationId, since)).toEqual([
+			{ key: 'customer-names', name: 'customer-names', tier: null, count: 1 }
+		]);
+		await prisma.dataType.create({
+			data: {
+				organizationId: mine.organizationId,
+				key: 'customer-names',
+				name: 'Customer names',
+				description: '',
+				examples: [],
+				tier: 'yellow',
+				action: 'pseudonymize'
+			}
+		});
+		expect(await protectedByType(mine.organizationId, since)).toEqual([
+			{ key: 'customer-names', name: 'Customer names', tier: 'yellow', count: 1 }
+		]);
+	});
+
+	it('says how many devices run the latest published policy (#96)', async () => {
+		expect(await policyRollout(mine.organizationId)).toEqual({
+			version: null,
+			current: 0,
+			devices: 1
+		});
+		const snapshot = { version: 1 };
+		await prisma.policyVersion.create({
+			data: { organizationId: mine.organizationId, version: 1, failMode: 'block', snapshot }
+		});
+		// The device's last check used policy version 1.
+		expect(await policyRollout(mine.organizationId)).toEqual({
+			version: 1,
+			current: 1,
+			devices: 1
+		});
+		await prisma.policyVersion.create({
+			data: { organizationId: mine.organizationId, version: 2, failMode: 'block', snapshot }
+		});
+		expect(await policyRollout(mine.organizationId)).toMatchObject({ version: 2, current: 0 });
 	});
 });
 

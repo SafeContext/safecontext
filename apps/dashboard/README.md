@@ -6,11 +6,14 @@ coding rules are in [CLAUDE.md](../../CLAUDE.md).
 
 ## What's here
 
+The look ("calm and clear", #96): white sidebar, cards on a light grey ground, colour tokens in
+`src/routes/layout.css` (`line`, `muted`, `subtle`, and `clean` / `hidden` / `blocked` for results).
+
 - **Sign-in** (`/sign-in`, #19): email + password with Better Auth (`src/lib/server/auth.ts`).
   Every other page needs a signed-in admin and shows only their organisation; `hooks.server.ts`
   redirects everyone else to sign-in. Nobody can sign up from the browser: admins come from
   `create-admin` (or the seed's demo admin, credentials in `prisma/demo-admin.ts`).
-- **Overview** (`/`): checks in the last 7 days and a live feed (#24).
+- **Overview** (`/`): checks in the last 7 days, checks per day, items found per data type, how many devices run the latest policy, and a live feed (#24, #96). Counts only.
 - **Policy** (`/policy`, #23): the policy editor. Edits save to the draft rows (`DataType`,
   `TermList`, `Organization.failMode` / `swapBackTools`) at once; Publish copies them into a new
   `PolicyVersion` (`src/lib/server/policy-draft.ts`). Board rules shared with the page are in

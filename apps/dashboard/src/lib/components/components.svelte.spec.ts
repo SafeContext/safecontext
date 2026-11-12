@@ -94,6 +94,6 @@ describe('FeedList', () => {
 		await expect.element(rows.nth(0)).toHaveTextContent(/Prompt.*Blocked.*dev-a1b2c3.*4 min ago/);
 		await expect
 			.element(rows.nth(1))
-			.toHaveTextContent(/Read.*Tool output.*Made vague.*dev-d4e5f6.*3 h ago/);
+			.toHaveTextContent(/Read.*Tool output.*Hidden.*dev-d4e5f6.*3 h ago/);
 	});
 });

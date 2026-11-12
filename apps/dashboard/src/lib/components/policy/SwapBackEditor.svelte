@@ -3,6 +3,7 @@
 	// values put back in place of placeholders. Local file tools are on by default; any other tool
 	// IT adds asks the person before each call.
 	import Button from '#lib/components/Button.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import { send } from './send.ts';
 
 	let {
@@ -53,96 +54,89 @@
 	}
 </script>
 
-<p class="mb-4 max-w-2xl text-sm text-ink/70">
-	Claude only sees placeholders such as <code>⟪customer_name_1⟫</code>. When Claude uses one of
-	these tools, Safe Context puts the real value back just before the tool runs, on the person's Mac.
-	Claude never sees it.
-</p>
-
-<h3 class="mb-2 text-sm font-semibold">File tools in the project folder</h3>
-<ul class="mb-5 flex flex-wrap gap-2" data-testid="swap-back-local">
-	{#each localTools as tool (tool)}
-		<li>
-			<label
-				class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold {shown.includes(
-					tool
-				)
-					? 'bg-mint'
-					: 'bg-ink/8 text-ink/60 line-through'}"
-			>
-				<input
-					type="checkbox"
-					class="size-3.5"
-					checked={shown.includes(tool)}
-					disabled={!canEdit || busy}
-					onchange={(e) => toggleLocal(tool, (e.currentTarget as HTMLInputElement).checked)}
-				/>
-				{tool}
-			</label>
-		</li>
-	{/each}
-</ul>
-
-<h3 class="mb-1 text-sm font-semibold">Other tools, each call approved by the person first</h3>
-<p class="mb-2 max-w-2xl text-sm text-ink/70">
-	These send real values off the Mac (an MCP server, a shell command), so the person sees the real
-	values and approves every call. Use a name ending in <code>*</code> for every tool that starts
-	with it, e.g. <code>mcp__slack__*</code>.
-</p>
-{#if added.length > 0}
-	<ul class="mb-3 flex flex-wrap gap-2" data-testid="swap-back-added">
-		{#each added as tool (tool)}
-			<li
-				class="inline-flex max-w-full items-center gap-1 rounded-full bg-lemon py-1 pr-1 pl-3 text-xs font-semibold"
-			>
-				<code class="break-all">{tool}</code>
-				{#if canEdit}
-					<button
-						type="button"
-						class="grid size-6 shrink-0 place-items-center rounded-full hover:bg-ink/10"
-						aria-label="Remove {tool}"
-						disabled={busy}
-						onclick={() =>
-							save(
-								shown.filter((t) => t !== tool),
-								`Removed ${tool}.`
-							)}
-					>
-						<svg
-							viewBox="0 0 24 24"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-						>
-							<path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
-						</svg>
-					</button>
-				{/if}
+<div class="flex flex-col gap-2">
+	<h3 class="font-sans text-[13px] font-semibold tracking-normal">
+		File tools in the project folder
+	</h3>
+	<ul class="flex flex-wrap gap-2" data-testid="swap-back-local">
+		{#each localTools as tool (tool)}
+			<li>
+				<label
+					class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[13px] {shown.includes(
+						tool
+					)
+						? 'border-field'
+						: 'border-dashed border-field text-muted line-through'}"
+				>
+					<input
+						type="checkbox"
+						class="m-0 size-3.5 accent-ink"
+						checked={shown.includes(tool)}
+						disabled={!canEdit || busy}
+						onchange={(e) => toggleLocal(tool, (e.currentTarget as HTMLInputElement).checked)}
+					/>
+					{tool}
+				</label>
 			</li>
 		{/each}
 	</ul>
-{:else}
-	<p class="mb-3 text-sm text-ink/70">
-		None. MCP tools and shell commands get the placeholder exactly as Claude wrote it.
-	</p>
-{/if}
+</div>
 
-{#if canEdit}
-	<form class="mb-4 flex max-w-md flex-wrap gap-2" onsubmit={add}>
-		<label class="sr-only" for="swap-back-add">Tool name</label>
-		<input
-			id="swap-back-add"
-			class="min-w-0 flex-1 rounded-full border border-ink/20 bg-white px-4 py-2 font-mono text-sm focus:border-ink focus:outline-none"
-			placeholder="mcp__slack__*"
-			autocomplete="off"
-			spellcheck="false"
-			bind:value={adding}
-		/>
-		<Button type="submit" variant="secondary" disabled={busy || !adding.trim()}>Add tool</Button>
-	</form>
-{/if}
+<div class="flex flex-col gap-2">
+	<h3 class="font-sans text-[13px] font-semibold tracking-normal">
+		Other tools (the person approves each call)
+	</h3>
+	{#if added.length > 0}
+		<ul class="flex flex-wrap gap-2" data-testid="swap-back-added">
+			{#each added as tool (tool)}
+				<li
+					class="inline-flex max-w-full items-center gap-1 rounded-full border border-[#f0dc6a] bg-[#fff7c2] py-1 pr-1 pl-3 font-mono text-[13px]"
+				>
+					<span class="break-all">{tool}</span>
+					{#if canEdit}
+						<button
+							type="button"
+							class="grid size-7 shrink-0 place-items-center rounded-full hover:bg-ink/10"
+							aria-label="Remove {tool}"
+							disabled={busy}
+							onclick={() =>
+								save(
+									shown.filter((t) => t !== tool),
+									`Removed ${tool}.`
+								)}
+						>
+							<Icon name="close" class="size-3.5" />
+						</button>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="text-sm text-muted">
+			None. MCP tools and shell commands get the placeholder exactly as Claude wrote it.
+		</p>
+	{/if}
 
-<p class="text-sm text-ink/70">
-	Real values never go into {neverTools.join(', ')}: their input goes to Anthropic.
+	{#if canEdit}
+		<form class="flex flex-wrap gap-2" onsubmit={add}>
+			<label class="sr-only" for="swap-back-add">Tool name</label>
+			<input
+				id="swap-back-add"
+				class="min-w-0 flex-[1_1_12rem] rounded-[10px] border border-field bg-white px-3 py-2 font-mono text-[13px] focus:border-ink focus:outline-none"
+				placeholder="mcp__jira__*"
+				autocomplete="off"
+				spellcheck="false"
+				bind:value={adding}
+			/>
+			<Button type="submit" variant="secondary" disabled={busy || !adding.trim()}>Add tool</Button>
+		</form>
+		<p class="text-xs text-muted">
+			These send real values off the person's device, so the person sees them and approves every
+			call. End a name with <code>*</code> to include every tool that starts with it.
+		</p>
+	{/if}
+</div>
+
+<p class="text-xs text-muted">
+	Never: {neverTools.join(', ')} (their input goes to Anthropic).
 </p>

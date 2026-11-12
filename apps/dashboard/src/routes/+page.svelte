@@ -4,10 +4,14 @@
 	import { resolve } from '$app/paths';
 	import Button from '#lib/components/Button.svelte';
 	import Card from '#lib/components/Card.svelte';
+	import DailyChart from '#lib/components/DailyChart.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FeedList from '#lib/components/FeedList.svelte';
+	import PageHeader from '#lib/components/PageHeader.svelte';
+	import ProtectedList from '#lib/components/ProtectedList.svelte';
+	import ResultKey from '#lib/components/ResultKey.svelte';
 	import StatCard from '#lib/components/StatCard.svelte';
-	import { addToStats, mergeFeed, parseFeedMessage, type FeedEvent } from '#lib/feed.ts';
+	import { addToDays, addToStats, mergeFeed, parseFeedMessage, type FeedEvent } from '#lib/feed.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -26,6 +30,12 @@
 	/** Live events that the loaded stats don't already include. */
 	const fresh = $derived(live.filter((e) => e.receivedAt > data.asOf && e.ts >= data.since));
 	const stats = $derived(addToStats(data.stats, fresh));
+	const days = $derived(addToDays(data.days, fresh));
+	const rolloutText = $derived(
+		`Policy v${data.rollout.version} on ${data.rollout.current} of ${data.rollout.devices} ${
+			data.rollout.devices === 1 ? 'device' : 'devices'
+		}`
+	);
 	const events = $derived(mergeFeed(live, data.events));
 
 	/** Reloads stats and feed from the database, then drops live events it now includes. */
@@ -80,37 +90,71 @@
 	<title>Overview · Safe Context</title>
 </svelte:head>
 
-<h1 class="mb-2 text-3xl font-bold">Overview</h1>
-<p class="mb-6 max-w-2xl text-ink/70">
-	What Safe Context checked for your team. Counts only: no prompt, file or tool text ever reaches
-	the dashboard.
-</p>
+<PageHeader eyebrow="Last 7 days" title="Overview">
+	{#if data.rollout.version !== null && data.rollout.devices > 0}
+		<a
+			href={resolve('/policy')}
+			class="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3.5 py-2 text-sm hover:border-ink/30"
+			data-testid="rollout"
+		>
+			<ResultKey tone={data.rollout.current === data.rollout.devices ? 'clean' : 'hidden'} />
+			{rolloutText}
+		</a>
+	{/if}
+</PageHeader>
 
-<h2 class="mb-3 font-sans text-sm font-semibold tracking-normal text-ink/60">Last 7 days</h2>
-<div class="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" data-testid="stats">
-	<StatCard label="Checked" value={stats.checked} hint="Prompts and tool calls" />
-	<StatCard label="Safe to share" value={stats.safe} tone="safe" hint="Nothing needed changing" />
-	<StatCard label="Made vague" value={stats.vague} tone="vague" hint="Sensitive parts changed" />
-	<StatCard label="Blocked" value={stats.blocked} tone="never" hint="Stopped before sending" />
+<div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" data-testid="stats">
+	<StatCard label="Checks" value={stats.checked} hint="Prompts, tool calls and files" />
+	<StatCard label="Nothing found" value={stats.safe} tone="clean" hint="Went to Claude unchanged" />
+	<StatCard
+		label="Hidden from Claude"
+		value={stats.vague}
+		tone="hidden"
+		hint="Swapped for placeholders"
+	/>
+	<StatCard
+		label="Blocked"
+		value={stats.blocked}
+		tone="blocked"
+		hint="Stopped before reaching Claude"
+	/>
 </div>
 
-<Card>
-	<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-		<h2 class="text-lg font-semibold">Live feed</h2>
+<div class="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+	<Card title="Checks per day" description="By day in UTC, today on the right.">
+		<DailyChart {days} />
+	</Card>
+	<Card title="What was protected" description="Items found per kind of data.">
+		{#snippet actions()}
+			<a href={resolve('/policy')} class="text-sm font-semibold underline-offset-4 hover:underline"
+				>Edit policy</a
+			>
+		{/snippet}
+		<ProtectedList types={data.types} />
+	</Card>
+</div>
+
+<Card
+	title="Live feed"
+	description="Counts only. No prompt, file or tool text ever leaves the device."
+>
+	{#snippet actions()}
 		<p
-			class="flex items-center gap-2 text-sm font-medium text-ink/70"
+			class="flex items-center gap-2 text-sm font-semibold {status === 'live'
+				? 'text-ink'
+				: 'text-muted'}"
 			data-testid="feed-status"
 			data-status={status}
 		>
 			<span
-				class="size-2.5 rounded-full {status === 'live'
-					? 'bg-mint ring-2 ring-mint/40'
-					: 'bg-ink/30'}"
+				class="size-2.5 rounded-full border {status === 'live'
+					? 'border-clean-edge bg-clean'
+					: 'border-ink/30 bg-ink/10'}"
 				aria-hidden="true"
 			></span>
 			{statusText[status]}
 		</p>
-	</div>
+	{/snippet}
 
 	{#if events.length}
 		<FeedList {events} {now} />

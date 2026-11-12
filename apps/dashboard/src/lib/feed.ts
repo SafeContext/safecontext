@@ -103,10 +103,54 @@ const STAGES: Record<HookEventName, string> = {
 export const stageLabel = (hookEvent: HookEventName): string => STAGES[hookEvent];
 
 export const RESULT_LABELS: Record<EventResult, string> = {
-	safe: 'Safe to share',
-	vague: 'Made vague',
+	safe: 'Nothing found',
+	vague: 'Hidden',
 	blocked: 'Blocked'
 };
+
+/** Items found for one data type ("What was protected"). Counts only. */
+export type ProtectedCount = {
+	/** Data type id (`EventCount.dataTypeKey`). */
+	key: string;
+	/** Its name in the policy draft, or the id if it has since been deleted. */
+	name: string;
+	/** Its column in the draft; null if it has since been deleted. */
+	tier: 'green' | 'yellow' | 'red' | null;
+	count: number;
+};
+
+/** How many days the "Checks per day" chart shows, today included. */
+export const CHART_DAYS = 7;
+
+/** Checks on one UTC day (`YYYY-MM-DD`), split by result. */
+export type DayCounts = { day: string } & Record<EventResult, number>;
+
+/** The UTC day of an ISO time, `YYYY-MM-DD`. */
+export const utcDay = (iso: string): string => iso.slice(0, 10);
+
+/** The last `count` UTC days up to and including `now`'s, oldest first, each with no checks. */
+export function emptyDays(now: Date, count = CHART_DAYS): DayCounts[] {
+	return Array.from({ length: count }, (_, i) => {
+		const d = new Date(now);
+		d.setUTCDate(d.getUTCDate() - (count - 1 - i));
+		return { day: d.toISOString().slice(0, 10), safe: 0, vague: 0, blocked: 0 };
+	});
+}
+
+/** Adds events to the days they fall on (returns new objects; events outside the days are ignored). */
+export function addToDays(days: readonly DayCounts[], events: readonly FeedEvent[]): DayCounts[] {
+	const next = days.map((d) => ({ ...d }));
+	const byDay = new Map(next.map((d) => [d.day, d]));
+	for (const e of events) {
+		const d = byDay.get(utcDay(e.ts));
+		if (d) d[e.result]++;
+	}
+	return next;
+}
+
+/** "Mon" for a `YYYY-MM-DD` day (UTC, so the server and the browser agree). */
+export const weekday = (day: string): string =>
+	new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' });
 
 /** Short relative time, e.g. "just now", "4 min ago", "3 h ago", "2 d ago". */
 export function timeAgo(iso: string, now: number): string {

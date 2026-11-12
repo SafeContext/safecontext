@@ -7,7 +7,10 @@ import {
 	mergeFeed,
 	parseFeedMessage,
 	timeAgo,
-	toolLabel
+	toolLabel,
+	addToDays,
+	emptyDays,
+	weekday
 } from './feed.ts';
 
 const none = { generalize: 0, pseudonymize: 0, mask: 0, block: 0 };
@@ -101,5 +104,46 @@ describe('timeAgo', () => {
 		['2026-10-27T12:00:05Z', 'just now']
 	])('%s -> %s', (iso, expected) => {
 		expect(timeAgo(iso, now)).toBe(expected);
+	});
+});
+
+describe('checks per day (#96)', () => {
+	const now = new Date('2026-11-12T20:00:00Z');
+	const event = (ts: string, result: FeedEvent['result']): FeedEvent => ({
+		id: '0199f000-0000-7000-8000-000000000001',
+		ts,
+		receivedAt: ts,
+		hookEvent: 'PostToolUse',
+		toolName: 'Read',
+		deviceId: 'dev-a1b2c3',
+		result
+	});
+
+	it('lists the last 7 UTC days, oldest first, today last', () => {
+		const days = emptyDays(now);
+		expect(days.map((d) => d.day)).toEqual([
+			'2026-11-06',
+			'2026-11-07',
+			'2026-11-08',
+			'2026-11-09',
+			'2026-11-10',
+			'2026-11-11',
+			'2026-11-12'
+		]);
+		expect(days[0]).toEqual({ day: '2026-11-06', safe: 0, vague: 0, blocked: 0 });
+	});
+
+	it('adds live events to their day, ignoring ones outside the chart', () => {
+		const days = addToDays(emptyDays(now), [
+			event('2026-11-12T19:59:00.000Z', 'blocked'),
+			event('2026-11-12T00:00:00.000Z', 'vague'),
+			event('2026-11-01T10:00:00.000Z', 'safe')
+		]);
+		expect(days.at(-1)).toEqual({ day: '2026-11-12', safe: 0, vague: 1, blocked: 1 });
+		expect(days.slice(0, -1).every((d) => d.safe + d.vague + d.blocked === 0)).toBe(true);
+	});
+
+	it('names the weekday in UTC', () => {
+		expect(weekday('2026-11-12')).toBe('Thu');
 	});
 });

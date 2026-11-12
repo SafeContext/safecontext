@@ -6,10 +6,25 @@
 @theme {
 	/* Brand colours, from the pitch deck */
 	--color-ink: #10132b;
-	--color-canvas: #f4f4f6;
+	--color-canvas: #f5f5f8;
 	--color-lemon: #ffe95c; /* vague */
 	--color-mint: #a6f4c5; /* safe */
 	--color-pink: #ffb3c7; /* never share */
+
+	/* "Calm and clear" redesign (issue #96) */
+	--color-line: #e4e5ec; /* card borders */
+	--color-well: #f7f7fa; /* panels inside cards */
+	--color-subtle: #3a3f5c; /* secondary text, 10.4:1 on white */
+	--color-muted: #5b5f76; /* tertiary text, 6.3:1 on white */
+	--color-field: #d5d7e2; /* input and secondary button borders */
+	/* Results use the three brand colours (the logo, brand/safecontext-mark.svg). They are pale, so
+	   bars and keys get a darker edge of the same hue (3:1 or more on white). */
+	--color-clean: #a6f4c5;
+	--color-clean-edge: #2f9f64;
+	--color-hidden: #ffe95c;
+	--color-hidden-edge: #a08800;
+	--color-blocked: #ffb3c7;
+	--color-blocked-edge: #d2477a;
 
 	--font-heading: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
 	--font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;

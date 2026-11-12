@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { authClient } from '#lib/auth-client.ts';
 	import Button from '#lib/components/Button.svelte';
+	import Logo from '#lib/components/Logo.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -38,7 +39,7 @@
 
 <div class="grid min-h-dvh place-items-center p-4">
 	<div class="w-full max-w-sm">
-		<p class="mb-6 text-center font-heading text-2xl font-bold tracking-tight">Safe Context</p>
+		<div class="mb-6 flex justify-center"><Logo size="lg" /></div>
 		<section class="rounded-2xl border border-ink/10 bg-white p-6 shadow-sm">
 			<h1 class="mb-1 text-2xl font-bold">Sign in</h1>
 			<p class="mb-6 text-sm text-ink/70">For your organisation's Safe Context admins.</p>
