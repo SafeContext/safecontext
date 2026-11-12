@@ -85,6 +85,16 @@ Use explicit `.ts` extensions in relative imports inside `packages/`.
   never use `@apply`, `@theme` or `@reference`; read design tokens as CSS variables
   (e.g. `var(--color-zinc-900)`).
 
+### Design ("calm and clear", #96)
+
+- The brand mark is in `brand/`. Its three colours always mean results: mint = nothing found,
+  lemon = hidden / make it vague, pink = blocked / never share. Map results with `#lib/tones.ts`.
+- Colours are tokens in `src/routes/layout.css`; never type a hex value in a component.
+- Components: `ui/` (generic), `layout/` (app frame), one folder per page (`overview/`, `policy/`).
+- Wording: plain English for IT admins, short sentences, product-neutral ("device", not "Mac").
+- Colour never carries meaning alone (pair it with a label); text contrast 4.5:1; anything
+  draggable also works from a menu or the keyboard.
+
 ### Environment variables (SvelteKit 3)
 
 - Declare every variable in `src/env.ts` with `defineEnvVars` (from `@sveltejs/kit/env`).

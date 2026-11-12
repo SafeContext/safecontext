@@ -1,9 +1,10 @@
 <script lang="ts">
 	// The policy editor (issue #23). Edits save to a draft straight away; Publish sends them to
-	// every Mac. Viewers see the same page without the controls.
-	import Button from '#lib/components/Button.svelte';
-	import Card from '#lib/components/Card.svelte';
-	import Pill from '#lib/components/Pill.svelte';
+	// every device. Viewers see the same page without the controls.
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
 	import DataTypeBoard from '#lib/components/policy/DataTypeBoard.svelte';
 	import DataTypeDialog, { type Target } from '#lib/components/policy/DataTypeDialog.svelte';
 	import FailModeSection from '#lib/components/policy/FailModeSection.svelte';
@@ -23,7 +24,7 @@
 		notice = { text, ok };
 	}
 
-	const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+	const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
 	async function publish() {
 		busy = true;
@@ -31,7 +32,7 @@
 		busy = false;
 		if (result.ok) {
 			say(
-				`Version ${String(result.data?.['published'])} published. Every Mac picks it up within a minute.`,
+				`Version ${String(result.data?.['published'])} published. Every device picks it up within a minute.`,
 				true
 			);
 		} else say(result.message, false);
@@ -50,52 +51,66 @@
 	<title>Policy · Safe Context</title>
 </svelte:head>
 
-<div class="mb-2 flex flex-wrap items-center gap-3">
-	<h1 class="text-3xl font-bold">Policy</h1>
-</div>
-<p class="mb-6 max-w-2xl text-ink/70">
-	Decide what Claude Code is allowed to see. Changes are saved as a draft; nothing changes on
-	anyone's Mac until you publish.
-</p>
+<PageHeader eyebrow="What Claude Code may see" title="Policy" />
 
+<!-- The publish bar sticks below the phone top bar, and near the top on wider screens. -->
 <div
-	class="sticky top-16 z-[5] mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-ink/10 bg-white/95 px-5 py-3 shadow-sm backdrop-blur"
+	class="sticky top-[4.25rem] z-[5] flex flex-col gap-3 rounded-[14px] bg-ink px-4 py-3.5 text-white shadow-[0_8px_24px_rgba(16,19,43,0.18)] sm:px-5 md:top-4"
 	data-testid="publish-bar"
 >
-	<div class="min-w-0 flex-1 text-sm">
-		{#if status.published}
-			<span class="font-semibold">Version {status.published.version}</span>
-			<span class="text-ink/70">
-				published {dateFormat.format(status.published.publishedAt)}{status.published.publishedBy
+	<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+		<span class="flex items-center gap-2 text-sm font-semibold">
+			<span
+				class="size-2 rounded-full {status.changed ? 'bg-hidden' : 'bg-clean'}"
+				aria-hidden="true"
+			></span>
+			{status.changed ? 'Unpublished changes' : 'Up to date'}
+		</span>
+		<span class="text-sm text-on-ink-muted">
+			{#if status.published}
+				Live: version {status.published.version}, published
+				{dateFormat.format(status.published.publishedAt)}{status.published.publishedBy
 					? ` by ${status.published.publishedBy}`
 					: ''}
+			{:else}
+				Not published yet
+			{/if}
+		</span>
+		{#if data.canEdit}
+			<span class="ml-auto flex gap-2">
+				{#if status.published}
+					<button
+						type="button"
+						class="min-h-10 rounded-[10px] border border-on-ink-line px-4 text-sm font-semibold hover:bg-white/10 disabled:opacity-40"
+						disabled={busy || !status.changed}
+						onclick={discard}
+					>
+						Discard
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="min-h-10 rounded-[10px] bg-white px-4 text-sm font-bold text-ink hover:bg-white/90 disabled:opacity-40"
+					disabled={busy || !status.changed}
+					onclick={publish}
+				>
+					Publish
+				</button>
 			</span>
 		{:else}
-			<span class="font-semibold">Not published yet</span>
+			<span
+				class="ml-auto rounded-full bg-white/10 px-3 py-1 text-xs font-semibold"
+				data-testid="view-only-note">View only: only admins can change the policy</span
+			>
 		{/if}
 	</div>
-	{#if status.changed}
-		<Pill tone="vague">Unpublished changes</Pill>
-	{:else}
-		<Pill tone="safe">Up to date</Pill>
-	{/if}
-	{#if data.canEdit}
-		<div class="flex gap-2">
-			{#if status.published}
-				<Button variant="ghost" disabled={busy || !status.changed} onclick={discard}>
-					Discard changes
-				</Button>
-			{/if}
-			<Button disabled={busy || !status.changed} onclick={publish}>Publish</Button>
-		</div>
-	{/if}
 	<!-- In the sticky bar, so a message is in view wherever the change was made. -->
-	<div aria-live="polite" class="basis-full empty:hidden">
+	<div aria-live="polite" class="empty:hidden">
 		{#if notice}
 			<p
-				class="flex items-start justify-between gap-3 rounded-xl px-4 py-2 text-sm {notice.ok
-					? 'bg-mint/60'
-					: 'bg-pink/60'}"
+				class="flex items-start justify-between gap-3 rounded-[10px] px-3.5 py-2 text-sm text-ink {notice.ok
+					? 'bg-clean'
+					: 'bg-blocked'}"
 				data-testid="notice"
 			>
 				{notice.text}
@@ -109,30 +124,33 @@
 	</div>
 </div>
 
-{#if !data.canEdit}
-	<p class="mb-6 rounded-xl bg-ink/5 px-4 py-3 text-sm" data-testid="view-only-note">
-		You can see the policy, but only admins can change it.
-	</p>
-{/if}
+<Card
+	title="What's sensitive"
+	description={data.canEdit
+		? 'Anything not listed goes to Claude as it is. Drag a row to the other column, or open it to edit.'
+		: 'Anything not listed goes to Claude as it is.'}
+>
+	{#snippet actions()}
+		{#if data.canEdit}
+			<Button variant="secondary" onclick={() => (target = { mode: 'add', tier: 'yellow' })}>
+				<Icon name="plus" class="size-4" />
+				Add data type
+			</Button>
+		{/if}
+	{/snippet}
+	<DataTypeBoard
+		dataTypes={data.draft.dataTypes}
+		canEdit={data.canEdit}
+		onopen={(t) => (target = t)}
+		onmessage={say}
+	/>
+</Card>
 
-<div class="flex flex-col gap-6">
-	<Card title="What's sensitive">
-		<p class="mb-4 max-w-2xl text-sm text-ink/70">
-			Each pill is a kind of data Safe Context protects. Anything not here goes to Claude as it is.
-			{#if data.canEdit}
-				Drag a pill to the other column, open it to change how it's hidden and the words to catch,
-				or delete it to stop protecting it.
-			{/if}
-		</p>
-		<DataTypeBoard
-			dataTypes={data.draft.dataTypes}
-			canEdit={data.canEdit}
-			onopen={(t) => (target = t)}
-			onmessage={say}
-		/>
-	</Card>
-
-	<Card title="Where real values go back">
+<div class="grid gap-4 lg:grid-cols-2">
+	<Card
+		title="Where real values go back"
+		description="Claude only sees placeholders. These tools get the real value back just before they run, on the person's device."
+	>
 		<SwapBackEditor
 			tools={data.draft.swapBackTools}
 			localTools={data.localTools}
@@ -142,7 +160,7 @@
 		/>
 	</Card>
 
-	<Card title="If Safe Context can't finish a check">
+	<Card title="If a check can't finish">
 		<FailModeSection value={data.draft.failMode} canEdit={data.canEdit} onmessage={say} />
 	</Card>
 </div>

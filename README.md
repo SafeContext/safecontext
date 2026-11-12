@@ -74,7 +74,7 @@ Also working:
 - The dashboard's Policy page is an editor ([#23](https://github.com/SafeContext/safecontext/issues/23)):
   drag data types between Make it vague and Never share; add your own with a word list, or delete
   one to stop protecting it; choose the tools real values go back into and what happens if a check can't finish.
-  Changes are a draft until an admin publishes them; every Mac picks up a publish within a minute.
+  Changes are a draft until an admin publishes them; every device picks up a publish within a minute.
   Viewers see the page but can't change it. The Deploy and Settings pages are placeholders.
 
 ## Known gaps
