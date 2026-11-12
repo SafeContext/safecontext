@@ -155,6 +155,7 @@ export function restoreToolInput(
 			}
 		}
 	}
+	if (unknown.size > 0) return { kind: 'refused', reason: 'unknown_placeholder', ids: [...unknown] };
 	if (invalidPath) return unsupported();
 	// An Edit's old_string is right when the file holds it.
 	let fileText: string | null | undefined;

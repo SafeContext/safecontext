@@ -83,7 +83,13 @@ describe('restoreToolInput', () => {
 	});
 
 	it("refuses a placeholder the key doesn't hold, naming it", () => {
-		const r = restoreToolInput('Read', { file_path: '⟪customer_name_1⟫/⟪customer_name_9⟫.md' }, key(), project, LOCAL);
+		const r = restoreToolInput(
+			'Read',
+			{ file_path: '⟪customer_name_1⟫/⟪customer_name_9: missing value⟫.md' },
+			key(),
+			project,
+			LOCAL
+		);
 		expect(r).toEqual({ kind: 'refused', reason: 'unknown_placeholder', ids: ['customer_name_9'] });
 	});
 
