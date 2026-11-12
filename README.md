@@ -6,6 +6,7 @@ company-run model, following a policy IT controls from a dashboard.
 - **Architecture, contracts, open decisions:** [SPEC.md](SPEC.md)
 - **Rules for coding agents:** [CLAUDE.md](CLAUDE.md)
 - **Roadmap and what's next:** [issue #1](https://github.com/SafeContext/safecontext/issues/1)
+- **Windows work branch (rules-only developer setup):** [startup and offline checks](docs/windows-startup.md)
 
 ## What it is
 
