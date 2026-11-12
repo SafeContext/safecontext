@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { knownValueFinder } from './known.ts';
 import { createPlaceholderStore, type SessionKey } from './placeholders.ts';
@@ -64,8 +64,9 @@ describe('restoreToolInput', () => {
 	});
 
 	it('reads anywhere: reading sends nothing off the Mac', () => {
-		const r = restoreToolInput('Read', { file_path: '/elsewhere/⟪customer_name_1⟫.md' }, key(), project, LOCAL);
-		expect(r).toMatchObject({ kind: 'restored', input: { file_path: '/elsewhere/Northwind.md' } });
+		const path = join(dirname(project), 'elsewhere', '⟪customer_name_1⟫.md');
+		const r = restoreToolInput('Read', { file_path: path }, key(), project, LOCAL);
+		expect(r).toMatchObject({ kind: 'restored', input: { file_path: path.replace('⟪customer_name_1⟫', 'Northwind') } });
 	});
 
 	it.each(['Bash', 'WebFetch', 'WebSearch', 'Agent', 'mcp__slack__send', 'SomeNewTool'])(
@@ -87,7 +88,7 @@ describe('restoreToolInput', () => {
 	});
 
 	it.each([
-		['outside the project', '/tmp/notes.md'],
+		['outside the project', join(dirname(project), 'outside.md')],
 		['above the project', '../notes.md'],
 		['in .git', '.git/hooks/pre-commit'],
 		['in .claude', '.claude/notes.md'],
@@ -218,7 +219,7 @@ describe('spellings', () => {
 describe('isSafeWriteTarget', () => {
 	it('follows symlinks out of the project', () => {
 		const outside = realpathSync(mkdtempSync(join(tmpdir(), 'sc-outside-')));
-		symlinkSync(outside, join(project, 'link'));
+		symlinkSync(outside, join(project, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
 		expect(isSafeWriteTarget('link/new.md', project)).toBe(false);
 		expect(isSafeWriteTarget('deals/new.md', project)).toBe(true);
 	});

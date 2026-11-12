@@ -56,6 +56,7 @@ export function toolInputResponse(decision: Decision, restored?: Restored, toolN
 				{
 					unknown_placeholder: () => messages.restoreUnknown(restored.ids),
 					outside_project: () => messages.restoreOutsideProject(),
+					unsupported_path: () => messages.restoreUnsupportedPath(),
 					sandbox_escape: () => messages.restoreSandboxEscape()
 				}[restored.reason]()
 			);

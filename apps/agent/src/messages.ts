@@ -88,6 +88,8 @@ export const messages = {
 		`${PRODUCT} can't put back the hidden value for ${ids.map((id) => `⟪${id}⟫`).join(', ')}: it no longer holds it (the Safe Context agent restarted, or the session is too old). Nothing was run. Read the file or output it came from again to get a current placeholder.`,
 	restoreSandboxEscape: () =>
 		`${PRODUCT} doesn't put hidden values back into a command that runs outside the sandbox: auto mode would send it off this Mac for a safety check. Nothing was run. Run it in the sandbox, or leave the placeholder out.`,
+	restoreUnsupportedPath: () =>
+		`${PRODUCT} couldn't establish a supported local file path for this call. Hidden values were not restored. Use an ordinary local path; network shares, device paths and ambiguous Windows names are not supported.`,
 	/** Shown to the user in the permission prompt for a tool IT added to swap-back (transform/restore.ts). */
 	restoreConfirm: (toolName: string, count: number) =>
 		`${PRODUCT} put ${count === 1 ? 'a hidden value' : `${count} hidden values`} back into this ${toolName} call, as your company's policy allows. Claude never saw ${count === 1 ? 'it' : 'them'}. Approve only if ${count === 1 ? 'it is' : 'they are'} meant to go there.`,

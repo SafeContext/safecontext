@@ -31,10 +31,12 @@
  * file name). A path gets the spelling that exists on disk, and an Edit's `old_string` the one the
  * file holds, so both still match exactly. Anything else gets the first spelling seen.
  */
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import { swapsBackInto } from '@safecontext/policy';
 import { OPEN, PLACEHOLDER, type SessionKey } from './placeholders.ts';
+import { isSafeWriteTarget, resolveRestorationPath, supportedRestorationPath } from './restore-paths.ts';
+export { isSafeWriteTarget } from './restore-paths.ts';
 
 interface RestoreTool {
 	/** Input fields holding a path. */
@@ -57,25 +59,16 @@ export const RESTORE_TOOLS: Readonly<Record<string, RestoreTool>> = {
 };
 const OTHER_TOOL: RestoreTool = { paths: [], writes: false };
 
-/** Files outside hidden folders that Claude Code protects too (docs: permission modes, protected paths). */
-const PROTECTED_FILES = new Set([
-	'lefthook.yml',
-	'lefthook.yaml',
-	'bunfig.toml',
-	'gradle-wrapper.properties',
-	'maven-wrapper.properties',
-	'pyrightconfig.json'
-]);
-
-/** `.env`, `.env.local`, `.env.production`, …: hidden files where real values belong. */
-const ENV_FILE = /^\.env(?:\.[A-Za-z0-9_-]+)*$/;
-
 export type Restored =
 	/** No placeholder to put back, or a tool that never gets real values. */
 	| { kind: 'none' }
 	/** `confirm`: not a local file tool, so the user approves the call first (the hook answers `ask`). */
 	| { kind: 'restored'; input: Record<string, unknown>; count: number; confirm: boolean }
-	| { kind: 'refused'; reason: 'unknown_placeholder' | 'outside_project' | 'sandbox_escape'; ids: string[] };
+	| {
+			kind: 'refused';
+			reason: 'unknown_placeholder' | 'outside_project' | 'sandbox_escape' | 'unsupported_path';
+			ids: string[];
+	  };
 
 export function restoreToolInput(
 	toolName: string,
@@ -88,6 +81,20 @@ export function restoreToolInput(
 	if (!swapsBackInto(tools, toolName) || !JSON.stringify(input).includes(OPEN)) return { kind: 'none' };
 	const local = RESTORE_TOOLS[toolName];
 	const tool = local ?? OTHER_TOOL;
+	const unsupported = (): Restored => ({ kind: 'refused', reason: 'unsupported_path', ids: [] });
+	if (tool.writes && tool.paths.some((field) => typeof input[field] !== 'string' || input[field] === '')) {
+		return { kind: 'refused', reason: 'outside_project', ids: [] };
+	}
+	// Reject unsupported raw paths before spelling selection or Edit's content read can probe them.
+	if (process.platform === 'win32' && local) {
+		if (!supportedRestorationPath('.', cwd)) return unsupported();
+		for (const field of tool.paths) {
+			const path = input[field];
+			if (typeof path === 'string' && !supportedRestorationPath(path.replace(PLACEHOLDER, 'placeholder'), cwd)) {
+				return unsupported();
+			}
+		}
+	}
 
 	let count = 0;
 	const unknown = new Set<string>();
@@ -126,12 +133,29 @@ export function restoreToolInput(
 
 	// Paths first. Best: the path exists with exactly these letters; next: its folder does (a new file).
 	const restored: Record<string, unknown> = { ...input };
+	let invalidPath = false;
 	for (const field of tool.paths) {
 		const v = input[field];
 		if (typeof v === 'string') {
-			restored[field] = swap(v, (c) => pathScore(resolve(cwd, c)), plain);
+			restored[field] = swap(
+				v,
+				(candidate) => {
+					if (!supportedRestorationPath(candidate, cwd)) return -1;
+					const path = process.platform === 'win32' ? resolveRestorationPath(candidate, cwd) : resolve(cwd, candidate);
+					return path ? pathScore(path) : -1;
+				},
+				plain
+			);
+			const candidate = restored[field] as string;
+			if (
+				process.platform === 'win32' &&
+				(!supportedRestorationPath(candidate, cwd) || !resolveRestorationPath(candidate, cwd))
+			) {
+				invalidPath = true;
+			}
 		}
 	}
+	if (invalidPath) return unsupported();
 	// An Edit's old_string is right when the file holds it.
 	let fileText: string | null | undefined;
 	const holds = (c: string) => {
@@ -209,48 +233,11 @@ function* combinations(options: readonly (readonly string[])[], max: number): Ge
 function readSmallFile(path: unknown, cwd: string): string | null {
 	if (typeof path !== 'string') return null;
 	try {
-		const full = resolve(cwd, path);
+		const full = process.platform === 'win32' ? resolveRestorationPath(path, cwd) : resolve(cwd, path);
+		if (!full) return null;
 		return statSync(full).size <= MAX_READ_BYTES ? readFileSync(full, 'utf8') : null;
 	} catch {
 		return null;
-	}
-}
-
-/** Inside `cwd` (symlinks resolved), with no hidden folder on the way and no protected file name. */
-export function isSafeWriteTarget(path: string, cwd: string): boolean {
-	if (!isAbsolute(cwd)) return false;
-	const root = realpathOrSelf(cwd);
-	const target = resolveExisting(resolve(cwd, path));
-	const rel = relative(root, target);
-	if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return false;
-	const parts = rel.split(sep);
-	const name = parts.at(-1)!;
-	if (parts.slice(0, -1).some((p) => p.startsWith('.'))) return false;
-	if (name.startsWith('.') && !ENV_FILE.test(name)) return false;
-	return !PROTECTED_FILES.has(name);
-}
-
-function realpathOrSelf(path: string): string {
-	try {
-		return realpathSync(path);
-	} catch {
-		return path;
-	}
-}
-
-/** The path with symlinks resolved as far as it exists (a file Write creates doesn't exist yet). */
-function resolveExisting(path: string): string {
-	let head = path;
-	const tail: string[] = [];
-	for (;;) {
-		try {
-			return resolve(realpathSync(head), ...tail);
-		} catch {
-			const parent = dirname(head);
-			if (parent === head) return path;
-			tail.unshift(basename(head));
-			head = parent;
-		}
 	}
 }
 
