@@ -33,6 +33,15 @@
 	let over = $state<BoardTier | null>(null);
 
 	const keys = { vague: 'hidden', never: 'blocked' } as const;
+	/** Each panel is a faint tint of its brand colour; its rows carry the colour itself. */
+	const panel = {
+		vague: 'border-[#f7efbd] bg-[#fffdf2]',
+		never: 'border-[#f9dde5] bg-[#fff9fb]'
+	} as const;
+	const row = {
+		vague: 'border-[#f0dc6a] bg-[#fff4b0] hover:border-hidden-edge',
+		never: 'border-[#f5b8c9] bg-[#ffdfe7] hover:border-blocked-edge'
+	} as const;
 
 	const words = (n: number) => `${n} ${n === 1 ? 'word' : 'words'}`;
 
@@ -62,10 +71,9 @@
 	{#each COLUMNS as column (column.tier)}
 		{@const items = shown.filter((d) => d.tier === column.tier)}
 		<section
-			class="flex flex-col gap-2.5 rounded-xl border bg-well p-3.5 transition-colors {over ===
-			column.tier
-				? 'border-ink/40 bg-white'
-				: 'border-[#ecedf2]'}"
+			class="flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors {panel[
+				column.tone
+			]} {over === column.tier ? 'ring-2 ring-ink/30' : ''}"
 			aria-labelledby="column-{column.tier}"
 			data-testid="column-{column.tier}"
 			ondragover={(e) => {
@@ -81,15 +89,15 @@
 				drop(column.tier, null);
 			}}
 		>
-			<div class="flex items-center gap-2.5 px-1 pt-0.5 pb-1.5">
-				<ResultKey tone={keys[column.tone]} />
+			<div class="flex items-start gap-2.5 px-1 pt-0.5 pb-1.5">
+				<ResultKey tone={keys[column.tone]} class="mt-[5px]" />
 				<span class="flex min-w-0 flex-col">
 					<h3 id="column-{column.tier}" class="font-sans text-[15px] font-bold tracking-normal">
 						{column.title}
 					</h3>
 					<span class="text-[13px] text-muted">{column.summary}</span>
 				</span>
-				<span class="ml-auto font-mono text-[13px] text-muted">{items.length}</span>
+				<span class="ml-auto pt-0.5 font-mono text-[13px] text-subtle">{items.length}</span>
 			</div>
 
 			<ul class="flex flex-col gap-2">
@@ -119,14 +127,15 @@
 					>
 						<button
 							type="button"
-							class="flex w-full items-center gap-3 rounded-[10px] border border-line bg-white px-3 py-2.5 text-left
-								hover:border-ink/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
+							class="flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left {row[
+								column.tone
+							]} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
 								{canEdit ? 'cursor-grab active:cursor-grabbing' : ''}"
 							data-testid="pill-{dt.key}"
 							onclick={() => onopen({ mode: 'edit', dataType: dt })}
 						>
 							{#if canEdit}
-								<Icon name="grip" class="size-3.5 shrink-0 text-[#9a9db3]" />
+								<Icon name="grip" class="size-3.5 shrink-0 text-ink/40" />
 							{/if}
 							<span class="flex min-w-0 flex-1 flex-col gap-0.5">
 								<span class="truncate text-sm font-semibold">{dt.name}</span>
@@ -136,7 +145,7 @@
 							</span>
 							{#if dt.terms.length > 0}
 								<span
-									class="shrink-0 rounded-full bg-[#eeeff4] px-2 py-0.5 text-xs whitespace-nowrap text-subtle"
+									class="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-xs whitespace-nowrap text-subtle"
 									>{words(dt.terms.length)}</span
 								>
 							{/if}
