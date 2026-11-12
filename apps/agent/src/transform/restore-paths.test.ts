@@ -18,7 +18,7 @@ import { join, parse } from 'node:path';
 import { LOCAL_SWAP_BACK_TOOLS } from '@safecontext/policy';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createPlaceholderStore } from './placeholders.ts';
-import { isSafeWriteTarget, ordinaryWindowsPath, resolveRestorationPath } from './restore-paths.ts';
+import { isSafeWriteTarget, ordinaryWindowsPath, resolveRestorationPath, sameWindowsDrive } from './restore-paths.ts';
 import { restoreToolInput } from './restore.ts';
 
 // Observe/refuse filesystem calls in namespace tests; other tests use real temp files and links.
@@ -62,6 +62,14 @@ function key(value = 'Northwind') {
 }
 
 describe('ordinary Windows path syntax (also runs on Unix CI)', () => {
+	it('normalizes slash styles and drive-letter case on both sides of the drive comparison', () => {
+		for (const cwd of ['C:/work/project', 'c:\\work\\project']) {
+			for (const path of ['notes.md', 'c:/work/project/notes.md', 'C:\\work\\project\\notes.md']) {
+				expect(sameWindowsDrive(path, cwd)).toBe(true);
+			}
+			expect(sameWindowsDrive('Z:/notes.md', cwd)).toBe(false);
+		}
+	});
 	it.each(['C:\\work\\notes.md', 'c:/work/notes.md', 'deals/notes.md', '.', '..', 'notes Jos\u00e9.md', '.env.local'])(
 		'accepts ordinary syntax: %s',
 		(path) => expect(ordinaryWindowsPath(path)).toBe(true)
@@ -186,6 +194,17 @@ describe.skipIf(process.platform !== 'win32')('Windows filesystem restoration', 
 	);
 	it('allows slash and drive-letter case variations', () => {
 		expect(isSafeWriteTarget(join(project, 'deals', 'note.md').replaceAll('\\', '/'), project)).toBe(true);
+		const forwardCwd = project.replaceAll('\\', '/');
+		expect(isSafeWriteTarget('notes.md', forwardCwd)).toBe(true);
+		expect(
+			restoreToolInput(
+				'Write',
+				{ file_path: 'notes.md', content: '\u27eacustomer_name_1\u27eb' },
+				key(),
+				forwardCwd,
+				local
+			)
+		).toMatchObject({ kind: 'restored', confirm: false });
 		expect(
 			isSafeWriteTarget(
 				join(project, 'note.md').replace(/^[A-Z]/, (c) => c.toLowerCase()),

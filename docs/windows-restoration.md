@@ -119,7 +119,7 @@ Native Windows, PowerShell 7.6.9, Node 24.22.1 and pnpm 12.14.0:
 | Agent, policy and detector type checks; agent lint | Pass |
 | Policy tests | 54 pass |
 | Detector tests | 519 pass, 1 existing skip |
-| Full model-free agent suite, `--maxWorkers=2` | 502 pass, 5 existing skips, 2 known W5 failures |
+| Full model-free agent suite, `--maxWorkers=2` | 503 pass, 5 existing skips, 2 known W5 failures |
 | W1 startup/status checks within that suite | All 17 pass |
 | Real link boundaries and local write/return privacy flow | Pass; Windows junctions and a hard link exercised |
 

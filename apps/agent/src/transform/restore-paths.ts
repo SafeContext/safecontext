@@ -41,7 +41,9 @@ export function supportedRestorationPath(path: string, cwd: string): boolean {
 
 /** Lexical only: a restored write cannot belong to a project on a different drive. */
 export function sameWindowsDrive(path: string, cwd: string): boolean {
-	return win32.parse(win32.resolve(cwd, path)).root.toLowerCase() === win32.parse(cwd).root.toLowerCase();
+	return (
+		win32.parse(win32.resolve(cwd, path)).root.toLowerCase() === win32.parse(win32.resolve(cwd)).root.toLowerCase()
+	);
 }
 
 /**
