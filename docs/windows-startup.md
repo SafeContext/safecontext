@@ -117,7 +117,8 @@ On the W0 Windows account, using PowerShell 7.6.9, Node 24.22.1 and pnpm 12.14.0
 | Detector type check and tests | Pass; 519 tests, 1 existing skip |
 | Agent type check and lint | Pass |
 | Startup/status suite | Pass; 17 tests, including failure cleanup and Windows path cases |
-| Full offline agent suite before the final cleanup test was added | 422 pass, 5 existing skips, the 3 W2/W5 failures listed above |
+| Full offline agent suite in a fresh checkout at `Safe Context José checkout` | 423 pass, 5 existing skips, the 3 W2/W5 failures listed above |
+| Fresh checkout with `core.autocrlf=true` | All 81 attributed files have LF; policy tests still pass; dependencies reused/refreshed at their existing locked versions |
 | Actual rules-only startup via the helper | Healthy on 4747 with inherited model/dashboard settings isolated; harmless prompt allowed; fake secret blocked and original prompt suppressed |
 | Status, startup note and shutdown warning | Pass; fake secret absent from responses and logs |
 
@@ -127,8 +128,9 @@ to pass on the PR; it does not replace a future live Windows Claude check.
 ## Stable checkout bytes
 
 `.gitattributes` pins LF for shell scripts, generated policy schemas, shared
-Tier 2 prompt files, and agent source/tests (whose formatter requires LF). This overrides `core.autocrlf=true` for those files so a fresh
-Windows checkout has the same bytes as Unix. It changes no schema or prompt
+Tier 2 prompt files, and agent source/tests (whose formatter requires LF). This
+overrides `core.autocrlf=true` for those files so a fresh Windows checkout has the
+same bytes as Unix. It changes no schema or prompt
 content and requires no regeneration. Other files keep the team's existing
 checkout behavior.
 
