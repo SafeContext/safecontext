@@ -84,7 +84,9 @@ test('stat cards and feed rows show counts and names only', async ({ page }) => 
 	await expect(page.getByTestId('feed-row').first()).toBeVisible();
 	await expect(page.getByTestId('daily-chart')).toBeVisible();
 	await expect(page.getByTestId('protected-list')).toBeVisible();
-	await expect(page.getByTestId('rollout')).toContainText(/Policy v\d+ on \d+ of \d+ devices?/);
+	await expect(page.getByTestId('rollout')).toContainText(
+		/Policy v\d+ (on \d+ of \d+ devices?|· no devices yet)/
+	);
 });
 
 test.describe('phone (375px)', () => {

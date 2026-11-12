@@ -156,21 +156,26 @@ export type Rollout = {
 	version: number | null;
 	/** Devices whose latest check used that version (or a newer one). */
 	current: number;
+	/** Devices that can still check in (they have a token; revoked ones don't). */
 	devices: number;
 };
 
-/** How many of the organisation's devices have picked up the latest published policy. */
+/**
+ * How many of the organisation's devices have picked up the latest published policy. Only devices
+ * with a token count: a revoked one never checks in again, so it would never catch up.
+ */
 export async function policyRollout(organizationId: string): Promise<Rollout> {
 	const latest = await prisma.policyVersion.findFirst({
 		where: { organizationId },
 		orderBy: { version: 'desc' },
 		select: { version: true }
 	});
+	const active = { organizationId, tokenHash: { not: null } };
 	const [devices, current] = await Promise.all([
-		prisma.device.count({ where: { organizationId } }),
+		prisma.device.count({ where: active }),
 		latest
 			? prisma.device.count({
-					where: { organizationId, lastPolicyVersion: { gte: latest.version } }
+					where: { ...active, lastPolicyVersion: { gte: latest.version } }
 				})
 			: Promise.resolve(0)
 	]);

@@ -32,9 +32,11 @@
 	const stats = $derived(addToStats(data.stats, fresh));
 	const days = $derived(addToDays(data.days, fresh));
 	const rolloutText = $derived(
-		`Policy v${data.rollout.version} on ${data.rollout.current} of ${data.rollout.devices} ${
-			data.rollout.devices === 1 ? 'device' : 'devices'
-		}`
+		data.rollout.devices === 0
+			? `Policy v${data.rollout.version} · no devices yet`
+			: `Policy v${data.rollout.version} on ${data.rollout.current} of ${data.rollout.devices} ${
+					data.rollout.devices === 1 ? 'device' : 'devices'
+				}`
 	);
 	const events = $derived(mergeFeed(live, data.events));
 
@@ -91,13 +93,17 @@
 </svelte:head>
 
 <PageHeader eyebrow="Last 7 days" title="Overview">
-	{#if data.rollout.version !== null && data.rollout.devices > 0}
+	{#if data.rollout.version !== null}
 		<a
 			href={resolve('/policy')}
 			class="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3.5 py-2 text-sm hover:border-ink/30"
 			data-testid="rollout"
 		>
-			<ResultKey tone={data.rollout.current === data.rollout.devices ? 'clean' : 'hidden'} />
+			<ResultKey
+				tone={data.rollout.devices > 0 && data.rollout.current === data.rollout.devices
+					? 'clean'
+					: 'hidden'}
+			/>
 			{rolloutText}
 		</a>
 	{/if}

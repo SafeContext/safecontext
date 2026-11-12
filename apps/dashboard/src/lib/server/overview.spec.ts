@@ -136,6 +136,13 @@ describe('stats and feed rows', () => {
 	});
 
 	it('says how many devices run the latest published policy (#96)', async () => {
+		// A device with no token (revoked, or never registered) doesn't count.
+		expect(await policyRollout(mine.organizationId)).toEqual({
+			version: null,
+			current: 0,
+			devices: 0
+		});
+		await prisma.device.update({ where: { id: mine.id }, data: { tokenHash: 'a'.repeat(64) } });
 		expect(await policyRollout(mine.organizationId)).toEqual({
 			version: null,
 			current: 0,
