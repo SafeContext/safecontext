@@ -76,7 +76,7 @@
 						{option.title}
 						{#if option.recommended}
 							<span
-								class="rounded-full bg-[#d9f7e6] px-2 py-0.5 text-xs font-semibold text-[#145c37]"
+								class="rounded-full bg-clean-soft px-2 py-0.5 text-xs font-semibold text-clean-text"
 								>Recommended</span
 							>
 						{/if}

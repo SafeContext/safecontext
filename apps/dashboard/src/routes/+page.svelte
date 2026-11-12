@@ -2,15 +2,15 @@
 	import { onMount } from 'svelte';
 	import { refreshAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import Button from '#lib/components/Button.svelte';
-	import Card from '#lib/components/Card.svelte';
-	import DailyChart from '#lib/components/DailyChart.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import FeedList from '#lib/components/FeedList.svelte';
-	import PageHeader from '#lib/components/PageHeader.svelte';
-	import ProtectedList from '#lib/components/ProtectedList.svelte';
-	import ResultKey from '#lib/components/ResultKey.svelte';
-	import StatCard from '#lib/components/StatCard.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import DailyChart from '#lib/components/overview/DailyChart.svelte';
+	import EmptyState from '#lib/components/ui/EmptyState.svelte';
+	import FeedList from '#lib/components/overview/FeedList.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import ProtectedList from '#lib/components/overview/ProtectedList.svelte';
+	import ResultKey from '#lib/components/ui/ResultKey.svelte';
+	import StatCard from '#lib/components/overview/StatCard.svelte';
 	import { addToDays, addToStats, mergeFeed, parseFeedMessage, type FeedEvent } from '#lib/feed.ts';
 	import type { PageProps } from './$types';
 

@@ -10,8 +10,9 @@
 		isBuiltin,
 		shownAction
 	} from '#lib/policy-board.ts';
-	import Icon from '#lib/components/Icon.svelte';
-	import ResultKey from '#lib/components/ResultKey.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import ResultKey from '#lib/components/ui/ResultKey.svelte';
+	import { TIER_TONE, TONE_CLASSES } from '#lib/tones.ts';
 	import type { DataTypeView, Target } from './DataTypeDialog.svelte';
 	import { send } from './send.ts';
 
@@ -32,16 +33,8 @@
 	let dragging = $state<string | null>(null);
 	let over = $state<BoardTier | null>(null);
 
-	const keys = { vague: 'hidden', never: 'blocked' } as const;
-	/** Each panel is a faint tint of its brand colour; its rows carry the colour itself. */
-	const panel = {
-		vague: 'border-[#f7efbd] bg-[#fffdf2]',
-		never: 'border-[#f9dde5] bg-[#fff9fb]'
-	} as const;
-	const row = {
-		vague: 'border-[#f0dc6a] bg-[#fff4b0] hover:border-hidden-edge',
-		never: 'border-[#f5b8c9] bg-[#ffdfe7] hover:border-blocked-edge'
-	} as const;
+	/** Panels get a faint tint of their column's brand colour; rows carry the colour itself. */
+	const tone = (tier: BoardTier) => TIER_TONE[tier];
 
 	const words = (n: number) => `${n} ${n === 1 ? 'word' : 'words'}`;
 
@@ -71,9 +64,9 @@
 	{#each COLUMNS as column (column.tier)}
 		{@const items = shown.filter((d) => d.tier === column.tier)}
 		<section
-			class="flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors {panel[
-				column.tone
-			]} {over === column.tier ? 'ring-2 ring-ink/30' : ''}"
+			class="flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors {TONE_CLASSES[
+				tone(column.tier)
+			].panel} {over === column.tier ? 'ring-2 ring-ink/30' : ''}"
 			aria-labelledby="column-{column.tier}"
 			data-testid="column-{column.tier}"
 			ondragover={(e) => {
@@ -90,7 +83,7 @@
 			}}
 		>
 			<div class="flex items-start gap-2.5 px-1 pt-0.5 pb-1.5">
-				<ResultKey tone={keys[column.tone]} class="mt-[5px]" />
+				<ResultKey tone={tone(column.tier)} class="mt-[5px]" />
 				<span class="flex min-w-0 flex-col">
 					<h3 id="column-{column.tier}" class="font-sans text-[15px] font-bold tracking-normal">
 						{column.title}
@@ -127,9 +120,10 @@
 					>
 						<button
 							type="button"
-							class="flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left {row[
-								column.tone
-							]} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
+							class="flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left {TONE_CLASSES[
+								tone(column.tier)
+							]
+								.row} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
 								{canEdit ? 'cursor-grab active:cursor-grabbing' : ''}"
 							data-testid="pill-{dt.key}"
 							onclick={() => onopen({ mode: 'edit', dataType: dt })}

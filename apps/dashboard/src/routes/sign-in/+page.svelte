@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { authClient } from '#lib/auth-client.ts';
-	import Button from '#lib/components/Button.svelte';
-	import Logo from '#lib/components/Logo.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Logo from '#lib/components/ui/Logo.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

@@ -9,9 +9,9 @@
 
 {#snippet lockup()}
 	<svg viewBox="0 0 70 16" class="{mark[size]} w-auto" role="img" aria-hidden="true">
-		<rect x="0" y="0" width="30" height="16" rx="8" fill="#a6f4c5" />
-		<rect x="20" y="0" width="30" height="16" rx="8" fill="#ffe95c" />
-		<rect x="40" y="0" width="30" height="16" rx="8" fill="#ffb3c7" />
+		<rect x="0" y="0" width="30" height="16" rx="8" class="fill-mint" />
+		<rect x="20" y="0" width="30" height="16" rx="8" class="fill-lemon" />
+		<rect x="40" y="0" width="30" height="16" rx="8" class="fill-pink" />
 	</svg>
 	<span class="font-heading {name[size]} font-bold tracking-tight">Safe Context</span>
 {/snippet}

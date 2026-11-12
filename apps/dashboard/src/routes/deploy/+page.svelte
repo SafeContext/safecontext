@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import Button from '#lib/components/Button.svelte';
-	import Card from '#lib/components/Card.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import PageHeader from '#lib/components/PageHeader.svelte';
-	import Pill from '#lib/components/Pill.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import EmptyState from '#lib/components/ui/EmptyState.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import Pill from '#lib/components/ui/Pill.svelte';
 </script>
 
 <svelte:head>

@@ -3,8 +3,8 @@
 	// bottom. A drawer on phones, opened from the Header's menu button.
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import Icon from './Icon.svelte';
-	import Logo from './Logo.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import Logo from '#lib/components/ui/Logo.svelte';
 	import { navItems } from './nav.ts';
 
 	type Admin = {

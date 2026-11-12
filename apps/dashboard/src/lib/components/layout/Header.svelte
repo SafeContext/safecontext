@@ -2,8 +2,8 @@
 	// The phone-width top bar: the logo and the button that opens the side menu. On wider screens
 	// the sidebar is always visible, so this bar is hidden.
 	import { resolve } from '$app/paths';
-	import Icon from './Icon.svelte';
-	import Logo from './Logo.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import Logo from '#lib/components/ui/Logo.svelte';
 
 	let { navOpen, onmenu }: { navOpen: boolean; onmenu: () => void } = $props();
 </script>

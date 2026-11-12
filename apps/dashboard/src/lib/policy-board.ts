@@ -20,7 +20,6 @@ export type Column = {
 	title: string;
 	/** What happens to this data, in a sentence (how the agent treats the tier: decide.ts). */
 	summary: string;
-	tone: 'vague' | 'never';
 	/** Actions offered in this column, first is the default for a data type moved here. */
 	actions: readonly Action[];
 };
@@ -30,14 +29,12 @@ export const COLUMNS: readonly Column[] = [
 		tier: 'yellow',
 		title: 'Make it vague',
 		summary: 'Claude sees a placeholder instead, with a hint where one helps.',
-		tone: 'vague',
 		actions: ['pseudonymize', 'generalize', 'mask']
 	},
 	{
 		tier: 'red',
 		title: 'Never share',
 		summary: 'Prompts and tool calls holding it are stopped; in files Claude reads, it is hidden.',
-		tone: 'never',
 		actions: ['block', 'mask']
 	}
 ];

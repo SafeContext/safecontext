@@ -1,10 +1,10 @@
 <script lang="ts">
 	// The policy editor (issue #23). Edits save to a draft straight away; Publish sends them to
 	// every device. Viewers see the same page without the controls.
-	import Button from '#lib/components/Button.svelte';
-	import Card from '#lib/components/Card.svelte';
-	import Icon from '#lib/components/Icon.svelte';
-	import PageHeader from '#lib/components/PageHeader.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
 	import DataTypeBoard from '#lib/components/policy/DataTypeBoard.svelte';
 	import DataTypeDialog, { type Target } from '#lib/components/policy/DataTypeDialog.svelte';
 	import FailModeSection from '#lib/components/policy/FailModeSection.svelte';
@@ -60,11 +60,13 @@
 >
 	<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
 		<span class="flex items-center gap-2 text-sm font-semibold">
-			<span class="size-2 rounded-full {status.changed ? 'bg-lemon' : 'bg-mint'}" aria-hidden="true"
+			<span
+				class="size-2 rounded-full {status.changed ? 'bg-hidden' : 'bg-clean'}"
+				aria-hidden="true"
 			></span>
 			{status.changed ? 'Unpublished changes' : 'Up to date'}
 		</span>
-		<span class="text-sm text-[#c3c6dc]">
+		<span class="text-sm text-on-ink-muted">
 			{#if status.published}
 				Live: version {status.published.version}, published
 				{dateFormat.format(status.published.publishedAt)}{status.published.publishedBy
@@ -79,7 +81,7 @@
 				{#if status.published}
 					<button
 						type="button"
-						class="min-h-10 rounded-[10px] border border-[#3a3f66] px-4 text-sm font-semibold hover:bg-white/10 disabled:opacity-40"
+						class="min-h-10 rounded-[10px] border border-on-ink-line px-4 text-sm font-semibold hover:bg-white/10 disabled:opacity-40"
 						disabled={busy || !status.changed}
 						onclick={discard}
 					>
@@ -107,8 +109,8 @@
 		{#if notice}
 			<p
 				class="flex items-start justify-between gap-3 rounded-[10px] px-3.5 py-2 text-sm text-ink {notice.ok
-					? 'bg-mint'
-					: 'bg-pink'}"
+					? 'bg-clean'
+					: 'bg-blocked'}"
 				data-testid="notice"
 			>
 				{notice.text}

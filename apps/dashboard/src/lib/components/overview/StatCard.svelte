@@ -1,12 +1,13 @@
 <script lang="ts">
-	import ResultKey, { type KeyTone } from './ResultKey.svelte';
+	import type { Tone } from '#lib/tones.ts';
+	import ResultKey from '#lib/components/ui/ResultKey.svelte';
 
 	let {
 		label,
 		value,
 		tone = 'neutral',
 		hint
-	}: { label: string; value: number; tone?: KeyTone; hint?: string } = $props();
+	}: { label: string; value: number; tone?: Tone; hint?: string } = $props();
 
 	const format = new Intl.NumberFormat('en-GB');
 </script>

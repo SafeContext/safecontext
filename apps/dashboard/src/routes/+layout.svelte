@@ -1,8 +1,8 @@
 <script lang="ts">
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
-	import Header from '#lib/components/Header.svelte';
-	import Sidebar from '#lib/components/Sidebar.svelte';
+	import Header from '#lib/components/layout/Header.svelte';
+	import Sidebar from '#lib/components/layout/Sidebar.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();

@@ -1,19 +1,15 @@
 <script lang="ts">
 	// "What was protected": items found per data type, as labelled bars. Counts only.
 	import type { ProtectedCount } from '#lib/feed.ts';
-	import ResultKey from './ResultKey.svelte';
+	import { TIER_TONE, TONE_CLASSES } from '#lib/tones.ts';
+	import ResultKey from '#lib/components/ui/ResultKey.svelte';
 
 	let { types }: { types: ProtectedCount[] } = $props();
 
 	const max = $derived(Math.max(1, ...types.map((t) => t.count)));
 	const format = new Intl.NumberFormat('en-GB');
-	const tone = (tier: ProtectedCount['tier']) =>
-		tier === 'yellow' ? 'hidden' : tier === 'green' ? 'clean' : 'blocked';
-	const bar = {
-		clean: 'bg-clean border-clean-edge',
-		hidden: 'bg-hidden border-hidden-edge',
-		blocked: 'bg-blocked border-blocked-edge'
-	} as const;
+	/** A data type deleted since has no column; show it as "never share", like the agent does. */
+	const tone = (tier: ProtectedCount['tier']) => TIER_TONE[tier ?? 'red'];
 </script>
 
 {#if types.length}
@@ -27,9 +23,9 @@
 					</span>
 					<span class="font-mono text-subtle tabular-nums">{format.format(t.count)}</span>
 				</span>
-				<span class="h-2 overflow-hidden rounded-full bg-[#eeeff4]" aria-hidden="true">
+				<span class="h-2 overflow-hidden rounded-full bg-track" aria-hidden="true">
 					<span
-						class="block h-full rounded-full border {bar[tone(t.tier)]}"
+						class="block h-full rounded-full border {TONE_CLASSES[tone(t.tier)].key}"
 						style="width: {Math.max(2, (t.count / max) * 100)}%"
 					></span>
 				</span>

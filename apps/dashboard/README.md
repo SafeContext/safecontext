@@ -6,8 +6,10 @@ coding rules are in [CLAUDE.md](../../CLAUDE.md).
 
 ## What's here
 
-The look ("calm and clear", #96): white sidebar, cards on a light grey ground, colour tokens in
-`src/routes/layout.css` (`line`, `muted`, `subtle`, and `clean` / `hidden` / `blocked` for results).
+The look ("calm and clear", #96): white sidebar, cards on a light grey ground, the brand's three
+colours for results. Colour tokens are in `src/routes/layout.css`, which result gets which colour is
+`src/lib/tones.ts`, and components are in `src/lib/components/` under `ui/`, `layout/`, `overview/`
+and `policy/` (design rules: CLAUDE.md, "Design").
 
 - **Sign-in** (`/sign-in`, #19): email + password with Better Auth (`src/lib/server/auth.ts`).
   Every other page needs a signed-in admin and shows only their organisation; `hooks.server.ts`

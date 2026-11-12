@@ -2,8 +2,8 @@
 	// "Where real values go back" (issue #83, editor in #23): the tools whose input gets real
 	// values put back in place of placeholders. Local file tools are on by default; any other tool
 	// IT adds asks the person before each call.
-	import Button from '#lib/components/Button.svelte';
-	import Icon from '#lib/components/Icon.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Icon from '#lib/components/ui/Icon.svelte';
 	import { send } from './send.ts';
 
 	let {
@@ -90,7 +90,7 @@
 		<ul class="flex flex-wrap gap-2" data-testid="swap-back-added">
 			{#each added as tool (tool)}
 				<li
-					class="inline-flex max-w-full items-center gap-1 rounded-full border border-[#f0dc6a] bg-[#fff7c2] py-1 pr-1 pl-3 font-mono text-[13px]"
+					class="inline-flex max-w-full items-center gap-1 rounded-full border border-hidden-soft-edge bg-hidden-soft py-1 pr-1 pl-3 font-mono text-[13px]"
 				>
 					<span class="break-all">{tool}</span>
 					{#if canEdit}
