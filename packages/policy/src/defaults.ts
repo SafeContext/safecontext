@@ -14,33 +14,12 @@ export const BUILTIN_DATA_TYPE = {
 /**
  * PROPOSED defaults, pending team approval in issue #2. Used to seed new organisations and
  * as the agent's fallback when it has no policy yet.
+ *
+ * Only data types Safe Context protects (yellow or red). There are no green defaults: nothing
+ * looks for a green type (tier 1 skips `allow` types), so the dashboard no longer offers them
+ * (issue #23). The contract still accepts green types, so older policies keep working.
  */
 export const DEFAULT_DATA_TYPES: DataType[] = [
-	// Green: safe to share
-	{
-		id: 'public-docs',
-		name: 'Public docs',
-		description: 'Documentation, marketing pages and other material already published to the public.',
-		examples: ['our public API reference', 'the pricing page'],
-		tier: 'green',
-		action: 'allow'
-	},
-	{
-		id: 'release-notes',
-		name: 'Release notes',
-		description: 'Features and fixes that have already shipped and been announced.',
-		examples: ['v2.4 is now public', 'we released dark mode last month'],
-		tier: 'green',
-		action: 'allow'
-	},
-	{
-		id: 'open-source-code',
-		name: 'Open-source code',
-		description: 'Code from public open-source projects and libraries.',
-		examples: ['a snippet from React', 'our public SDK on GitHub'],
-		tier: 'green',
-		action: 'allow'
-	},
 	// Yellow: make it vague
 	{
 		id: 'revenue-figures',

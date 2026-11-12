@@ -6,6 +6,7 @@ export const load: LayoutServerLoad = ({ locals }) => ({
 		? {
 				email: locals.admin.email,
 				name: locals.admin.name,
+				role: locals.admin.role,
 				organizationName: locals.admin.organization.name
 			}
 		: null

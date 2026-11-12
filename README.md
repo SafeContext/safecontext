@@ -42,11 +42,11 @@ hasn't settled the result.
 the value. Names and dates need tier 2. Without it (or if its answer could give the value away) the
 placeholder has no hint.
 
-**Default data types** (`packages/policy/src/defaults.ts`; IT can move any of them or add its own):
+**Default data types** (`packages/policy/src/defaults.ts`; IT can move any of them, delete
+most, or add its own). Only what Safe Context protects is listed: anything else goes through.
 
 | Traffic light | Data types |
 | --- | --- |
-| 🟢 Safe to share | Public docs, release notes, open-source code |
 | 🟡 Make it vague | Revenue figures, internal metrics, deal sizes, customer names (which companies are clients) |
 | 🔴 Never share | Unreleased roadmap, API keys & secrets, customer personal data |
 
@@ -70,16 +70,22 @@ Also working:
   disk, and upload counts ([#21](https://github.com/SafeContext/safecontext/issues/21),
   [#22](https://github.com/SafeContext/safecontext/issues/22)).
 - The dashboard's Overview page shows the last 7 days' counts and a live feed
-  ([#24](https://github.com/SafeContext/safecontext/issues/24)). The Policy, Deploy and
-  Settings pages are placeholders.
+  ([#24](https://github.com/SafeContext/safecontext/issues/24)).
+- The dashboard's Policy page is an editor ([#23](https://github.com/SafeContext/safecontext/issues/23)):
+  drag data types between Make it vague and Never share; add your own with a word list, or delete
+  one to stop protecting it; choose the tools real values go back into and what happens if a check can't finish.
+  Changes are a draft until an admin publishes them; every Mac picks up a publish within a minute.
+  Viewers see the page but can't change it. The Deploy and Settings pages are placeholders.
 
 ## Known gaps
 
 - **Dashboard sign-in is email + password only** ([#19](https://github.com/SafeContext/safecontext/issues/19)).
-  Admins are added with a script (`create-admin`), not from the dashboard. Google and company SSO
-  are not decided yet.
-- **No policy editor** ([#23](https://github.com/SafeContext/safecontext/issues/23)) and **no
-  "Deploy to Claude Code" page** ([#25](https://github.com/SafeContext/safecontext/issues/25)).
+  Admins and viewers are added with a script (`create-admin`), not from the dashboard. Google and
+  company SSO are not decided yet.
+- **No "Deploy to Claude Code" page** ([#25](https://github.com/SafeContext/safecontext/issues/25)).
+- **A data type added with no word list relies on the tier 1 model finding it by name**, which it
+  was trained on the default types to do. How well it finds a new kind of data varies, and the
+  dashboard can't test it yet.
 - **No installer** ([#26](https://github.com/SafeContext/safecontext/issues/26)). You run the agent
   from this repo.
 - **"Make it vague" data in prompts and tool calls goes through unchanged.** Claude Code can only
@@ -196,7 +202,7 @@ pnpm --filter @safecontext/dashboard dev                     # dashboard on http
 Sign in as the seeded demo admin; the email and password are in
 `apps/dashboard/prisma/demo-admin.ts` (local demo only). To add a real admin:
 `pnpm --filter @safecontext/dashboard create-admin <org-slug> <email> [name]` prints a new
-password once.
+password once. Add `--viewer` for someone who can see the dashboard but not change the policy.
 
 Then start the agent pointed at the dashboard:
 

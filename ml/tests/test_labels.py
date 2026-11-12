@@ -5,7 +5,6 @@ from pathlib import Path
 
 from safecontext_ml.dataset.labels import (
     DATA_TYPES,
-    DOCUMENT_TYPES,
     RED_LABELS,
     SENSITIVE_LABELS,
     SPAN_LABELS,
@@ -32,14 +31,12 @@ def parse_defaults() -> list[tuple[str, str, str, str]]:
 
 def test_matches_policy_defaults():
     expected = parse_defaults()
-    assert len(expected) == 10
+    assert len(expected) == 7
     assert [(d.id, d.name, d.tier, d.description) for d in DATA_TYPES] == expected
 
 
-def test_span_labels_are_values_not_document_types():
-    # Decided by what a type is, not by its tier.
-    assert not set(DOCUMENT_TYPES) & set(SPAN_LABELS)
-    assert set(DOCUMENT_TYPES) | set(SPAN_LABELS) == {d.id for d in DATA_TYPES}
+def test_span_labels():
+    assert set(SPAN_LABELS) == {d.id for d in DATA_TYPES}
     assert set(RED_LABELS) == {
         "unreleased-roadmap",
         "secrets",

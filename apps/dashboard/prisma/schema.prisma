@@ -39,6 +39,13 @@ enum FailMode {
   allow
 }
 
+/// What a dashboard admin may do (issue #23). Admins change and publish the policy; viewers see
+/// every page but change nothing.
+enum MemberRole {
+  admin
+  viewer
+}
+
 enum HookEventName {
   UserPromptSubmit
   PreToolUse
@@ -73,20 +80,22 @@ model Organization {
   events         Event[]
 }
 
-/// An admin of one organisation. Signing in to the dashboard (issue #19) needs a Member row: it
+/// A person who can sign in to one organisation's dashboard (`role` says whether they can change
+/// the policy). Signing in to the dashboard (issue #19) needs a Member row: it
 /// decides which organisation's data the admin sees (`src/lib/server/current-org.ts`).
 ///
 /// `userId` links the sign-in account (`User`). It is filled in at first sign-in by matching
 /// `email` (`src/lib/server/auth.ts`), so a Member can be added before its account exists.
 model Member {
-  id             String   @id @default(uuid(7)) @db.Uuid
-  organizationId String   @db.Uuid
+  id             String     @id @default(uuid(7)) @db.Uuid
+  organizationId String     @db.Uuid
   email          String
   name           String?
+  role           MemberRole @default(admin)
   /// Better Auth `user.id`. Null until the person first signs in. Unique: one user, one member.
-  userId         String?  @unique
-  createdAt      DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  userId         String?    @unique
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
 
   organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)

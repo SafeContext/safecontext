@@ -11,7 +11,12 @@ coding rules are in [CLAUDE.md](../../CLAUDE.md).
   redirects everyone else to sign-in. Nobody can sign up from the browser: admins come from
   `create-admin` (or the seed's demo admin, credentials in `prisma/demo-admin.ts`).
 - **Overview** (`/`): checks in the last 7 days and a live feed (#24).
-- **Policy**, **Deploy** and **Settings**: placeholders (#23, #25).
+- **Policy** (`/policy`, #23): the policy editor. Edits save to the draft rows (`DataType`,
+  `TermList`, `Organization.failMode` / `swapBackTools`) at once; Publish copies them into a new
+  `PolicyVersion` (`src/lib/server/policy-draft.ts`). Board rules shared with the page are in
+  `src/lib/policy-board.ts`. Only members with `role = admin` can change anything; `viewer`s
+  see the page read-only.
+- **Deploy** and **Settings**: placeholders (#25).
 - **Agent API** (`src/routes/api/`, #21): `POST /api/devices`, `GET /api/policy`,
   `POST /api/events`. Authenticated by device tokens, not admin sign-in. Contracts in `packages/policy/src/dashboard-api.ts`; see SPEC.md §3.
 - **Live feed stream** (`/live-feed`): server-sent events fed by Postgres `NOTIFY` on
@@ -26,7 +31,7 @@ pnpm --filter @safecontext/dashboard dev              # http://localhost:5173
 pnpm --filter @safecontext/dashboard db:migrate       # prisma migrate dev
 pnpm --filter @safecontext/dashboard db:seed          # demo org and admin, policy v1, demo events
 pnpm --filter @safecontext/dashboard enrollment-key [org-slug]   # new enrollment key (default macrohard-demo)
-pnpm --filter @safecontext/dashboard create-admin <org-slug> <email> [name]   # add an admin / new password
+pnpm --filter @safecontext/dashboard create-admin <org-slug> <email> [name] [--viewer|--admin]   # add an admin / new password
 pnpm --filter @safecontext/dashboard check
 pnpm --filter @safecontext/dashboard lint
 pnpm --filter @safecontext/dashboard test             # Vitest (client + server) then Playwright

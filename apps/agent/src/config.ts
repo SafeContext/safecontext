@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { AGENT_DEFAULT_PORT } from '@safecontext/policy';
+import { AGENT_DEFAULT_PORT, DEFAULT_CHECK_BUDGET_MS } from '@safecontext/policy';
 import { readSyncConfig, type SyncConfig } from './sync/config.ts';
 
 export interface AgentConfig {
@@ -63,8 +63,7 @@ export interface Tier1Config {
 	labelTemplate: string;
 }
 
-/** Default check budget: room for tier 2 (~1–5 s) while staying far inside Claude Code's 30 s. */
-export const DEFAULT_CHECK_BUDGET_MS = 8_000;
+export { DEFAULT_CHECK_BUDGET_MS };
 const MAX_CHECK_BUDGET_MS = 25_000;
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {

@@ -1,12 +1,15 @@
 // Links a sign-in account (Better Auth `User`) to the `Member` row that says which organisation
 // that person administers (issue #19).
 import { prisma } from '#lib/server/prisma.ts';
+import type { MemberRole } from './generated/prisma/enums.ts';
 
 /** The signed-in admin and their organisation. */
 export type Admin = {
 	memberId: string;
 	email: string;
 	name: string | null;
+	/** `admin` can change and publish the policy; `viewer` can only look (issue #23). */
+	role: MemberRole;
 	organization: { id: string; name: string };
 };
 
@@ -18,6 +21,7 @@ export async function adminForUser(userId: string): Promise<Admin | null> {
 			id: true,
 			email: true,
 			name: true,
+			role: true,
 			organization: { select: { id: true, name: true } }
 		}
 	});
