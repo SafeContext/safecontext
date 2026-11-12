@@ -173,23 +173,32 @@ export async function moveDataType(
 	beforeKey: string | null
 ): Promise<void> {
 	const dt = await findDataType(organizationId, key);
-	await prisma.$transaction(async (tx) => {
-		const column = await tx.dataType.findMany({
-			where: { organizationId, tier, NOT: { id: dt.id } },
-			orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-			select: { id: true, key: true }
-		});
-		const at = beforeKey ? column.findIndex((c) => c.key === beforeKey) : -1;
-		const ordered = column.map((c) => c.id);
-		ordered.splice(at === -1 ? ordered.length : at, 0, dt.id);
-		await tx.dataType.update({
-			where: { id: dt.id },
-			data: { tier, action: actionFor(tier, dt.action) }
-		});
-		for (const [position, id] of ordered.entries()) {
-			await tx.dataType.update({ where: { id }, data: { position } });
-		}
+	await prisma.$transaction((tx) => placeInColumn(tx, organizationId, dt, tier, beforeKey));
+}
+
+/** Puts `dt` in `tier` before `beforeKey` (or last), renumbering that column. */
+async function placeInColumn(
+	tx: Prisma.TransactionClient,
+	organizationId: string,
+	dt: { id: string; action: Action },
+	tier: BoardTier,
+	beforeKey: string | null
+): Promise<void> {
+	const column = await tx.dataType.findMany({
+		where: { organizationId, tier, NOT: { id: dt.id } },
+		orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+		select: { id: true, key: true }
 	});
+	const at = beforeKey ? column.findIndex((c) => c.key === beforeKey) : -1;
+	const ordered = column.map((c) => c.id);
+	ordered.splice(at === -1 ? ordered.length : at, 0, dt.id);
+	await tx.dataType.update({
+		where: { id: dt.id },
+		data: { tier, action: actionFor(tier, dt.action) }
+	});
+	for (const [position, id] of ordered.entries()) {
+		await tx.dataType.update({ where: { id }, data: { position } });
+	}
 }
 
 export type DataTypeInput = {
@@ -262,8 +271,9 @@ export async function saveDataType(
 		throw new DraftError(`"${column.title}" doesn't offer that option.`);
 	}
 	await assertNameFree(organizationId, name, dt.id);
-	if (input.tier !== dt.tier) await moveDataType(organizationId, key, input.tier, null);
+	// One transaction, so a failed save doesn't leave the move applied.
 	await prisma.$transaction(async (tx) => {
+		if (input.tier !== dt.tier) await placeInColumn(tx, organizationId, dt, input.tier, null);
 		await tx.dataType.update({ where: { id: dt.id }, data: { name, description, action } });
 		await saveTerms(tx, dt.id, terms);
 	});
@@ -340,6 +350,10 @@ export async function setSwapBackTools(organizationId: string, tools: string[]):
 /** Publishes the draft as the next version. Agents pick it up on their next sync (≤ 30 s). */
 export async function publish(organizationId: string, memberId: string): Promise<number> {
 	const draft = await loadDraft(organizationId);
+	// The button is disabled then too; this stops a direct request making a duplicate version.
+	if (!(await draftStatus(organizationId, draft)).changed) {
+		throw new DraftError('Nothing has changed since the last publish.');
+	}
 	try {
 		return await prisma.$transaction(async (tx) => {
 			const latest = await tx.policyVersion.findFirst({

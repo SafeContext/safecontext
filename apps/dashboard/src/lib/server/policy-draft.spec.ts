@@ -66,6 +66,8 @@ describe('policy draft', () => {
 		expect(await publish(orgId, memberId)).toBe(1);
 		const status = await draftStatus(orgId, await loadDraft(orgId));
 		expect(status).toMatchObject({ changed: false, published: { version: 1 } });
+		// Publishing again with no change is refused (no duplicate versions).
+		await expect(publish(orgId, memberId)).rejects.toThrow('Nothing has changed');
 	});
 
 	it('moving a pill changes its column, action and place, and counts as a change', async () => {
