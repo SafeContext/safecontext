@@ -58,7 +58,7 @@ runner errors are an execution-environment restriction, not detector failures.
 | Sync default-path test expects `/Users/x/Library/Application Support/SafeContext`, but Windows `path.join` produces backslashes.                                                                                                          | POSIX-specific assertion; application state-directory default is also macOS-specific.                                                           | W5: choose an appropriate Windows state location and test platform defaults.                                                     |
 | Policy-cache test expects POSIX mode `0600`; Windows reports `0666`.                                                                                                                                                                      | Test portability and an unresolved application security requirement. A mode-bit assertion does not establish Windows access-control protection. | W5: verify appropriate Windows ACLs for cached policy/term lists. Do not remove the privacy requirement merely to pass the test. |
 | One restoration test cannot create its directory symlink (`EPERM`) on this account.                                                                                                                                                       | Test setup lacks symlink capability; the relevant Windows boundary remains unverified.                                                          | W2: cover Windows symlinks/junctions, traversal, drives and protected paths with an agreed test setup.                           |
-| Dashboard prepare prints `File '$app/tsconfig' not found.` and then finishes successfully because its script includes `                                                                                                                   |                                                                                                                                                 | echo ''`.                                                                                                                        | Workspace setup failure outside the rules-only path; its Windows specificity has not been established. | Diagnose separately before claiming dashboard setup works. Successful install alone is insufficient evidence. |
+| Dashboard prepare prints `File '$app/tsconfig' not found.`; its fallback echo command masks the failure and lets installation finish.                                                                                                     | Workspace setup failure outside the rules-only path; its Windows specificity has not been established.                                          | Diagnose separately before claiming dashboard setup works. Successful install alone is insufficient evidence.                    |
 
 The agent's five skipped cases include opt-in real-model tests. Detector results
 also contain one skipped test; skipped cases are not counted as passes.
@@ -92,9 +92,14 @@ the private model weights.
 
 In a dedicated PowerShell terminal, disable optional integrations for this
 process and start the same entry point used by the agent's development command,
-without its file watcher:
+without its file watcher. This terminal also needs Node 24 and the isolated pnpm
+on PATH; process-local PATH changes do not carry over to another open terminal:
 
 ```powershell
+$toolRoot = Join-Path (Split-Path (Get-Location).Path -Parent) 'output/windows-baseline-tools'
+$env:Path = "$toolRoot/pnpm/node_modules/.bin;" + $env:Path
+node --version # Must still be v24.x in this terminal.
+pnpm --version # 12.14.0
 'SC_DASHBOARD_URL', 'SC_TIER1_MODEL_DIR', 'SC_TIER2_BASE_URL', 'SC_TIER2_MODEL', 'SC_POLICY_FILE' |
     ForEach-Object { Remove-Item -LiteralPath "Env:$_" -ErrorAction SilentlyContinue }
 $env:SC_AGENT_PORT = '4747'
@@ -146,7 +151,7 @@ then restored; this report introduces no shared line-ending policy.
 The separate status-suite diagnostic used the existing Git for Windows shell:
 
 ```powershell
-# In a temporary terminal; the exact Git installation path may differ.
+# In the tool-configured terminal; the exact Git installation path may differ.
 $env:Path = 'C:\Program Files\Git\usr\bin;' + $env:Path
 pnpm --filter @safecontext/agent exec vitest run e2e/plugin-status.test.ts
 ```
