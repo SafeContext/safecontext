@@ -61,7 +61,9 @@ Checks appear in the live feed within a few seconds. Without the dashboard, the 
 built-in default policy, which has no word lists: Project Atlas and Northwind are then only
 caught where tier 1 spots them, and some scenarios give a different result.
 
-There's no policy editor yet (#23), so you can't change the policy from the dashboard.
+To change the policy, use the dashboard's Policy page (#23) and click Publish; the agent picks it
+up within 30 seconds. If you change what the demo personas rely on (the word lists, or the columns
+of customer names, roadmap and secrets), some checks in `demo/check.ts` will give different results.
 
 ## Check the scenarios
 

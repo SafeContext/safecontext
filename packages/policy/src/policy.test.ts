@@ -63,9 +63,9 @@ describe('defaults', () => {
 		expect(p.dataTypes).toHaveLength(DEFAULT_DATA_TYPES.length);
 	});
 
-	it('has every tier represented and valid data types', () => {
+	it('has valid data types, all protected (no green defaults since #23)', () => {
 		const tiers = new Set(DEFAULT_DATA_TYPES.map((d) => DataType.parse(d).tier));
-		expect([...tiers].sort()).toEqual(['green', 'red', 'yellow']);
+		expect([...tiers].sort()).toEqual(['red', 'yellow']);
 	});
 });
 

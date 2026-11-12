@@ -137,8 +137,15 @@ Every request and response on both APIs is checked against these schemas.
   green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists,
   `failMode` (default `block`) and `swapBack.tools` (the tools that get real values back, default
   the local file tools; §4, #83). Only green types may `allow`. `defaultPolicy()` has version 0
-  ("never published") and the 10 default data types in `defaults.ts`. The dashboard writes it; the
+  ("never published") and the 7 default data types in `defaults.ts` (yellow and red only: no green
+  defaults since #23, because nothing looks for a green type). The dashboard writes it; the
   agent pulls it, keeps the highest version it has seen, caches it on disk and works offline.
+  On the dashboard's Policy page (#23) admins edit a draft (the `DataType`/`TermList` rows and the
+  organisation's settings) on a two-column board, yellow and red: the dashboard doesn't offer
+  green, and deleting a type stops protecting it. Publish makes the draft the next version.
+  Dashboard members are `admin`
+  (edit and publish) or `viewer` (read-only). The built-in data types (`BUILTIN_DATA_TYPE`) can be
+  moved but not deleted: the agent treats a data type missing from the policy as red + block.
 - **Agent API** (`api.ts`; binds `127.0.0.1` only; port from `SC_AGENT_PORT`, default 4747, but
   the plugin's hook URLs are fixed at 4747, see §2):
   - `GET /health`: `{ ok, policyVersion }`
@@ -306,9 +313,9 @@ Text already in placeholder form is never flagged again.
 `GET /v1/session-start` returns, built from the policy. It says what placeholders mean, to copy
 them exactly, which tools put real values back (and which ask the user first), and which don't.
 
-**On the dashboard** the Policy page shows the published list (read-only). Editing it, and
-publishing, comes with the policy editor (#23). The draft list is `Organization.swapBackTools`,
-copied into each published version like `failMode`.
+**On the dashboard** the Policy page edits the list (#23): the local file tools can be turned
+off, and IT can add tool names or prefixes (`mcp__slack__*`), checked with `SwapBack`. The draft
+list is `Organization.swapBackTools`, copied into each published version like `failMode`.
 
 Not done (#83 follow-ups): a local record of what was swapped where (the key is the only record, in
 memory), keeping placeholders across agent restarts or sessions, and a usefulness benchmark.
@@ -353,7 +360,7 @@ only; weights are hosted only if we fine-tune.
 | Agent | Every endpoint returns valid hook JSON (validated against `packages/policy`). Tiers 0+1 p95 < 300 ms on a Mac. Fail-mode behaviour covered by tests. | Endpoints and fail mode built and tested (#9). Tier 1 inside the target on an M3 Max (PR #67, measured on a busy machine); large tool output is slower (~100 ms per KB). Base M-series Mac not measured. |
 | Classifier | Meets the evaluation targets above on the held-out set. | Tier 1 meets red recall ≥ 95% (97.8%). Task preservation not run yet. Tier 2 (#14, #16) clears tier 1's roadmap-vs-press-release false positives (52% → 0% on test) without losing a true span. |
 | Installer | On a clean Mac, one command + `/plugin install` gives a working setup. The SessionStart check tells the user how to fix a missing agent. | SessionStart check built (#17). Installer not started (#26). |
-| Dashboard | Moving a data type between columns updates the policy; the agent picks it up within N seconds. Live feed shows events and contains no text. | Live feed built (#24). Agent pulls the policy every 30 s (#22). Policy editor not built (#23). |
+| Dashboard | Moving a data type between columns updates the policy; the agent picks it up within N seconds. Live feed shows events and contains no text. | Live feed built (#24). Agent pulls the policy every 30 s (#22). Policy editor built (#23). |
 
 ---
 

@@ -1,5 +1,10 @@
 <script lang="ts">
-	type Admin = { email: string; name: string | null; organizationName: string };
+	type Admin = {
+		email: string;
+		name: string | null;
+		role: 'admin' | 'viewer';
+		organizationName: string;
+	};
 
 	let { admin, navOpen, onmenu }: { admin: Admin; navOpen: boolean; onmenu: () => void } = $props();
 </script>
@@ -30,6 +35,13 @@
 			</span>
 			<span class="truncate">{admin.organizationName}</span>
 		</span>
+		{#if admin.role === 'viewer'}
+			<span
+				class="rounded-full bg-ink/8 px-3 py-1 text-xs font-semibold whitespace-nowrap"
+				title="You can see everything but not change the policy"
+				data-testid="view-only">View only</span
+			>
+		{/if}
 		<!-- A plain form post so signing out works without JavaScript and reloads the page. -->
 		<form method="POST" action="/sign-out">
 			<button

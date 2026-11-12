@@ -79,7 +79,23 @@ describe('tier 1 labels', () => {
 		const { model, calls } = fakeModel({ Northwind: 'Customer names' });
 		const tier1 = createTier1({ model });
 		const text = 'Renewal for Northwind is due.';
-		const [spans] = await tier1.detect([text], ctx());
+		// A green type (the defaults have none since #23) is never a label.
+		const base = defaultPolicy();
+		const policy = {
+			...base,
+			dataTypes: [
+				{
+					id: 'public-docs',
+					name: 'Public docs',
+					description: '',
+					examples: [],
+					tier: 'green' as const,
+					action: 'allow' as const
+				},
+				...base.dataTypes
+			]
+		};
+		const [spans] = await tier1.detect([text], ctx(policy));
 		expect(calls[0]!.labels).toEqual(names());
 		expect(calls[0]!.labels).not.toContain('Public docs');
 		expect(spans).toEqual([
@@ -215,7 +231,11 @@ describe('when tier 1 runs (shouldRun)', () => {
 
 	it('skips when there is no text, or no data type to tag', () => {
 		expect(needsTier1(state({ texts: ['', ' \n\t'], spans: [[], []] }))).toBe(false);
-		const allAllow = policyWith({ dataTypes: policy.dataTypes.filter((d) => d.action === 'allow') });
+		const allAllow = policyWith({
+			dataTypes: [
+				{ id: 'public-docs', name: 'Public docs', description: '', examples: [], tier: 'green', action: 'allow' }
+			]
+		});
 		expect(needsTier1(state({ policy: allAllow }))).toBe(false);
 	});
 });

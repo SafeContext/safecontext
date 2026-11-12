@@ -18,6 +18,13 @@ import {
 
 /** Default port. Override with the SC_AGENT_PORT environment variable. */
 export const AGENT_DEFAULT_PORT = 4747;
+
+/**
+ * How long the agent may spend checking one prompt, tool call or tool output before the policy's
+ * fail mode applies (SPEC.md §2a). Room for tier 2 (~1–5 s) while staying far inside Claude Code's
+ * 30 s. Each Mac can change it with SC_CHECK_BUDGET_MS; the dashboard shows this default.
+ */
+export const DEFAULT_CHECK_BUDGET_MS = 8_000;
 /** The agent only ever binds to loopback. */
 export const AGENT_HOST = '127.0.0.1';
 

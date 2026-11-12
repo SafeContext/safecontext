@@ -4,6 +4,7 @@
 import { hashPassword } from 'better-auth/crypto';
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from './generated/prisma/client.ts';
+import type { MemberRole } from './generated/prisma/enums.ts';
 
 /** Shortest password allowed (also Better Auth's `minPasswordLength`). */
 export const MIN_PASSWORD_LENGTH = 12;
@@ -18,6 +19,11 @@ export type AdminInput = {
 	password: string;
 	/** Replace the password if the account already has one. Default false (leave it alone). */
 	resetPassword?: boolean;
+	/**
+	 * `admin` (changes the policy) or `viewer` (looks only), issue #23. Set on a new member, and
+	 * changed on an existing one only when given. New members default to `admin`.
+	 */
+	role?: MemberRole;
 };
 
 /**
@@ -51,10 +57,19 @@ export async function ensureAdmin(prisma: PrismaClient, input: AdminInput): Prom
 			throw new Error(`${email} is already an admin of another organisation`);
 		}
 		if (member) {
-			await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
+			await tx.member.update({
+				where: { id: member.id },
+				data: { userId: user.id, ...(input.role && { role: input.role }) }
+			});
 		} else {
 			await tx.member.create({
-				data: { organizationId: input.organizationId, email, name: input.name, userId: user.id }
+				data: {
+					organizationId: input.organizationId,
+					email,
+					name: input.name,
+					userId: user.id,
+					role: input.role ?? 'admin'
+				}
 			});
 		}
 

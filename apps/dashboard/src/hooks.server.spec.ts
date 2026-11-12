@@ -186,6 +186,7 @@ describe('signing in', () => {
 			expect(layout.admin).toEqual({
 				email: admin.email,
 				name: `Admin ${i}`,
+				role: 'admin',
 				organizationName: orgs[i]!.name
 			});
 		}

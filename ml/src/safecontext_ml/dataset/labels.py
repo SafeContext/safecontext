@@ -23,24 +23,6 @@ class DataType:
 
 DATA_TYPES: tuple[DataType, ...] = (
     DataType(
-        "public-docs",
-        "Public docs",
-        "green",
-        "Documentation, marketing pages and other material already published to the public.",
-    ),
-    DataType(
-        "release-notes",
-        "Release notes",
-        "green",
-        "Features and fixes that have already shipped and been announced.",
-    ),
-    DataType(
-        "open-source-code",
-        "Open-source code",
-        "green",
-        "Code from public open-source projects and libraries.",
-    ),
-    DataType(
         "revenue-figures",
         "Revenue figures",
         "yellow",
@@ -88,16 +70,11 @@ DATA_TYPES: tuple[DataType, ...] = (
 
 BY_ID: dict[str, DataType] = {d.id: d for d in DATA_TYPES}
 
-#: Data types that describe a whole document, not a value in it ("this is public docs"). They
-#: never appear on spans: such text is simply text with no spans.
-DOCUMENT_TYPES: tuple[str, ...] = ("public-docs", "release-notes", "open-source-code")
-
-#: Labels that appear on spans: every data type except the document types. This is decided by
-#: what the type *is*, not by its tier, so a green type that is a value (not a kind of document)
-#: would still be labelled, and IT could move it to yellow or red.
-SPAN_LABELS: tuple[str, ...] = tuple(
-    d.id for d in DATA_TYPES if d.id not in DOCUMENT_TYPES
-)
+#: Labels that appear on spans: every default data type. (The defaults used to include three
+#: green "document" types, public docs, release notes and open-source code, that described a whole
+#: text and never appeared on spans. They were dropped in issue #23. Safe text such as public docs
+#: is still generated as genres: text with no spans.)
+SPAN_LABELS: tuple[str, ...] = tuple(d.id for d in DATA_TYPES)
 
 RED_LABELS: tuple[str, ...] = tuple(d.id for d in DATA_TYPES if d.tier == "red")
 
