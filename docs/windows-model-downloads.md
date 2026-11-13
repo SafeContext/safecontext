@@ -1,7 +1,8 @@
 # Windows: download the pinned Tier 1 files
 
 W3 prepares the Tier 1 ONNX files for the agent. It does not run the model, install
-Ollama, train a model or establish detection accuracy. W4 covers inference.
+Ollama, train a model or establish detection accuracy. See the separate
+[W4 inference checks](windows-inference.md) for model-enabled commands and evidence.
 
 ## Download tools without the training stack
 
