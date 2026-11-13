@@ -1,6 +1,7 @@
 <script lang="ts">
-	// "What's sensitive": the board of data types Safe Context protects (issue #23). Drag a pill to
-	// the other column (or open it and change its column) to change what happens to that data.
+	// "What's sensitive": the board of data types Safe Context protects (issue #23, restyled in
+	// #96). Drag a row to the other column (or open it and change its column) to change what happens
+	// to that data. Adding one is the page's "Add data type" button.
 	import {
 		ACTION_LABELS,
 		actionFor,
@@ -9,6 +10,9 @@
 		isBuiltin,
 		shownAction
 	} from '#lib/policy-board.ts';
+	import Icon from '#lib/components/ui/Icon.svelte';
+	import ResultKey from '#lib/components/ui/ResultKey.svelte';
+	import { TIER_TONE, TONE_CLASSES } from '#lib/tones.ts';
 	import type { DataTypeView, Target } from './DataTypeDialog.svelte';
 	import { send } from './send.ts';
 
@@ -29,20 +33,10 @@
 	let dragging = $state<string | null>(null);
 	let over = $state<BoardTier | null>(null);
 
-	const tones = {
-		vague: { column: 'bg-lemon/35', pill: 'bg-lemon', ring: 'ring-lemon' },
-		never: { column: 'bg-pink/35', pill: 'bg-pink', ring: 'ring-pink' }
-	} as const;
+	/** Panels get a faint tint of their column's brand colour; rows carry the colour itself. */
+	const tone = (tier: BoardTier) => TIER_TONE[tier];
 
-	/** "Placeholder only · 3 words · built-in" */
-	function detail(dt: DataTypeView): string {
-		const parts: string[] = [];
-		parts.push(ACTION_LABELS[shownAction(dt.tier, dt.action)].label);
-		if (dt.terms.length > 0)
-			parts.push(`${dt.terms.length} ${dt.terms.length === 1 ? 'word' : 'words'}`);
-		if (isBuiltin(dt.key)) parts.push('built-in');
-		return parts.join(' · ');
-	}
+	const words = (n: number) => `${n} ${n === 1 ? 'word' : 'words'}`;
 
 	async function drop(tier: BoardTier, before: string | null) {
 		const key = dragging;
@@ -70,8 +64,9 @@
 	{#each COLUMNS as column (column.tier)}
 		{@const items = shown.filter((d) => d.tier === column.tier)}
 		<section
-			class="flex min-h-48 flex-col rounded-2xl p-4 transition-shadow {tones[column.tone]
-				.column} {over === column.tier ? `ring-2 ring-offset-2 ${tones[column.tone].ring}` : ''}"
+			class="flex flex-col gap-2.5 rounded-xl border p-3.5 transition-colors {TONE_CLASSES[
+				tone(column.tier)
+			].panel} {over === column.tier ? 'ring-2 ring-ink/30' : ''}"
 			aria-labelledby="column-{column.tier}"
 			data-testid="column-{column.tier}"
 			ondragover={(e) => {
@@ -87,14 +82,18 @@
 				drop(column.tier, null);
 			}}
 		>
-			<h3 id="column-{column.tier}" class="flex items-center gap-2 text-base font-semibold">
-				<span class="size-3 rounded-full {tones[column.tone].pill} ring-1 ring-ink/20"></span>
-				{column.title}
-				<span class="ml-auto text-sm font-normal text-ink/60">{items.length}</span>
-			</h3>
-			<p class="mt-1 mb-3 text-sm text-ink/70">{column.summary}</p>
+			<div class="flex items-start gap-2.5 px-1 pt-0.5 pb-1.5">
+				<ResultKey tone={tone(column.tier)} class="mt-[5px]" />
+				<span class="flex min-w-0 flex-col">
+					<h3 id="column-{column.tier}" class="font-sans text-[15px] font-bold tracking-normal">
+						{column.title}
+					</h3>
+					<span class="text-[13px] text-muted">{column.summary}</span>
+				</span>
+				<span class="ml-auto pt-0.5 font-mono text-[13px] text-subtle">{items.length}</span>
+			</div>
 
-			<ul class="flex flex-wrap content-start gap-2">
+			<ul class="flex flex-col gap-2">
 				{#each items as dt (dt.key)}
 					<li
 						draggable={canEdit}
@@ -121,29 +120,47 @@
 					>
 						<button
 							type="button"
-							class="flex max-w-full flex-col items-start rounded-2xl px-3 py-1.5 text-left shadow-sm ring-1 ring-ink/10 hover:ring-ink/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink {tones[
-								column.tone
-							].pill} {canEdit ? 'cursor-grab active:cursor-grabbing' : ''}"
+							class="flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left {TONE_CLASSES[
+								tone(column.tier)
+							]
+								.row} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
+								{canEdit ? 'cursor-grab active:cursor-grabbing' : ''}"
 							data-testid="pill-{dt.key}"
 							onclick={() => onopen({ mode: 'edit', dataType: dt })}
 						>
-							<span class="text-sm font-semibold">{dt.name}</span>
-							{#if detail(dt)}
-								<span class="text-xs text-ink/70">{detail(dt)}</span>
+							{#if canEdit}
+								<Icon name="grip" class="size-3.5 shrink-0 text-ink/40" />
+							{/if}
+							<span class="flex min-w-0 flex-1 flex-col gap-0.5">
+								<span class="truncate text-sm font-semibold">{dt.name}</span>
+								<span class="truncate text-xs text-muted"
+									>{ACTION_LABELS[shownAction(dt.tier, dt.action)].label}</span
+								>
+							</span>
+							{#if dt.terms.length > 0}
+								<span
+									class="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-xs whitespace-nowrap text-subtle"
+									>{words(dt.terms.length)}</span
+								>
+							{/if}
+							{#if isBuiltin(dt.key)}
+								<span
+									class="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-subtle"
+									title="Built in: can move, can't be deleted"
+								>
+									<Icon name="lock" class="size-3.5" />Built in
+								</span>
 							{/if}
 						</button>
 					</li>
 				{/each}
 			</ul>
-
-			{#if canEdit}
-				<button
-					type="button"
-					class="mt-3 w-fit rounded-full border border-dashed border-ink/30 px-3 py-1.5 text-sm font-semibold text-ink/80 hover:border-ink/60 hover:bg-white/60"
-					onclick={() => onopen({ mode: 'add', tier: column.tier })}
+			{#if items.length === 0}
+				<p
+					class="rounded-[10px] border border-dashed border-field px-3 py-4 text-center text-sm text-muted"
 				>
-					+ Add data type
-				</button>
+					{canEdit ? 'Drag a data type here' : 'Nothing here'}
+				</p>
 			{/if}
 		</section>
 	{/each}

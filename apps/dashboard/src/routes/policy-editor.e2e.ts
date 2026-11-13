@@ -13,7 +13,7 @@ test('shows the two protected columns with the default data types', async ({ pag
 	// No "Safe to share" column: nothing looks for green data types.
 	await expect(page.getByTestId('column-green')).toHaveCount(0);
 	await expect(page.getByTestId('column-red').getByTestId('pill-secrets')).toBeVisible();
-	await expect(page.getByTestId('publish-bar')).toContainText('Version');
+	await expect(page.getByTestId('publish-bar')).toContainText(/version \d+/);
 });
 
 test('opening a built-in data type shows it can be moved but not deleted', async ({ page }) => {
@@ -30,8 +30,9 @@ test('opening a built-in data type shows it can be moved but not deleted', async
 test('adds a data type with a word list, then deletes it', async ({ page }) => {
 	const name = `E2E test type ${Date.now().toString(36)}`;
 	await page.goto('/policy');
-	await page.getByTestId('column-red').getByRole('button', { name: '+ Add data type' }).click();
+	await page.getByRole('button', { name: 'Add data type' }).click();
 	const dialog = page.getByRole('dialog');
+	await dialog.getByLabel('Column').selectOption('red');
 	await dialog.getByLabel('Name').fill(name);
 	await expect(dialog.getByTestId('no-words-warning')).toBeVisible();
 	await dialog.getByLabel('Word list').fill('Oakwood Clinic\nSt Mary Hospital');

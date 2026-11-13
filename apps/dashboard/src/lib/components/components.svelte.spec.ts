@@ -2,12 +2,12 @@ import { page } from 'vitest/browser';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { createRawSnippet } from 'svelte';
-import Button from './Button.svelte';
-import Card from './Card.svelte';
-import EmptyState from './EmptyState.svelte';
-import Pill from './Pill.svelte';
-import FeedList from './FeedList.svelte';
-import StatCard from './StatCard.svelte';
+import Button from '#lib/components/ui/Button.svelte';
+import Card from '#lib/components/ui/Card.svelte';
+import EmptyState from '#lib/components/ui/EmptyState.svelte';
+import Pill from '#lib/components/ui/Pill.svelte';
+import FeedList from '#lib/components/overview/FeedList.svelte';
+import StatCard from '#lib/components/overview/StatCard.svelte';
 
 const text = (value: string) => createRawSnippet(() => ({ render: () => `<span>${value}</span>` }));
 
@@ -25,7 +25,7 @@ describe('Button', () => {
 
 describe('Pill', () => {
 	it('shows its label', async () => {
-		render(Pill, { tone: 'safe', children: text('Safe') });
+		render(Pill, { tone: 'clean', children: text('Safe') });
 		await expect.element(page.getByText('Safe')).toBeInTheDocument();
 	});
 });
@@ -94,6 +94,6 @@ describe('FeedList', () => {
 		await expect.element(rows.nth(0)).toHaveTextContent(/Prompt.*Blocked.*dev-a1b2c3.*4 min ago/);
 		await expect
 			.element(rows.nth(1))
-			.toHaveTextContent(/Read.*Tool output.*Made vague.*dev-d4e5f6.*3 h ago/);
+			.toHaveTextContent(/Read.*Tool output.*Hidden.*dev-d4e5f6.*3 h ago/);
 	});
 });

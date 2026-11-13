@@ -3,7 +3,7 @@
 	// Also the way to move a pill without dragging (keyboard, touch screens): change its column.
 	import { onMount, untrack } from 'svelte';
 	import type { Action } from '@safecontext/policy';
-	import Button from '#lib/components/Button.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
 	import {
 		ACTION_LABELS,
 		actionFor,

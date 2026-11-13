@@ -1,20 +1,20 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import Button from '#lib/components/Button.svelte';
-	import Card from '#lib/components/Card.svelte';
-	import EmptyState from '#lib/components/EmptyState.svelte';
-	import Pill from '#lib/components/Pill.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
+	import Card from '#lib/components/ui/Card.svelte';
+	import EmptyState from '#lib/components/ui/EmptyState.svelte';
+	import PageHeader from '#lib/components/ui/PageHeader.svelte';
+	import Pill from '#lib/components/ui/Pill.svelte';
 </script>
 
 <svelte:head>
 	<title>Deploy · Safe Context</title>
 </svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center gap-3">
-	<h1 class="text-3xl font-bold">Deploy</h1>
+<PageHeader eyebrow="Roll out" title="Deploy">
 	<Pill>Coming soon</Pill>
-</div>
-<p class="mb-6 max-w-2xl text-ink/70">Roll Safe Context out to your team.</p>
+</PageHeader>
+<p class="-mt-2 max-w-2xl text-muted">Roll Safe Context out to your team.</p>
 
 <Card>
 	<EmptyState
