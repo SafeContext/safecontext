@@ -453,6 +453,11 @@ Use `dev` for prompt changes; `test` is for the final numbers.
 
 ## Models and data
 
+Windows download-only setup: see [the Windows guide](../docs/windows-model-downloads.md).
+`uv run --locked ml/download.py status` from the repository root uses a separate
+minimal environment, and its `pull` command selects only Tier 1 ONNX. The commands
+below remain the existing Mac/training workflow.
+
 Weights, exports and built splits never go in git. They live in the **private Hugging Face
 organisation `SafeContext`**, and [`models.lock.json`](models.lock.json) pins each one to an exact commit, with
 the sha256 and size of every file. Changing a model or the dataset is a normal PR that changes

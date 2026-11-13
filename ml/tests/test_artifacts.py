@@ -246,7 +246,8 @@ def test_status_rows(tmp_path):
     rows = {r["name"]: r for r in A.status_rows(arts, tmp_path)}
     assert rows["tier1-onnx"]["pin"] == f"acme/tier1-gliner@{REV[:12]}"
     assert rows["tier1-onnx"]["local"].startswith("partial 1/2")
-    assert rows["tier1-onnx"]["checksum"] == "ok"
+    assert rows["tier1-onnx"]["checksum"] == "incomplete"
+    assert rows["tier1-onnx"]["ready"] == "no"
     (d / "labels.json").write_bytes(b"tampered")
     rows = {r["name"]: r for r in A.status_rows(arts, tmp_path)}
     assert rows["tier1-onnx"]["checksum"] == "mismatch: labels.json"
@@ -497,7 +498,7 @@ def provenance_inputs(tmp_path, prefix="1aec53bb"):
         )
     )
     report = tmp_path / "report.md"
-    report.write_text(REPORT.format(prefix=prefix))
+    report.write_text(REPORT.format(prefix=prefix), encoding="utf-8")
     cache = tmp_path / "hf"
     ref = cache / "models--urchade--gliner_small-v2.1" / "refs" / "main"
     ref.parent.mkdir(parents=True)
@@ -526,7 +527,8 @@ def test_build_provenance_rejects_scores_from_another_test_split(tmp_path):
 def test_build_provenance_rejects_a_report_without_a_test_split(tmp_path):
     export, ft, splits, report, cache = provenance_inputs(tmp_path)
     report.write_text(
-        "\n".join(l for l in report.read_text().splitlines() if "sha256" not in l)
+        "\n".join(l for l in report.read_text(encoding="utf-8").splitlines() if "sha256" not in l),
+        encoding="utf-8",
     )
     with pytest.raises(A.ArtifactError, match="doesn't say which test split"):
         A.build_provenance(export, ft, splits, report, cache)
