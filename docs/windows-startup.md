@@ -6,6 +6,9 @@ not an installer, a finished Windows security port, or evidence that all Claude
 data routes are protected. The [W0 baseline](windows-baseline.md) records the
 remaining restoration, state-directory and permission work.
 
+See [Windows file restoration (W2)](windows-restoration.md) for the subsequent
+path checks, supported cases and remaining limits.
+
 ## Prerequisites
 
 - PowerShell **7** (`pwsh`), Node **24** and **pnpm 12.14.0** (the version pinned in
@@ -102,10 +105,11 @@ the PowerShell helper from such a path, verifies inherited hook utilities, and
 checks that a missing Git installation leaves PATH unchanged. The existing
 fail-mode and privacy tests exercise enforcement without contacting a real model.
 
-Three W0 failures remain outside W1 on the baseline account: creating a directory
-symlink without Windows privileges (W2), the macOS-specific state-directory
-expectation (W5), and the POSIX `0600` cache-permission expectation (W5). Do not
-skip them or treat their presence as a fully passing Windows port.
+W1 recorded three W0 failures on the baseline account. W2 now runs the directory
+link boundary assertion with a Windows junction, retaining Unix symlink coverage.
+The macOS-specific state-directory expectation (W5) and POSIX `0600`
+cache-permission expectation (W5) remain. Do not skip them or treat the current
+results as a fully passing Windows port. The dated W1 results below are historical.
 
 ### W1 verification on 2026-11-12
 

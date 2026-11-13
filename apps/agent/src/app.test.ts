@@ -1,4 +1,5 @@
 import { AGENT_API, AgentEvent, defaultPolicy } from '@safecontext/policy';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { messages, SAFE_VERSION_MAX_CHARS } from './messages.ts';
 import {
@@ -301,10 +302,10 @@ describe('swap-back and re-hiding (issue #83)', () => {
 	it('puts the real value into a local file tool, with no permission decision', async () => {
 		const { post } = testApp({ tiers: [createTier0(), contextTier] });
 		await readCrm(post);
-		const res = await post(
-			preTool.path,
-			toolInput('Write', { file_path: 'notes.md', content: 'Call ⟪customer_name_1⟫ on Monday' })
-		);
+		const res = await post(preTool.path, {
+			...toolInput('Write', { file_path: 'notes.md', content: 'Call ⟪customer_name_1⟫ on Monday' }),
+			cwd: process.cwd()
+		});
 		expect(preTool.response.parse(res.json)).toEqual({
 			hookSpecificOutput: {
 				hookEventName: 'PreToolUse',
@@ -322,7 +323,10 @@ describe('swap-back and re-hiding (issue #83)', () => {
 
 	it("denies a file tool whose placeholder it doesn't hold, and says why", async () => {
 		const { post } = testApp();
-		const res = await post(preTool.path, toolInput('Read', { file_path: 'deals/⟪customer_name_1⟫.md' }));
+		const res = await post(preTool.path, {
+			...toolInput('Read', { file_path: 'deals/⟪customer_name_1⟫.md' }),
+			cwd: process.cwd()
+		});
 		const out = preTool.response.parse(res.json).hookSpecificOutput;
 		expect(out?.permissionDecision).toBe('deny');
 		expect(out?.permissionDecisionReason).toBe(messages.restoreUnknown(['customer_name_1']));
@@ -331,7 +335,10 @@ describe('swap-back and re-hiding (issue #83)', () => {
 	it('denies a write of real values outside the project', async () => {
 		const { post } = testApp({ tiers: [createTier0(), contextTier] });
 		await readCrm(post);
-		const res = await post(preTool.path, toolInput('Write', { file_path: '/tmp/x.md', content: '⟪customer_name_1⟫' }));
+		const res = await post(preTool.path, {
+			...toolInput('Write', { file_path: join(dirname(process.cwd()), 'outside.md'), content: '⟪customer_name_1⟫' }),
+			cwd: process.cwd()
+		});
 		expect(preTool.response.parse(res.json).hookSpecificOutput?.permissionDecisionReason).toBe(
 			messages.restoreOutsideProject()
 		);
@@ -395,10 +402,10 @@ describe('swap-back and re-hiding (issue #83)', () => {
 	it('logs how many values were put back, never the values', async () => {
 		const { post, logger } = testApp({ tiers: [createTier0(), contextTier] });
 		await readCrm(post);
-		await post(
-			preTool.path,
-			toolInput('Edit', { file_path: 'a.md', old_string: '⟪customer_name_1⟫', new_string: 'x' })
-		);
+		await post(preTool.path, {
+			...toolInput('Edit', { file_path: 'a.md', old_string: '⟪customer_name_1⟫', new_string: 'x' }),
+			cwd: process.cwd()
+		});
 		const line = logger.records.find((r) => r.hook === 'PreToolUse');
 		expect(line).toMatchObject({ restored: 1 });
 		expect(JSON.stringify(logger.records)).not.toContain('Northwind');
