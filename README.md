@@ -4,7 +4,7 @@ Use AI. Keep the secrets. Safe Context checks Claude Code prompts and cleans too
 company-run model, following a policy IT controls from a dashboard.
 
 - **Architecture, contracts, open decisions:** [SPEC.md](SPEC.md)
-- **Rules for coding agents:** [CLAUDE.md](CLAUDE.md)
+- **Rules for coding agents:** [AGENTS.md](AGENTS.md), plus one in each app folder (each `CLAUDE.md` imports the `AGENTS.md` beside it)
 - **Roadmap and what's next:** [issue #1](https://github.com/SafeContext/safecontext/issues/1)
 
 ## What it is

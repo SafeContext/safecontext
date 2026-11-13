@@ -99,7 +99,8 @@ jobs:
             1) TRIAGE
                - `gh pr view` (description, linked issue) and `gh pr diff`.
                - `gh issue view <n>` for the issue it closes; note its "Done when".
-               - Read CLAUDE.md, and SPEC.md sections relevant to the changed areas.
+               - Read AGENTS.md (the root one and those in the changed apps' folders),
+                 and SPEC.md sections relevant to the changed areas.
                - Count changed lines, excluding the files above. Pick a mode:
                    TINY:  docs/config only, or <= 40 lines -> lead reviews alone; no subagents.
                    SMALL: <= 300 lines -> lead reviews alone against the full checklist,
@@ -137,7 +138,7 @@ jobs:
                  the PR meets its issue's "Done when"; one issue per PR; no scope creep.
               G. Code quality: readability, naming, dead code, error handling, idiomatic
                  TS/Svelte/Python.
-              H. Conventions: CLAUDE.md and SPEC.md rules ("must"/"never"/"always"); the PR
+              H. Conventions: AGENTS.md and SPEC.md rules ("must"/"never"/"always"); the PR
                  description follows .github/pull_request_template.md (every section filled,
                  plain-English Summary, human tasks under "Needs human input"). Quote the
                  rule each deviation breaks.
