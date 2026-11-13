@@ -23,6 +23,7 @@ import argparse
 import errno
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -72,15 +73,7 @@ def _relative_path(value: str, *, empty: bool = False) -> None:
         not value
         or PureWindowsPath(value).drive
         or "\\" in value
-        or any(
-            p in ("", ".", "..")
-            or p.endswith((" ", "."))
-            or any(ord(c) < 32 or c in '<>:"|?*' for c in p)
-            or re.fullmatch(
-                r"(?i)(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?", p
-            )
-            for p in parts
-        )
+        or any(p in ("", ".", "..") or ntpath.isreserved(p) for p in parts)
     ):
         raise ArtifactError(
             "manifest path must be relative and portable (no aliases or traversal)"
@@ -106,9 +99,10 @@ def _local_path(path: Path, root: Path) -> Path:
             raise ArtifactError(
                 "cannot inspect model path; check permissions and file locks"
             ) from None
-        if (
-            stat.S_ISLNK(info.st_mode)
-            or (os.name == "nt" and getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        if stat.S_ISLNK(info.st_mode) or (
+            os.name == "nt"
+            and getattr(info, "st_file_attributes", 0)
+            & stat.FILE_ATTRIBUTE_REPARSE_POINT
         ):
             raise ArtifactError(
                 "linked/reparse model paths are unsupported; use an ordinary local directory"

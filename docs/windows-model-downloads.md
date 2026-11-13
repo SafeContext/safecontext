@@ -117,7 +117,7 @@ Verified on native Windows x64 with Python 3.14.7, uv 0.12.19, Hugging Face Hub
 1.33.0, pytest 9.1.1 and Ruff 0.17.1. The development venv installed only the
 download dependencies plus pytest/Ruff; no training packages were installed.
 
-- Artifact and Windows downloader suites: **100 passed**, including actual
+- Artifact and Windows downloader suites: **112 passed**, including actual
   Windows junctions, a hard link and an exclusive file-sharing lock. Junction
   fixtures need a process allowed to create junctions; the restricted execution
   sandbox denied them, and the ordinary user-context run passed without admin
