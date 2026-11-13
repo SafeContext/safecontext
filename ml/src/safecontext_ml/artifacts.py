@@ -20,16 +20,20 @@ to the export directory if it has none.
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
+import stat
 import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from fnmatch import fnmatch
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from typing import Any
 
@@ -58,6 +62,67 @@ NO_TOKEN = (
 
 class ArtifactError(Exception):
     """A problem the user can fix: printed without a traceback."""
+
+
+def _relative_path(value: str, *, empty: bool = False) -> None:
+    """Manifest paths use unambiguous portable POSIX components, even on Windows."""
+    if empty and value == "":
+        return
+    parts = value.split("/")
+    if (
+        not value
+        or PureWindowsPath(value).drive
+        or "\\" in value
+        or any(p in ("", ".", "..") or ntpath.isreserved(p) for p in parts)
+    ):
+        raise ArtifactError(
+            "manifest path must be relative and portable (no aliases or traversal)"
+        )
+
+
+def _local_path(path: Path, root: Path) -> Path:
+    """Refuse links/reparse points before reading/writing; not a race-proof sandbox."""
+    root = root.absolute()
+    path = path.absolute()
+    if os.name == "nt" and (path.drive.startswith("\\") or root.drive.startswith("\\")):
+        raise ArtifactError(
+            "network/device model paths are unsupported; use a local directory"
+        )
+    if ".." in path.parts or not path.is_relative_to(root):
+        raise ArtifactError("model path is outside the intended download directory")
+    for component in (*reversed(path.parents), path):
+        try:
+            info = component.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            raise ArtifactError(
+                "cannot inspect model path; check permissions and file locks"
+            ) from None
+        if stat.S_ISLNK(info.st_mode) or (
+            os.name == "nt"
+            and getattr(info, "st_file_attributes", 0)
+            & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            raise ArtifactError(
+                "linked/reparse model paths are unsupported; use an ordinary local directory"
+            )
+        if stat.S_ISREG(info.st_mode) and info.st_nlink > 1:
+            raise ArtifactError("hard-linked model files are unsupported")
+    return path
+
+
+def _file_path(art: Artifact, entry: FileEntry, root: Path) -> Path:
+    return _local_path(art.target(root) / entry.path, root)
+
+
+def _check_local_file(art: Artifact, entry: FileEntry, root: Path) -> str:
+    try:
+        return check_file(_file_path(art, entry, root), entry)
+    except OSError:
+        raise ArtifactError(
+            "file access denied or locked; check model directory permissions and file locks"
+        ) from None
 
 
 # --- lock file -------------------------------------------------------------------------------
@@ -97,6 +162,8 @@ class Artifact:
 def _artifact(raw: dict[str, Any]) -> Artifact:
     files = [FileEntry(**f) for f in raw.get("files", [])]
     art = Artifact(**{**raw, "files": files})
+    _relative_path(art.local_dir)
+    _relative_path(art.path_in_repo, empty=True)
     if art.repo_type not in _REPO_TYPES:
         raise ArtifactError(f"{art.name}: repo_type must be one of {_REPO_TYPES}")
     if art.revision is not None and not _REVISION.fullmatch(art.revision):
@@ -105,7 +172,12 @@ def _artifact(raw: dict[str, Any]) -> Artifact:
         )
     if art.revision is not None and not art.repo_id:
         raise ArtifactError(f"{art.name}: has a revision but no repo_id")
+    if len({f.path.casefold() for f in files}) != len(files):
+        raise ArtifactError(f"{art.name}: duplicate or case-aliased file paths")
     for f in files:
+        _relative_path(f.path)
+        if not isinstance(f.size, int) or isinstance(f.size, bool) or f.size < 0:
+            raise ArtifactError(f"{art.name}: invalid expected file size")
         if not _SHA256.fullmatch(f.sha256):
             raise ArtifactError(f"{art.name}: bad sha256 for {f.path}")
         if Path(f.path).is_absolute() or ".." in Path(f.path).parts:
@@ -116,7 +188,7 @@ def _artifact(raw: dict[str, Any]) -> Artifact:
 def load_lock(path: Path = LOCK_PATH) -> dict[str, Artifact]:
     """The artifacts in the lock file, by name, in file order."""
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise ArtifactError(f"{path} not found") from None
     if data.get("schema_version") != 1:
@@ -172,7 +244,7 @@ def _external(raw: dict[str, Any]) -> ExternalModel:
 
 def load_external(path: Path = LOCK_PATH) -> dict[str, ExternalModel]:
     """The lock file's `external` models (off-the-shelf, not hosted on our org), by name."""
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     out: dict[str, ExternalModel] = {}
     for raw in data.get("external", []):
         m = _external(raw)
@@ -196,9 +268,15 @@ def ollama_digests(base_url: str = "http://127.0.0.1:11434") -> dict[str, str] |
 
 def save_lock(arts: dict[str, Artifact], path: Path = LOCK_PATH) -> None:
     """Rewrite the artifacts, keeping the file's other top-level keys."""
-    data = json.loads(path.read_text()) if path.exists() else {"schema_version": 1}
+    data = (
+        json.loads(path.read_text(encoding="utf-8"))
+        if path.exists()
+        else {"schema_version": 1}
+    )
     data["artifacts"] = [asdict(a) for a in arts.values()]
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 # --- checksums -------------------------------------------------------------------------------
@@ -222,11 +300,15 @@ def check_file(path: Path, entry: FileEntry) -> str:
 
 
 def verify(path: Path, entry: FileEntry) -> None:
-    """Raise if `path` doesn't have the pinned sha256."""
+    """Raise unless both the pinned SHA-256 and size match."""
     got = file_sha256(path)
     if got != entry.sha256:
         raise ArtifactError(
             f"sha256 mismatch for {entry.path}: expected {entry.sha256}, got {got}"
+        )
+    if path.stat().st_size != entry.size:
+        raise ArtifactError(
+            f"size mismatch for {entry.path}: expected {entry.size} bytes"
         )
 
 
@@ -270,7 +352,7 @@ def _explain(
         )
     if isinstance(e, err.EntryNotFoundError):
         return ArtifactError(
-            f"{art.name}: a file in models.lock.json isn't in {repo_id}@{art.revision}: {e}"
+            f"{art.name}: a file in models.lock.json isn't in {repo_id}@{art.revision}"
         )
     if _status_code(e) in (401, 403):
         return ArtifactError(access)
@@ -286,7 +368,8 @@ def status_rows(
     rows = []
     for art in arts.values():
         target = art.target(root)
-        checks = {f.path: check_file(target / f.path, f) for f in art.files}
+        _local_path(target, root)
+        checks = {f.path: _check_local_file(art, f, root) for f in art.files}
         present = sum(c != "missing" for c in checks.values())
         bad = [p for p, c in checks.items() if c == "mismatch"]
         if not art.files:
@@ -301,7 +384,11 @@ def status_rows(
                 else f"partial {present}/{len(checks)}"
             )
             checksum = (
-                f"mismatch: {', '.join(bad)}" if bad else "ok" if present else "-"
+                f"mismatch: {', '.join(bad)}"
+                if bad
+                else "ok"
+                if present == len(checks)
+                else "incomplete"
             )
         rows.append(
             {
@@ -311,6 +398,9 @@ def status_rows(
                 else "unpinned",
                 "local": f"{local} ({art.local_dir})",
                 "checksum": checksum,
+                "ready": "yes"
+                if art.pinned and checks and all(c == "ok" for c in checks.values())
+                else "no",
             }
         )
     return rows
@@ -382,28 +472,47 @@ def pull(
         raise ArtifactError(
             "nothing is pinned in models.lock.json yet; nothing to pull"
         )
+    if any(not art.files for art in chosen):
+        raise ArtifactError(
+            "a pinned artifact has no files; cannot verify an empty model"
+        )
 
     counts = {"downloaded": 0, "skipped": 0}
     todo = [
         (art, f)
         for art in chosen
         for f in art.files
-        if check_file(art.target(root) / f.path, f) != "ok"
+        if _check_local_file(art, f, root) != "ok"
     ]
     counts["skipped"] = sum(len(a.files) for a in chosen) - len(todo)
     if not todo:
         print("everything is present and verified", file=sys.stderr)
         return counts
 
-    hub = hub_factory()
-    if not hub.get_token():
+    try:
+        hub = hub_factory()
+        token_present = bool(hub.get_token())
+    except ImportError:
+        raise ArtifactError(
+            "install the locked download tools using `uv run --locked ml/download.py status`"
+        ) from None
+    except Exception:  # noqa: BLE001 - redact arbitrary credential-provider errors
+        raise ArtifactError(
+            "cannot initialize Hugging Face access; check the download tools and your own login"
+        ) from None
+    if not token_present:
         raise ArtifactError(NO_TOKEN.format(need="read"))
     for art, f in todo:
         assert art.repo_id is not None
-        target = art.target(root)
-        staging = target / STAGING_DIR
+        staging = None
         print(f"{art.name}: {f.path} ({_size(f.size)})", file=sys.stderr)
         try:
+            target = _local_path(art.target(root), root)
+            target.mkdir(parents=True, exist_ok=True)
+            _local_path(target, root)
+            # A new owned directory per file avoids sharing/cleaning an old download's staging.
+            staging = Path(tempfile.mkdtemp(prefix=STAGING_DIR + "-", dir=target))
+            _local_path(staging, root)
             got = Path(
                 hub.download(
                     repo_id=art.repo_id,
@@ -413,6 +522,7 @@ def pull(
                     local_dir=staging,
                 )
             )
+            _local_path(got, staging)
             try:
                 verify(got, f)
             except ArtifactError as e:
@@ -421,16 +531,52 @@ def pull(
                     f"{art.name}: {e}. The download was deleted. The repo content no longer "
                     "matches models.lock.json: tell whoever pushed it last."
                 ) from None
-            dest = target / f.path
+            dest = _file_path(art, f, root)
             dest.parent.mkdir(parents=True, exist_ok=True)
+            _local_path(dest, root)
             os.replace(got, dest)
             counts["downloaded"] += 1
         except ArtifactError:
             raise
-        except Exception as e:
-            raise _explain(e, hub, art, art.repo_id, "read") from e
+        except Exception as e:  # noqa: BLE001 - never print signed URLs/auth headers
+            explained = _explain(e, hub, art, art.repo_id, "read")
+            if isinstance(explained, ArtifactError):
+                raise explained from None
+            if isinstance(e, ConnectionError | TimeoutError):
+                raise ArtifactError(
+                    f"{art.name}: download failed; check network access and retry"
+                ) from None
+            if isinstance(e, OSError):
+                reason = (
+                    "not enough disk space"
+                    if e.errno == errno.ENOSPC
+                    else "file access denied or locked"
+                    if isinstance(e, PermissionError)
+                    else "local file operation failed"
+                )
+                raise ArtifactError(
+                    f"{art.name}: {reason}; check disk space, permissions and file locks, then retry"
+                ) from None
+            # HTTP exceptions may contain authorization headers, signed URLs or token values.
+            raise ArtifactError(
+                f"{art.name}: download failed; check network access and retry (details withheld to protect credentials)"
+            ) from None
         finally:
-            shutil.rmtree(staging, ignore_errors=True)
+            if staging is not None:
+                try:
+                    # Never recursively clean a path that now resolves outside the owned target.
+                    _local_path(staging, root)
+                    shutil.rmtree(staging)
+                except ArtifactError, OSError:
+                    print(
+                        "warning: staging cleanup incomplete; inspect owned .hf-download-* directories before retrying",
+                        file=sys.stderr,
+                    )
+    # A successful return means every selected file still verifies, including reused files.
+    if any(_check_local_file(a, f, root) != "ok" for a in chosen for f in a.files):
+        raise ArtifactError(
+            "download incomplete; run status and retry before using the model"
+        )
     print(
         f"downloaded {counts['downloaded']}, already present {counts['skipped']}; all sha256 ok",
         file=sys.stderr,
@@ -456,7 +602,7 @@ def cached_revision(model_id: str, cache: Path | None = None) -> str | None:
         / "refs"
         / "main"
     )
-    rev = ref.read_text().strip() if ref.is_file() else ""
+    rev = ref.read_text(encoding="utf-8").strip() if ref.is_file() else ""
     return rev if _REVISION.fullmatch(rev) else None
 
 
@@ -473,7 +619,7 @@ _SCORE_KEYS = {
 
 def headline_scores(report: Path) -> dict[str, Any]:
     """The "overall" column of an evaluation report's Headline table, plus its test sha prefix."""
-    text = report.read_text()
+    text = report.read_text(encoding="utf-8")
     out: dict[str, Any] = {
         "report": report.relative_to(ML_ROOT).as_posix()
         if report.is_relative_to(ML_ROOT)
@@ -524,9 +670,11 @@ def build_provenance(
             "can't write provenance.json, missing:\n  " + "\n  ".join(missing)
         )
     try:
-        tier1 = json.loads((export_dir / "tier1.json").read_text())
-        args = json.loads((finetune_dir / "finetune_args.json").read_text())
-        splits = json.loads(splits_manifest.read_text())["splits"]
+        tier1 = json.loads((export_dir / "tier1.json").read_text(encoding="utf-8"))
+        args = json.loads(
+            (finetune_dir / "finetune_args.json").read_text(encoding="utf-8")
+        )
+        splits = json.loads(splits_manifest.read_text(encoding="utf-8"))["splits"]
         shas = {s: splits[s]["sha256"] for s in ("train", "dev", "test")}
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         raise ArtifactError(
