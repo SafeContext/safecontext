@@ -144,9 +144,10 @@ Do not use a destructive reset over work in progress.
 
 ## Optional live Claude check: separate authorization and quota
 
-For the separate W3 model-file preparation step, see
-[Windows model downloads](windows-model-downloads.md). That step does not enable
-or verify model inference, and the rules-only startup above still clears model settings.
+For W3 model-file preparation, see [Windows model downloads](windows-model-downloads.md).
+For opt-in model checks and model-enabled startup, see
+[Windows inference](windows-inference.md). The rules-only startup above still
+clears model settings.
 
 After the offline checks, a developer with permission and Claude access can
 prepare a terminal, keep the agent running and launch:

@@ -6,3 +6,4 @@
 # The agent's existing formatter requires LF too.
 /apps/agent/src/** text eol=lf
 /apps/agent/e2e/** text eol=lf
+/apps/agent/scripts/windows-inference.ts text eol=lf
