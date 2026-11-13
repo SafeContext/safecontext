@@ -2,7 +2,7 @@
 
 The Safe Context admin dashboard (SvelteKit 3, Prisma 7, Postgres 18), and the API the local
 agent uses. Setup and the full "try it locally" steps are in the root [README](../../README.md);
-coding rules are in [CLAUDE.md](../../CLAUDE.md).
+coding rules are in [AGENTS.md](AGENTS.md) here and the root [AGENTS.md](../../AGENTS.md).
 
 ## What's here
 
