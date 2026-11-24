@@ -27,6 +27,18 @@
         ]
       }
     ],
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:4747/v1/prompt-expansion",
+            "statusMessage": "Safe Context is checking this command\u2026",
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",

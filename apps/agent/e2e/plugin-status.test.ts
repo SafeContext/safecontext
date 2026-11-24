@@ -135,6 +135,14 @@ describe('plugin wiring', () => {
 		expect(skill).toContain('allowed-tools: Bash(sh "${CLAUDE_PLUGIN_ROOT}/scripts/agent-status.sh")');
 	});
 
+	it('checks typed slash commands and skills before they expand (issue #42)', () => {
+		expect(hooks.UserPromptExpansion[0].hooks[0]).toMatchObject({
+			type: 'http',
+			url: 'http://127.0.0.1:4747/v1/prompt-expansion',
+			onFailure: 'block'
+		});
+	});
+
 	it('checks every tool, including subagents (Agent) and tools added later (issue #41)', () => {
 		for (const event of ['PreToolUse', 'PostToolUse']) {
 			expect(hooks[event]).toHaveLength(1);

@@ -44,6 +44,25 @@ export const PostToolUseInput = z.looseObject({
 });
 export type PostToolUseInput = z.infer<typeof PostToolUseInput>;
 
+/**
+ * A slash command or skill the user typed, before it expands into Claude's prompt (#42). The
+ * hook sees only the command's name, not the skill's text or the output of commands it injects.
+ */
+export const UserPromptExpansionInput = z.looseObject({
+	...common,
+	hook_event_name: z.literal('UserPromptExpansion'),
+	/** `slash_command` (skills and custom commands) or `mcp_prompt`. */
+	expansion_type: z.string(),
+	/** e.g. `deploy-brief`, `frontend:component`, `my-plugin:review`. */
+	command_name: z.string(),
+	command_args: z.string().optional(),
+	/** e.g. `plugin`; other values aren't documented. */
+	command_source: z.string().optional(),
+	/** The line as typed. */
+	prompt: z.string().optional()
+});
+export type UserPromptExpansionInput = z.infer<typeof UserPromptExpansionInput>;
+
 // ---------------------------------------------------------------- outputs
 
 /**
@@ -63,6 +82,19 @@ export const UserPromptSubmitOutput = z.strictObject({
 		.optional()
 });
 export type UserPromptSubmitOutput = z.infer<typeof UserPromptSubmitOutput>;
+
+/** UserPromptExpansion can block the command (`reason` shown to the user) but not rewrite it. */
+export const UserPromptExpansionOutput = z.strictObject({
+	decision: z.literal('block').optional(),
+	reason: z.string().optional(),
+	hookSpecificOutput: z
+		.strictObject({
+			hookEventName: z.literal('UserPromptExpansion'),
+			additionalContext: z.string().optional()
+		})
+		.optional()
+});
+export type UserPromptExpansionOutput = z.infer<typeof UserPromptExpansionOutput>;
 
 /** PreToolUse: allow/deny/ask/defer, or rewrite the input (`updatedInput` replaces the WHOLE input). */
 export const PreToolUseOutput = z.strictObject({
