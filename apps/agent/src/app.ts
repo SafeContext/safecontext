@@ -143,7 +143,10 @@ export function createApp(deps: AppDeps): Hono {
 			for (const [a, b] of lineParts(text, PART_CHARS)) {
 				const left = deadline - REWRITE_RESERVE_MS - now();
 				if (left <= 0) break outer;
-				const r = await classifier.classify([text.slice(a, b)], policy, { hook: 'PostToolUse', budgetMs: left });
+				// Each part is checked with up to OVERLAP_CHARS before it, from a line start, so a
+				// multi-line secret across a boundary (a private key block) is still seen whole.
+				const from = a === 0 ? 0 : text.lastIndexOf('\n', Math.max(0, a - OVERLAP_CHARS)) + 1;
+				const r = await classifier.classify([text.slice(from, b)], policy, { hook: 'PostToolUse', budgetMs: left });
 				for (const t of r.tiers) tiers.set(t.id, (tiers.get(t.id) ?? 0) + t.ms);
 				ms += r.ms;
 				if (!r.ok) {
@@ -151,7 +154,7 @@ export function createApp(deps: AppDeps): Hono {
 					break outer;
 				}
 				cleared += r.cleared ?? 0;
-				for (const s of r.spans[0] ?? []) spans[i]!.push({ ...s, start: s.start + a, end: s.end + a });
+				for (const s of r.spans[0] ?? []) spans[i]!.push({ ...s, start: s.start + from, end: s.end + from });
 				checkedUntil[i] = b;
 			}
 		}
@@ -411,6 +414,11 @@ export function createApp(deps: AppDeps): Hono {
 export const PARTIAL_MIN_CHARS = 16_000;
 /** Most characters per part; parts end at a line break where one is near. */
 const PART_CHARS = 8_000;
+/**
+ * Text before each part checked along with it, so something spread over several lines across a
+ * boundary is seen whole. A 4096-bit private key block is about 3,300 characters.
+ */
+const OVERLAP_CHARS = 4_000;
 /** Time kept back from the parts for rewriting (tier 2's vague hints for figures). */
 const REWRITE_RESERVE_MS = 1_000;
 

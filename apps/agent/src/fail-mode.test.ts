@@ -175,6 +175,20 @@ describe("large tool output that can't all be checked in time (#110)", () => {
 		expect(stdout).not.toContain('withheld');
 	});
 
+	it('still finds a private key that spans two parts (PR #125 review)', async () => {
+		const body = Array.from({ length: 30 }, () => 'MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MaNG').join('\n');
+		const key = `-----${'BEGIN'} RSA PRIVATE KEY-----\n${body}\n-----${'END'} RSA PRIVATE KEY-----`;
+		const filler = `${'x'.repeat(79)}\n`;
+		const big = filler.repeat(90) + key + '\n' + filler.repeat(150); // the key crosses the 8,000-character boundary
+		expect(big.indexOf('BEGIN')).toBeLessThan(8_000);
+		expect(big.indexOf('END')).toBeGreaterThan(8_000);
+		const a = testApp();
+		const res = await a.post(postTool.path, toolOutput('Bash', { stdout: big, stderr: '' }));
+		const stdout = (postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput as { stdout: string })
+			.stdout;
+		expect(stdout).not.toContain('MIIEowIBAAKCAQEA');
+	});
+
 	it('splits text into parts at line breaks', () => {
 		expect(lineParts('aaaa\nbbbb\ncc', 7)).toEqual([
 			[0, 5],
