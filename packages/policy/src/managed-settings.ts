@@ -22,7 +22,7 @@ type HttpHook = { type: 'http'; url: string; statusMessage?: string; onFailure?:
 type HookGroup = { matcher?: string; hooks: HttpHook[] };
 
 export interface ManagedSettings {
-	hooks: Record<'UserPromptSubmit' | 'PreToolUse' | 'PostToolUse', HookGroup[]>;
+	hooks: Record<'UserPromptSubmit' | 'UserPromptExpansion' | 'PreToolUse' | 'PostToolUse', HookGroup[]>;
 	forceRemoteSettingsRefresh?: true;
 }
 
@@ -39,6 +39,18 @@ export function managedSettings({ failMode, forceRefresh = false, port = AGENT_D
 							type: 'http',
 							url: url(AGENT_API.prompt.path),
 							statusMessage: 'Safe Context is checking your prompt…',
+							...gate
+						}
+					]
+				}
+			],
+			UserPromptExpansion: [
+				{
+					hooks: [
+						{
+							type: 'http',
+							url: url(AGENT_API.promptExpansion.path),
+							statusMessage: 'Safe Context is checking this command…',
 							...gate
 						}
 					]
