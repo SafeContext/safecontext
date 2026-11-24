@@ -29,7 +29,13 @@ export const DataType = z.strictObject({
 	description: z.string().max(500),
 	examples: z.array(z.string().max(200)).max(20).default([]),
 	tier: Tier,
-	action: Action
+	action: Action,
+	/**
+	 * Also stop prompts and tool calls holding it (#50). Red data types and `block` always do. For
+	 * the others it's IT's choice, off by default: the person's own prompt goes through, and Claude
+	 * still gets the value hidden in files and command output.
+	 */
+	stopsPrompts: z.boolean().optional()
 });
 export type DataType = z.infer<typeof DataType>;
 

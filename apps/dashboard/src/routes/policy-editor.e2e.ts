@@ -68,6 +68,34 @@ test('the fail mode section names the time limit and both choices', async ({ pag
 	await expect(page.getByTestId('agent-down-note')).toContainText('everything there is blocked');
 });
 
+test('a yellow data type can also stop prompts (#50)', async ({ page }) => {
+	await page.goto('/policy');
+	await page
+		.getByRole('button', { name: /Deal sizes/ })
+		.first()
+		.click();
+	const box = page
+		.getByRole('dialog')
+		.getByLabel('Also stop prompts and tool calls that contain it');
+	await expect(box).not.toBeChecked();
+	await box.check();
+	await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+	await expect(page.getByTestId('notice')).toBeVisible();
+	await page
+		.getByRole('button', { name: /Deal sizes/ })
+		.first()
+		.click();
+	await expect(
+		page.getByRole('dialog').getByLabel('Also stop prompts and tool calls that contain it')
+	).toBeChecked();
+	await page
+		.getByRole('dialog')
+		.getByLabel('Also stop prompts and tool calls that contain it')
+		.uncheck();
+	await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+	await expect(page.getByTestId('notice')).toBeVisible();
+});
+
 test('adds a name to always share, then removes it (#117)', async ({ page }) => {
 	await page.goto('/policy');
 	const name = `Kite ${Date.now().toString(36)}`;

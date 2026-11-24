@@ -1,10 +1,12 @@
 // Text from an image or a PDF, on this device (#40). The agent runs it before Claude reads one,
 // so the text can be checked like any other.
 //
-//   sc-extract <path>   →   stdout: {"text": "...", "pages": 3, "ocrPages": 1}
+//   sc-extract <path>   →   stdout: {"text": "...", "pages": 3, "ocrPages": 3, "skippedPages": 0}
 //
-// Images: Vision's text recognition (accurate mode). PDFs: each page's text layer (PDFKit); a page
-// with little or no text (a scan) is rendered and read with Vision, up to MAX_OCR_PAGES pages.
+// Images: Vision's text recognition (accurate mode). PDFs: each page's text layer (PDFKit), plus
+// the page rendered and read with Vision, since a page can hold a screenshot under its text. Pages
+// past MAX_OCR_PAGES aren't rendered; they're counted in `skippedPages`, so the agent treats the
+// file as not fully checked (PR #129 review).
 // Exit code 2: the file can't be opened or read as an image or PDF. Never prints the text anywhere
 // else, never writes a file.
 import AppKit
@@ -13,7 +15,6 @@ import PDFKit
 import Vision
 
 let MAX_OCR_PAGES = 30
-let MIN_PAGE_CHARS = 20
 
 func fail(_ message: String) -> Never {
 	FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
@@ -51,6 +52,7 @@ let url = URL(fileURLWithPath: args[1])
 var text = ""
 var pages = 1
 var ocrPages = 0
+var skippedPages = 0
 if url.pathExtension.lowercased() == "pdf" {
 	guard let doc = PDFDocument(url: url) else { fail("not a readable PDF") }
 	if doc.isLocked && !doc.unlock(withPassword: "") { fail("the PDF is password-protected") }
@@ -59,10 +61,15 @@ if url.pathExtension.lowercased() == "pdf" {
 	for i in 0..<doc.pageCount {
 		guard let page = doc.page(at: i) else { continue }
 		var pageText = page.string ?? ""
-		if pageText.trimmingCharacters(in: .whitespacesAndNewlines).count < MIN_PAGE_CHARS, ocrPages < MAX_OCR_PAGES,
-			let image = render(page) {
-			ocrPages += 1
-			pageText += "\n" + recognize(image)
+		if ocrPages < MAX_OCR_PAGES {
+			if let image = render(page) {
+				ocrPages += 1
+				pageText += "\n" + recognize(image)
+			} else {
+				skippedPages += 1
+			}
+		} else {
+			skippedPages += 1
 		}
 		parts.append(pageText)
 	}
@@ -75,6 +82,6 @@ if url.pathExtension.lowercased() == "pdf" {
 	text = recognize(cg)
 }
 
-let out: [String: Any] = ["text": text, "pages": pages, "ocrPages": ocrPages]
+let out: [String: Any] = ["text": text, "pages": pages, "ocrPages": ocrPages, "skippedPages": skippedPages]
 let data = try! JSONSerialization.data(withJSONObject: out)
 FileHandle.standardOutput.write(data)

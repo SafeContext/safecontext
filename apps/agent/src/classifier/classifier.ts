@@ -25,9 +25,13 @@ export function createClassifier({ tiers, budgetMs, now = () => performance.now(
 		if (tier.clear && tier.tier !== 2) throw new Error(`${tier.id}: only tier 2 may clear spans`);
 	}
 	return {
-		async classify(texts: readonly string[], policy: Policy, { hook }: ClassifyOptions = {}): Promise<ClassifyResult> {
+		async classify(
+			texts: readonly string[],
+			policy: Policy,
+			{ hook, budgetMs: callBudgetMs }: ClassifyOptions = {}
+		): Promise<ClassifyResult> {
 			const start = now();
-			const deadline = start + budgetMs;
+			const deadline = start + (callBudgetMs ?? budgetMs);
 			const timings: TierTiming[] = [];
 			let spans: Span[][] = texts.map(() => []);
 			// Rule and term-list matches, before merging: tier 2 may never clear these.

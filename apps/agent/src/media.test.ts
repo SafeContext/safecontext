@@ -28,7 +28,7 @@ const decisionOf = (json: Record<string, unknown>) => preTool.response.parse(jso
 describe('images and PDFs (#40)', () => {
 	it('stops a Read of a screenshot that holds a key, naming only the data type', async () => {
 		const { extractor, paths } = fakeExtractor(`Staging deploy key:\n${key}`);
-		const { post, reports } = testApp({ extractor });
+		const { post, reports, logger } = testApp({ extractor });
 		const out = decisionOf((await post(preTool.path, read('shots/deploy.png'))).json);
 		expect(out?.permissionDecision).toBe('deny');
 		expect(out?.permissionDecisionReason).toContain('this image');
@@ -36,6 +36,9 @@ describe('images and PDFs (#40)', () => {
 		expect(out?.permissionDecisionReason).not.toContain(key);
 		expect(paths).toEqual(['/work/project/shots/deploy.png']);
 		expect(reports.at(-1)).toMatchObject({ blocked: true });
+		// Logs and dashboard events hold metadata only (apps/agent/AGENTS.md).
+		expect(JSON.stringify([logger.records, reports])).not.toContain(key);
+		expect(JSON.stringify([logger.records, reports])).not.toContain('Staging deploy');
 	});
 
 	it('stops a PDF with "make it vague" data too: it can\'t be shown with parts hidden', async () => {

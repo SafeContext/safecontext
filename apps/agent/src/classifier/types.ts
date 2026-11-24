@@ -67,6 +67,8 @@ export interface ClassifyState {
 export interface ClassifyOptions {
 	/** Which hook the texts come from. Lets a tier skip work that can't change the outcome. */
 	hook?: HookEventName;
+	/** Time budget for this call, in ms, instead of the classifier's own (a part of a large output, #110). */
+	budgetMs?: number;
 }
 
 export interface TierTiming {

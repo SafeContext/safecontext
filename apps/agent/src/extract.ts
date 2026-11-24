@@ -32,7 +32,10 @@ export function mediaKind(path: string): MediaKind | undefined {
 }
 
 export interface Extractor {
-	/** The file's text. Rejects if it can't be read, isn't an image or PDF, or takes longer than `timeoutMs`. */
+	/**
+	 * The file's text. Rejects if it can't be read, isn't an image or PDF, takes longer than
+	 * `timeoutMs`, or some of its pages couldn't be read (so it can't be called checked).
+	 */
 	extract(path: string, timeoutMs: number): Promise<string>;
 }
 
@@ -48,8 +51,9 @@ export function createExtractor(bin: string): Extractor {
 					(err, stdout) => {
 						if (err) return reject(new Error('extract_failed'));
 						try {
-							const { text } = JSON.parse(stdout) as { text?: unknown };
+							const { text, skippedPages } = JSON.parse(stdout) as { text?: unknown; skippedPages?: unknown };
 							if (typeof text !== 'string') throw new Error('bad output');
+							if (typeof skippedPages === 'number' && skippedPages > 0) throw new Error('pages skipped');
 							resolve(text);
 						} catch {
 							reject(new Error('extract_failed'));

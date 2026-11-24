@@ -87,7 +87,8 @@ export const actions: Actions = {
 				name: text(form, 'name'),
 				description: text(form, 'description'),
 				action: text(form, 'action'),
-				terms: text(form, 'terms')
+				terms: text(form, 'terms'),
+				stopsPrompts: form.get('stopsPrompts') === 'on'
 			})
 		);
 	},
@@ -99,7 +100,8 @@ export const actions: Actions = {
 			added: await addDataType(organizationId, tier(form), {
 				name: text(form, 'name'),
 				description: text(form, 'description'),
-				terms: text(form, 'terms')
+				terms: text(form, 'terms'),
+				stopsPrompts: form.get('stopsPrompts') === 'on'
 			})
 		}));
 	},

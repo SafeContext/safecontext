@@ -96,6 +96,9 @@ export const messages = {
 		`${PRODUCT} stopped Claude reading this ${kind} because it contains: ${listActing(hits)}. It can't be shown with those parts hidden. Share a copy without them, or describe what you need from it.`,
 	mediaUnchecked: (kind: 'image' | 'PDF') =>
 		`${PRODUCT} couldn't check the text in this ${kind}, so your company's policy blocked it.`,
+	/** Appended where a large tool output stops being checked in time (#110). */
+	toolOutputPartlyUnchecked: (lines: number) =>
+		`\n[${PRODUCT}: the remaining ${lines} ${lines === 1 ? 'line was' : 'lines were'} withheld because ${lines === 1 ? 'it' : 'they'} couldn't be checked in time. Read a smaller part to see ${lines === 1 ? 'it' : 'them'}.]`,
 	/** Shown to Claude when a placeholder in a file tool's input can't be swapped back (transform/restore.ts). */
 	restoreUnknown: (ids: readonly string[]) =>
 		`${PRODUCT} can't put back the hidden value for ${ids.map((id) => `⟪${id}⟫`).join(', ')}: it no longer holds it (the Safe Context agent restarted, or the session is too old). Nothing was run. Read the file or output it came from again to get a current placeholder.`,

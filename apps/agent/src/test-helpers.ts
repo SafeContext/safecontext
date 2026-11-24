@@ -27,13 +27,16 @@ export interface TestAppOptions {
 	budgetMs?: number;
 	/** Text extraction for images and PDFs (#40). Default: none, so such reads fail closed. */
 	extractor?: Extractor;
+	/** The agent's budget per check (`SC_CHECK_BUDGET_MS`). Default: the agent's default. */
+	checkBudgetMs?: number;
 }
 
 export function testApp({
 	policy = policyWith(),
 	tiers = [createTier0()],
 	budgetMs = 1_000,
-	extractor
+	extractor,
+	checkBudgetMs
 }: TestAppOptions = {}) {
 	const logger = memoryLogger();
 	const reports: CheckReport[] = [];
@@ -41,6 +44,7 @@ export function testApp({
 		policy: staticPolicySource(policy),
 		classifier: createClassifier({ tiers, budgetMs }),
 		...(extractor && { extractor }),
+		...(checkBudgetMs !== undefined && { checkBudgetMs }),
 		logger,
 		events: { record: (r) => reports.push(r) }
 	});
