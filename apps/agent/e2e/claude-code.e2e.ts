@@ -34,7 +34,7 @@ import { SECRET } from '../src/test-helpers.ts';
 import { freePort, pluginOnPort, startAgent, withModelTiers, withoutAgentEnv, type RunningAgent } from './helpers.ts';
 
 /** Obviously fake contact (example.com is reserved for examples). */
-const EMAIL = 'mh.canary.7731@example.com';
+const EMAIL = 'mh.canary.7731@northwind.example';
 const NOTES = `Macrohard launch notes (fake test data)\nContact: ${EMAIL}\nDeploy token: ${SECRET}\n`;
 const READS =
 	'Use the Read tool to read notes.txt, then run `cat notes.txt` with the Bash tool, then reply with just DONE.';

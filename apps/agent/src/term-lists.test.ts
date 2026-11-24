@@ -61,7 +61,7 @@ describe('latency with 10k admin terms', () => {
 	const RUNS = 50;
 	const terms = Array.from({ length: 10_000 }, (_, i) => `Customer${i.toString(36)} Holdings`);
 	const big = policyWith({ lists: [{ dataTypeId: 'customer-names', terms }] });
-	const unit = `Call with ${terms[4_242]} about the invoice; jane@example.com cc'd. Build passed in 3m.\n`;
+	const unit = `Call with ${terms[4_242]} about the invoice; jane@northwind.example cc'd. Build passed in 3m.\n`;
 	const text = unit.repeat(Math.ceil(5_120 / unit.length)).slice(0, 5_120);
 
 	it('stays well under 10 ms at p95', async () => {

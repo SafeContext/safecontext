@@ -381,7 +381,7 @@ describe('swap-back and re-hiding (issue #83)', () => {
 				type: 'text',
 				file: {
 					filePath: '/w/a.md',
-					content: 'see ⟪note_1: jane.doe@example.com⟫',
+					content: 'see ⟪note_1: jane.doe@northwind.example⟫',
 					numLines: 1,
 					startLine: 1,
 					totalLines: 1
@@ -389,7 +389,7 @@ describe('swap-back and re-hiding (issue #83)', () => {
 			})
 		);
 		const text = JSON.stringify(postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput);
-		expect(text).not.toContain('jane.doe@example.com');
+		expect(text).not.toContain('jane.doe@northwind.example');
 	});
 
 	it('logs how many values were put back, never the values', async () => {

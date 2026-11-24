@@ -168,16 +168,20 @@ describe('placeholder text', () => {
 	});
 
 	it('keeps spans in a placeholder this session never issued (PR #86 review)', () => {
-		const text = 'see ⟪note_1: jane.doe@example.com⟫';
+		const text = 'see ⟪note_1: jane.doe@northwind.example⟫';
 		const at = text.indexOf('jane');
-		expect(kept(text, [span(at, at + 20, 'customer-personal-data')])).toEqual(['jane.doe@example.com']);
+		expect(kept(text, [span(at, at + 'jane.doe@northwind.example'.length, 'customer-personal-data')])).toEqual([
+			'jane.doe@northwind.example'
+		]);
 	});
 
 	it('still checks a hint the session never showed with that id', () => {
-		const text = '⟪customer_name_1: jane.doe@example.com⟫';
+		const text = '⟪customer_name_1: jane.doe@northwind.example⟫';
 		const at = text.indexOf('jane');
 		// A span reaching over the id is cut down to the hint.
-		expect(kept(text, [span(0, at + 20, 'customer-personal-data')])).toEqual(['jane.doe@example.com']);
+		expect(kept(text, [span(0, at + 'jane.doe@northwind.example'.length, 'customer-personal-data')])).toEqual([
+			'jane.doe@northwind.example'
+		]);
 	});
 
 	it('keeps the parts of a span either side of an issued placeholder', () => {

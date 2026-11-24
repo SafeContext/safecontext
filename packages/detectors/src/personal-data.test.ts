@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	cardDetector,
 	emailDetector,
+	isRoleOrExampleAddress,
 	hasCardBrandShape,
 	ipDetector,
 	passesLuhn,
@@ -23,13 +24,34 @@ describe('emailDetector', () => {
 		'jane.doe+billing@northwind.co.uk',
 		'jane_doe@mail.northwind.io',
 		'J.DOE@NORTHWIND.COM',
-		'josé@example.com',
+		'josé@northwind.example',
 		'名前@example.jp',
 		'müller@münchen.de',
-		'jose\u0301@example.com'
+		'jose\u0301@northwind.example'
 	])('finds %s', (email) => {
 		expect(found(emailDetector, `contact ${email} today`)).toEqual([email]);
 	});
+
+	it.each([
+		'support@example.com',
+		'billing@acme.io',
+		'no-reply@northwind.com',
+		'oncall@macrohard.io',
+		'finance-board@macrohard.io',
+		'Info+press@contoso.com',
+		'jane.doe@example.org',
+		'dev@docs.example.net'
+	])('leaves the team or documentation address %s alone (#112)', (email) => {
+		expect(found(emailDetector, `contact ${email} today`)).toEqual([]);
+		expect(isRoleOrExampleAddress(email)).toBe(true);
+	});
+
+	it.each(['jane@northwind.com', 'support.jane@northwind.com', 'it.manager.bob@acme.org', 'jane@northwind.example'])(
+		'still finds the personal address %s',
+		(email) => {
+			expect(found(emailDetector, `contact ${email} today`)).toEqual([email]);
+		}
+	);
 
 	it('stops at the end of the address, not at sentence punctuation', () => {
 		expect(found(emailDetector, 'Write to jane@northwind.com.')).toEqual(['jane@northwind.com']);
