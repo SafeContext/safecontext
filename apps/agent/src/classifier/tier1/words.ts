@@ -12,34 +12,49 @@ export interface Word {
 	end: number;
 	/** A line break comes between this word and the one before it. */
 	newLine?: boolean;
-	/** The word's line looks like a table row (CSV, TSV, pipe table): see `isRecordLine`. */
+	/** The word's line is a table row (CSV, TSV, pipe table): see `recordLines`. */
 	record?: boolean;
 }
 
-/** A line holding 2 or more of the same separator: one record of a CSV, TSV or pipe table. */
-export function isRecordLine(line: string): boolean {
-	return [',', '\t', '|', ';'].some((sep) => line.split(sep).length > 3 || (sep !== ',' && line.split(sep).length > 2));
+/**
+ * Which lines of `lines` are table rows (CSV, TSV, pipe or semicolon tables): a line with at
+ * least 2 tabs, pipes or semicolons, or 3 commas, and a neighbouring line with the same number of
+ * them, as a header and its rows have. Prose with a few commas doesn't line up like that.
+ */
+export function recordLines(lines: readonly string[]): boolean[] {
+	const counts = lines.map((line) => SEPARATORS.map(([sep]) => line.split(sep).length - 1));
+	return lines.map((_, i) =>
+		SEPARATORS.some(([, min], k) => {
+			const n = counts[i]![k]!;
+			return n >= min && (counts[i - 1]?.[k] === n || counts[i + 1]?.[k] === n);
+		})
+	);
 }
+const SEPARATORS: ReadonlyArray<readonly [string, number]> = [
+	[',', 3],
+	['\t', 2],
+	['|', 2],
+	[';', 2]
+];
 
 /** Same split as Python gliner's WhitespaceTokenSplitter: `\w+(?:[-_]\w+)*|\S`. */
 export function splitWords(text: string): Word[] {
 	const pattern = /[\p{L}\p{M}\p{N}_]+(?:[-_][\p{L}\p{M}\p{N}_]+)*|\S/gu;
-	const lineBreak = /\r\n|[\n\r\u2028\u2029]/g;
-	const recordAt = (offset: number) => {
-		const start = Math.max(...['\n', '\r', '\u2028', '\u2029'].map((c) => text.lastIndexOf(c, offset - 1))) + 1;
-		const rest = text.slice(start).search(/[\n\r\u2028\u2029]/);
-		return isRecordLine(text.slice(start, rest === -1 ? undefined : start + rest));
-	};
+	const lineStarts = [0];
+	for (const m of text.matchAll(/\r\n|[\n\r\u2028\u2029]/g)) lineStarts.push(m.index + m[0].length);
+	const lines = lineStarts.map((start, i) => text.slice(start, (lineStarts[i + 1] ?? text.length + 1) - 1));
+	const records = recordLines(lines);
+	let line = 0;
 	let previousEnd = 0;
-	let record = recordAt(0);
 	return [...text.matchAll(pattern)].map((m) => {
 		const word: Word = { text: m[0], start: m.index, end: m.index + m[0].length };
-		if (lineBreak.test(text.slice(previousEnd, m.index))) {
-			word.newLine = true;
-			record = recordAt(m.index);
+		let moved = false;
+		while (line + 1 < lineStarts.length && lineStarts[line + 1]! <= m.index) {
+			line++;
+			moved = true;
 		}
-		lineBreak.lastIndex = 0;
-		if (record) word.record = true;
+		if (moved && /[\n\r\u2028\u2029]/.test(text.slice(previousEnd, m.index))) word.newLine = true;
+		if (records[line]) word.record = true;
 		previousEnd = word.end;
 		return word;
 	});

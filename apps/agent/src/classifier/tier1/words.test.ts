@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decode, isRecordLine, splitWords, windows } from './words.ts';
+import { decode, recordLines, splitWords, windows } from './words.ts';
 
 describe('splitWords', () => {
 	it('matches the Python splitter: hyphen/underscore words stay whole, punctuation splits', () => {
@@ -126,12 +126,17 @@ describe('decode', () => {
 	});
 });
 
-describe('isRecordLine', () => {
-	it('spots CSV, TSV and pipe table rows, not prose or an address line', () => {
-		expect(isRecordLine('Northwind,1350000,Renewal,2027-01-31')).toBe(true);
-		expect(isRecordLine('a\tb\tc')).toBe(true);
-		expect(isRecordLine('| Revenue | $4.2M |')).toBe(true);
-		expect(isRecordLine('22 Kiln Street, Raleigh, NC 27648')).toBe(false);
-		expect(isRecordLine('Thanks, Sam, for the call.')).toBe(false);
+describe('recordLines', () => {
+	it('spots CSV, TSV and pipe tables, not prose with commas', () => {
+		expect(recordLines(['account,arr,stage,close', 'Northwind,1350000,Renewal,2027-01-31'])).toEqual([true, true]);
+		expect(recordLines(['a\tb\tc', '1\t2\t3'])).toEqual([true, true]);
+		expect(recordLines(['| Revenue | $4.2M |', '| Margin | 71% |'])).toEqual([true, true]);
+		expect(
+			recordLines([
+				'@omar refund for Hanne Bramwell, card 5105, billing address 22 Kiln Street, Raleigh, NC 27648',
+				'@omar Project Halyard shipped publicly last year, nice work'
+			])
+		).toEqual([false, false]);
+		expect(recordLines(['one, two, three, four'])).toEqual([false]);
 	});
 });
