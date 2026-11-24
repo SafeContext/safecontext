@@ -211,7 +211,7 @@ export function prefixFor(dataTypeId: string): string {
 
 /**
  * Placeholders already in a text aren't flagged again, but only ones this session issued: text in
- * placeholder form can come from a file or web page too (`⟪note_1: jane@example.com⟫`, PR #86 review).
+ * placeholder form can come from a file or web page too (`⟪note_1: jane@northwind.example⟫`, PR #86 review).
  * - Issued, with the hint it was issued with (or none): the whole placeholder is cut out of spans.
  * - Issued id, any other hint: only `⟪id:` and `⟫` are cut out; the hint text is still checked.
  * - Not issued: ordinary text, nothing is cut out.
