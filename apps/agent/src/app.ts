@@ -171,12 +171,12 @@ export function createApp(deps: AppDeps): Hono {
 		}
 		const known = knownValueFinder(key);
 		const rank = strictness(policy);
-		const merged = texts.map((text, i) =>
-			mergeSpans(
-				dropPlaceholderSpans(text, [...spans[i]!, ...known(text).filter((s) => s.end <= checkedUntil[i]!)], key),
-				rank
-			)
-		);
+		const allowed = allowedBy(policy);
+		const merged = texts.map((text, i) => {
+			const found = dropAllowedModelSpans(text, spans[i]!, allowed);
+			const again = known(text).filter((s) => s.end <= checkedUntil[i]! && !allowed(text.slice(s.start, s.end)));
+			return mergeSpans(dropPlaceholderSpans(text, [...found, ...again], key), rank);
+		});
 		const result: ClassifyResult = { ok: true, spans: merged, tiers: timings, ms, ...(cleared && { cleared }) };
 		const complete = checkedUntil.every((c, i) => c === texts[i]!.length);
 		return {
