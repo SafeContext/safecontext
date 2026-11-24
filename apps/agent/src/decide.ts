@@ -20,6 +20,8 @@ export interface Hit {
 	name: string;
 	tier: Tier;
 	action: Action;
+	/** The data type's `stopsPrompts` setting (#50). */
+	stopsPrompts?: boolean;
 	count: number;
 }
 
@@ -36,14 +38,13 @@ export type Decision =
 
 /**
  * THE RULE for which data stops a prompt or a tool call outright. Prompts and tool inputs
- * can't be edited, only blocked or let through, so this decides between the two.
- *
- * TEMPORARY (issue #50, needs a decision): only red data, or a data type whose action is `block`,
- * stops them. Yellow data (mask, pseudonymize, generalize) in a prompt or tool input goes through
- * unchanged. Tool output is always transformed span by span, whatever this returns.
+ * can't be edited, only blocked or let through, so this decides between the two (#50, decided
+ * 23 Nov 2026): red data and `block` always stop them; any other data type only when IT turns on
+ * its `stopsPrompts` setting (off by default). Tool output is always transformed span by span,
+ * whatever this returns.
  */
-export function stopsPromptsAndToolCalls(hit: Pick<Hit, 'tier' | 'action'>): boolean {
-	return hit.tier === 'red' || hit.action === 'block';
+export function stopsPromptsAndToolCalls(hit: Pick<Hit, 'tier' | 'action' | 'stopsPrompts'>): boolean {
+	return hit.tier === 'red' || hit.action === 'block' || hit.stopsPrompts === true;
 }
 
 export function failDecision(policy: Policy, failure: Failure, hits: Hit[] = []): Decision {
@@ -77,6 +78,7 @@ export function summarize(spans: readonly Span[], policy: Policy): Hit[] {
 				name: dt?.name ?? span.dataTypeId,
 				tier: dt?.tier ?? 'red',
 				action: dt?.action ?? 'block',
+				...(dt?.stopsPrompts && { stopsPrompts: true }),
 				count: 1
 			});
 		}

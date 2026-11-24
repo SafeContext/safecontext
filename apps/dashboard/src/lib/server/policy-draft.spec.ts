@@ -11,6 +11,7 @@ import {
 	draftStatus,
 	loadDraft,
 	moveDataType,
+	policyFromDraft,
 	publish,
 	saveDataType,
 	setFailMode,
@@ -194,6 +195,39 @@ describe('policy draft', () => {
 		await expect(setFailMode(orgId, 'maybe')).rejects.toThrow(DraftError);
 		await setFailMode(orgId, 'allow');
 		expect((await loadDraft(orgId)).failMode).toBe('allow');
+	});
+
+	it('keeps "also stop prompts" for yellow data types only (#50)', async () => {
+		const base = { name: 'Customer names', description: 'Client companies', terms: '' };
+		await saveDataType(orgId, 'customer-names', {
+			...base,
+			tier: 'yellow',
+			action: 'pseudonymize',
+			stopsPrompts: true
+		});
+		const dt = (await loadDraft(orgId)).dataTypes.find((d) => d.key === 'customer-names')!;
+		expect(dt.stopsPrompts).toBe(true);
+		expect(
+			policyFromDraft(await loadDraft(orgId), 9, new Date()).dataTypes.find(
+				(d) => d.id === 'customer-names'
+			)
+		).toMatchObject({
+			stopsPrompts: true
+		});
+		await saveDataType(orgId, 'customer-names', {
+			...base,
+			tier: 'red',
+			action: 'block',
+			stopsPrompts: true
+		});
+		expect(
+			(await loadDraft(orgId)).dataTypes.find((d) => d.key === 'customer-names')!.stopsPrompts
+		).toBe(false);
+		await saveDataType(orgId, 'customer-names', {
+			...base,
+			tier: 'yellow',
+			action: 'pseudonymize'
+		});
 	});
 
 	it('publishes the draft as the next version, which the agent API serves', async () => {

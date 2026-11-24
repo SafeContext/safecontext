@@ -39,6 +39,8 @@ export type DraftDataType = {
 	examples: string[];
 	tier: Tier;
 	action: Action;
+	/** #50: also stop prompts and tool calls (yellow types only). */
+	stopsPrompts: boolean;
 	terms: string[];
 };
 
@@ -65,6 +67,7 @@ export async function loadDraft(organizationId: string): Promise<Draft> {
 					examples: true,
 					tier: true,
 					action: true,
+					stopsPrompts: true,
 					termList: { select: { terms: true } }
 				}
 			}
@@ -88,7 +91,8 @@ export function policyFromDraft(draft: Draft, version: number, updatedAt: Date):
 			description: dt.description,
 			examples: dt.examples,
 			tier: dt.tier,
-			action: dt.action
+			action: dt.action,
+			...(dt.stopsPrompts && dt.tier === 'yellow' && { stopsPrompts: true })
 		})),
 		lists: draft.dataTypes
 			.filter((dt) => dt.terms.length > 0)
@@ -206,6 +210,8 @@ export type DataTypeInput = {
 	description: string;
 	/** Word list, one term per line. */
 	terms: string;
+	/** #50: also stop prompts and tool calls. Only kept for the yellow column. */
+	stopsPrompts?: boolean;
 };
 
 function cleanInput(input: DataTypeInput) {
@@ -274,7 +280,11 @@ export async function saveDataType(
 	// One transaction, so a failed save doesn't leave the move applied.
 	await prisma.$transaction(async (tx) => {
 		if (input.tier !== dt.tier) await placeInColumn(tx, organizationId, dt, input.tier, null);
-		await tx.dataType.update({ where: { id: dt.id }, data: { name, description, action } });
+		const stopsPrompts = input.tier === 'yellow' && input.stopsPrompts === true;
+		await tx.dataType.update({
+			where: { id: dt.id },
+			data: { name, description, action, stopsPrompts }
+		});
 		await saveTerms(tx, dt.id, terms);
 	});
 }
@@ -302,7 +312,17 @@ export async function addDataType(
 		Math.max(-1, ...existing.filter((e) => e.tier === tier).map((e) => e.position)) + 1;
 	await prisma.$transaction(async (tx) => {
 		const created = await tx.dataType.create({
-			data: { organizationId, key, name, description, examples: [], tier, action, position }
+			data: {
+				organizationId,
+				key,
+				name,
+				description,
+				examples: [],
+				tier,
+				action,
+				stopsPrompts: tier === 'yellow' && input.stopsPrompts === true,
+				position
+			}
 		});
 		await saveTerms(tx, created.id, terms);
 	});
@@ -403,6 +423,7 @@ export async function discardDraft(organizationId: string): Promise<void> {
 					examples: dt.examples,
 					tier: dt.tier,
 					action: dt.action,
+					stopsPrompts: dt.stopsPrompts === true,
 					position
 				}
 			});

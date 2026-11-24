@@ -72,6 +72,13 @@ describe('defaults', () => {
 describe('swapBack (issue #83)', () => {
 	const minimal = { version: 1, updatedAt: '2026-11-06T00:00:00.000Z', dataTypes: defaultPolicy().dataTypes };
 
+	it('has an optional stopsPrompts setting on data types (#50)', () => {
+		const types = defaultPolicy().dataTypes.map((d) => (d.id === 'customer-names' ? { ...d, stopsPrompts: true } : d));
+		const parsed = Policy.parse({ ...minimal, dataTypes: types });
+		expect(parsed.dataTypes.find((d) => d.id === 'customer-names')?.stopsPrompts).toBe(true);
+		expect(parsed.dataTypes.find((d) => d.id === 'deal-sizes')?.stopsPrompts).toBeUndefined();
+	});
+
 	it('defaults to the local file tools', () => {
 		expect(Policy.parse(minimal).swapBack).toEqual({ tools: [...LOCAL_SWAP_BACK_TOOLS] });
 		expect(Policy.parse({ ...minimal, swapBack: {} }).swapBack.tools).toEqual([...LOCAL_SWAP_BACK_TOOLS]);

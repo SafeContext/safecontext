@@ -57,6 +57,9 @@
               "mask",
               "block"
             ]
+          },
+          "stopsPrompts": {
+            "type": "boolean"
           }
         },
         "required": [

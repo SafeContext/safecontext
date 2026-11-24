@@ -187,6 +187,9 @@ model DataType {
   examples       String[]
   tier           Tier
   action         Action
+  /// Also stop prompts and tool calls holding it (`DataType.stopsPrompts`, issue #50). Only
+  /// yellow types use it; red ones always stop them.
+  stopsPrompts   Boolean  @default(false)
   /// Order within its column.
   position       Int      @default(0)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
