@@ -1,29 +1,42 @@
 <script lang="ts">
-	// "Always share" (#117): names IT says are fine to share, such as the company's own products
-	// and its vendors. The models never flag them; secrets and personal details are still hidden.
+	// A list of names on the Policy page, edited as chips: "Always share" (#117) and "Skills that
+	// may run commands" (#42). Each change is saved to the draft straight away.
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import { send } from './send.ts';
 
 	let {
-		terms,
+		names,
+		action,
+		label,
+		placeholder,
+		testid,
+		chipClass = 'border-clean-edge bg-clean-soft',
 		canEdit,
 		onmessage
 	}: {
-		terms: string[];
+		names: string[];
+		/** The page's form action that saves the whole list (`name` fields). */
+		action: string;
+		/** Label for the add field (read by screen readers). */
+		label: string;
+		placeholder: string;
+		testid: string;
+		chipClass?: string;
 		canEdit: boolean;
 		onmessage: (message: string, ok: boolean) => void;
 	} = $props();
 
-	let shown = $derived(terms);
+	let shown = $derived(names);
 	let adding = $state('');
 	let busy = $state(false);
+	const id = $derived(`${testid}-add`);
 
 	async function save(next: string[], done: string) {
 		const previous = shown;
 		shown = next;
 		busy = true;
-		const result = await send('allow', { term: next });
+		const result = await send(action, { name: next });
 		busy = false;
 		if (!result.ok) {
 			shown = previous;
@@ -47,24 +60,24 @@
 </script>
 
 {#if shown.length > 0}
-	<ul class="flex flex-wrap gap-2" data-testid="always-share">
-		{#each shown as term (term)}
+	<ul class="flex flex-wrap gap-2" data-testid={testid}>
+		{#each shown as name (name)}
 			<li
-				class="inline-flex max-w-full items-center gap-1 rounded-full border border-clean-edge bg-clean-soft py-1 pr-1 pl-3 text-[13px] {canEdit
+				class="inline-flex max-w-full items-center gap-1 rounded-full border py-1 pr-1 pl-3 text-[13px] {chipClass} {canEdit
 					? ''
 					: 'pr-3'}"
 			>
-				<span class="break-all">{term}</span>
+				<span class="break-all">{name}</span>
 				{#if canEdit}
 					<button
 						type="button"
 						class="grid size-7 shrink-0 place-items-center rounded-full hover:bg-ink/10"
-						aria-label="Remove {term}"
+						aria-label="Remove {name}"
 						disabled={busy}
 						onclick={() =>
 							save(
-								shown.filter((t) => t !== term),
-								`Removed ${term}.`
+								shown.filter((t) => t !== name),
+								`Removed ${name}.`
 							)}
 					>
 						<Icon name="close" class="size-3.5" />
@@ -79,18 +92,14 @@
 
 {#if canEdit}
 	<form class="flex flex-wrap gap-2" onsubmit={add}>
-		<label class="sr-only" for="always-share-add">Name to always share</label>
+		<label class="sr-only" for={id}>{label}</label>
 		<input
-			id="always-share-add"
+			{id}
 			class="min-w-0 flex-[1_1_12rem] rounded-[10px] border border-field bg-white px-3 py-2 text-[13px] focus:border-ink focus:outline-none"
-			placeholder="Your product, a vendor…"
+			{placeholder}
 			autocomplete="off"
 			bind:value={adding}
 		/>
 		<Button type="submit" variant="secondary" disabled={busy || !adding.trim()}>Add</Button>
 	</form>
 {/if}
-<p class="text-xs text-muted">
-	Whole names, any capitalisation. Keys, passwords and personal details are still hidden, and so is
-	anything on a word list above.
-</p>
