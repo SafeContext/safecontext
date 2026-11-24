@@ -34,6 +34,7 @@ import type { PolicySource } from './policy-source.ts';
 import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
 import { mergeSpans } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
+import { allowedBy, dropAllowedModelSpans } from './transform/allow.ts';
 import { knownValueFinder } from './transform/known.ts';
 import {
 	createPlaceholderStore,
@@ -116,9 +117,12 @@ export function createApp(deps: AppDeps): Hono {
 		if (classified.ok) {
 			const known = findKnown ? knownValueFinder(key) : undefined;
 			const rank = strictness(policy);
-			const spans = texts.map((text, i) =>
-				mergeSpans(dropPlaceholderSpans(text, [...(classified.spans[i] ?? []), ...(known?.(text) ?? [])], key), rank)
-			);
+			const allowed = allowedBy(policy);
+			const spans = texts.map((text, i) => {
+				const found = dropAllowedModelSpans(text, classified.spans[i] ?? [], allowed);
+				const again = (known?.(text) ?? []).filter((s) => !allowed(text.slice(s.start, s.end)));
+				return mergeSpans(dropPlaceholderSpans(text, [...found, ...again], key), rank);
+			});
 			result = { ...classified, spans };
 		}
 		const chars = texts.reduce((n, t) => n + t.length, 0);

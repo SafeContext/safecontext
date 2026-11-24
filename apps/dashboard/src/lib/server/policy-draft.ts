@@ -8,6 +8,7 @@
 //
 // Every function takes the organisation id from `currentOrganization()`, never from the request.
 import {
+	AllowTerms,
 	DataType as DataTypeContract,
 	FailMode,
 	Policy,
@@ -49,6 +50,8 @@ export type Draft = {
 	dataTypes: DraftDataType[];
 	failMode: FailMode;
 	swapBackTools: string[];
+	/** "Always share" (#117). */
+	allowTerms: string[];
 };
 
 export async function loadDraft(organizationId: string): Promise<Draft> {
@@ -57,6 +60,7 @@ export async function loadDraft(organizationId: string): Promise<Draft> {
 		select: {
 			failMode: true,
 			swapBackTools: true,
+			allowTerms: true,
 			dataTypes: {
 				// Postgres sorts an enum in declaration order: green, yellow, red.
 				orderBy: [{ tier: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
@@ -76,6 +80,7 @@ export async function loadDraft(organizationId: string): Promise<Draft> {
 	return {
 		failMode: org.failMode,
 		swapBackTools: org.swapBackTools,
+		allowTerms: org.allowTerms,
 		dataTypes: org.dataTypes.map(({ termList, ...dt }) => ({ ...dt, terms: termList?.terms ?? [] }))
 	};
 }
@@ -98,7 +103,8 @@ export function policyFromDraft(draft: Draft, version: number, updatedAt: Date):
 			.filter((dt) => dt.terms.length > 0)
 			.map((dt) => ({ dataTypeId: dt.key, terms: dt.terms })),
 		failMode: draft.failMode,
-		swapBack: { tools: draft.swapBackTools }
+		swapBack: { tools: draft.swapBackTools },
+		allow: draft.allowTerms
 	});
 	if (!parsed.success) {
 		throw new DraftError(`The policy isn't valid yet: ${parsed.error.issues[0]?.message}`);
@@ -117,7 +123,8 @@ function content(policy: Policy): string {
 		dataTypes: [...policy.dataTypes].sort(byId),
 		lists: [...policy.lists].sort(byId),
 		failMode: policy.failMode,
-		swapBack: policy.swapBack
+		swapBack: policy.swapBack,
+		allow: [...policy.allow].sort()
 	});
 }
 
@@ -367,6 +374,29 @@ export async function setSwapBackTools(organizationId: string, tools: string[]):
 	});
 }
 
+/**
+ * Replaces the always-share list (#117): one entry per name, duplicates (ignoring case) and blank
+ * lines dropped, checked with the contract's `AllowTerms`.
+ */
+export async function setAllowTerms(organizationId: string, terms: string[]): Promise<void> {
+	const seen = new Set<string>();
+	const cleaned = terms
+		.map((t) => t.trim())
+		.filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()));
+	const parsed = AllowTerms.safeParse(cleaned);
+	if (!parsed.success) {
+		throw new DraftError(
+			cleaned.some((t) => t.length > 200)
+				? 'Keep each name under 200 characters.'
+				: 'That list is too long.'
+		);
+	}
+	await prisma.organization.update({
+		where: { id: organizationId },
+		data: { allowTerms: parsed.data }
+	});
+}
+
 /** Publishes the draft as the next version. Agents pick it up on their next sync (≤ 30 s). */
 export async function publish(organizationId: string, memberId: string): Promise<number> {
 	const draft = await loadDraft(organizationId);
@@ -431,7 +461,11 @@ export async function discardDraft(organizationId: string): Promise<void> {
 		}
 		await tx.organization.update({
 			where: { id: organizationId },
-			data: { failMode: policy.failMode, swapBackTools: policy.swapBack.tools }
+			data: {
+				failMode: policy.failMode,
+				swapBackTools: policy.swapBack.tools,
+				allowTerms: policy.allow
+			}
 		});
 	});
 }

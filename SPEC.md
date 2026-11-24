@@ -135,8 +135,10 @@ Every request and response on both APIs is checked against these schemas.
 
 - **Policy** (`policy.ts`): `version`, data types (each with id, name, description, examples, tier
   green/yellow/red and action allow, generalize, pseudonymize, mask, block), admin term lists,
-  `failMode` (default `block`) and `swapBack.tools` (the tools that get real values back, default
-  the local file tools; §4, #83). Only green types may `allow`. `defaultPolicy()` has version 0
+  `failMode` (default `block`), `swapBack.tools` (the tools that get real values back, default
+  the local file tools; §4, #83) and `allow` ("always share": names the models never flag and the
+  agent never re-hides, such as the company's own products and vendors; rules and word lists
+  still apply; #117). Only green types may `allow`. `defaultPolicy()` has version 0
   ("never published") and the 7 default data types in `defaults.ts` (yellow and red only: no green
   defaults since #23, because nothing looks for a green type). The dashboard writes it; the
   agent pulls it, keeps the highest version it has seen, caches it on disk and works offline.

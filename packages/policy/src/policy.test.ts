@@ -90,6 +90,13 @@ describe('swapBack (issue #83)', () => {
 		expect(Policy.parse({ ...minimal, swapBack: { tools: [] } }).swapBack.tools).toEqual([]);
 	});
 
+	it('has an always-share list, empty by default (#117)', () => {
+		expect(Policy.parse(minimal).allow).toEqual([]);
+		expect(Policy.parse({ ...minimal, allow: [' Flow ', 'Stripe'] }).allow).toEqual(['Flow', 'Stripe']);
+		expect(Policy.safeParse({ ...minimal, allow: [''] }).success).toBe(false);
+		expect(Policy.safeParse({ ...minimal, allow: ['x'.repeat(201)] }).success).toBe(false);
+	});
+
 	it.each(['Agent', 'Task', 'WebFetch', 'WebSearch', 'Web*', 'A*', '*'])(
 		'rejects %s: its input would go to an Anthropic model',
 		(pattern) => {

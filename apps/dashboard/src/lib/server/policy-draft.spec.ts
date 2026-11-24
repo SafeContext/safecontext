@@ -14,6 +14,7 @@ import {
 	policyFromDraft,
 	publish,
 	saveDataType,
+	setAllowTerms,
 	setFailMode,
 	setSwapBackTools
 } from '#lib/server/policy-draft.ts';
@@ -230,6 +231,13 @@ describe('policy draft', () => {
 		});
 	});
 
+	it('keeps an always-share list, without blanks or repeats (#117)', async () => {
+		await setAllowTerms(orgId, ['Flow', ' flow ', 'Stripe', '']);
+		expect((await loadDraft(orgId)).allowTerms).toEqual(['Flow', 'Stripe']);
+		await expect(setAllowTerms(orgId, ['x'.repeat(201)])).rejects.toThrow('200 characters');
+		expect((await loadDraft(orgId)).allowTerms).toEqual(['Flow', 'Stripe']);
+	});
+
 	it('publishes the draft as the next version, which the agent API serves', async () => {
 		await addDataType(orgId, 'red', { name: 'Payroll', description: '', terms: 'Q4 bonus pool' });
 		expect(await publish(orgId, memberId)).toBe(2);
@@ -238,7 +246,8 @@ describe('policy draft', () => {
 		expect(served).toMatchObject({
 			version: 2,
 			failMode: 'allow',
-			swapBack: { tools: ['Read', 'mcp__slack__*'] }
+			swapBack: { tools: ['Read', 'mcp__slack__*'] },
+			allow: ['Flow', 'Stripe']
 		});
 		expect(served?.dataTypes.find((d) => d.id === 'payroll')).toMatchObject({
 			tier: 'red',
@@ -256,6 +265,7 @@ describe('policy draft', () => {
 		await moveDataType(orgId, 'secrets', 'yellow', null);
 		await deleteDataType(orgId, 'payroll');
 		await setSwapBackTools(orgId, ['Read']);
+		await setAllowTerms(orgId, []);
 		await setFailMode(orgId, 'block');
 		expect((await draftStatus(orgId, await loadDraft(orgId))).changed).toBe(true);
 
