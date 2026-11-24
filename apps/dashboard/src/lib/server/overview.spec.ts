@@ -2,7 +2,7 @@
 // Uses two throwaway organisations and deletes them afterwards; nothing else is touched.
 import type { AgentEvent } from '@safecontext/policy';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FeedEvent } from '#lib/feed.ts';
+import { FeedEvent, windowStart } from '#lib/feed.ts';
 import type { AuthedDevice } from '#lib/server/agent-api/auth.ts';
 import { storeEvents } from '#lib/server/agent-api/events.ts';
 import { closeListener, subscriberCount } from '#lib/server/event-listener.ts';
@@ -179,6 +179,24 @@ describe('stored times (#97)', () => {
 			SELECT extract(epoch FROM "ts")::float8 AS "epoch", to_char("ts" AT TIME ZONE 'UTC', 'HH24:MI') AS "text"
 			FROM "Event" WHERE "organizationId" = ${mine.organizationId}::uuid AND "toolName" = 'TzProbe'`;
 		expect(row).toEqual({ epoch: ts.getTime() / 1000, text: '12:00' });
+	});
+});
+
+describe('one window for totals and chart (#114)', () => {
+	it('counts the same events in the totals as in the chart, at the window’s edges too', async () => {
+		const slug = `test-overview-window-${run}`;
+		slugs.push(slug);
+		const org = await makeDevice(slug);
+		const now = new Date('2026-11-24T15:00:00.000Z');
+		const start = windowStart(now); // 2026-11-18T00:00Z
+		const at = (ms: number) => agentEvent({ ts: new Date(start.getTime() + ms).toISOString() });
+		// 1 ms before the window (out of both), its first instant and 6.9 days later (in both).
+		await storeEvents(org, { events: [at(-1), at(0), at(6.9 * 24 * 3600 * 1000)] });
+		const stats = await statsSince(org.organizationId, start);
+		const days = await dailyCounts(org.organizationId, now);
+		const bars = days.reduce((n, d) => n + d.safe + d.vague + d.blocked, 0);
+		expect(stats.checked).toBe(2);
+		expect(bars).toBe(stats.checked);
 	});
 });
 
