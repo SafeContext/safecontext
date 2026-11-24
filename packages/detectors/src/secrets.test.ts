@@ -132,7 +132,8 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 			'postgres://db.internal/orders',
 			'postgres://app:${DB_PASSWORD}@db.internal/app',
 			'mysql://app:<password>@db/app',
-			'redis://:****@cache:6379'
+			'redis://:****@cache:6379',
+			'postgres://app:$DB_PASSWORD@db.internal/app'
 		]
 	},
 	'digitalocean-pat': {
@@ -283,7 +284,11 @@ describe('secretsDetector', () => {
 			`mongodb+srv://app:${'lkxpJuTh'}S5U&xzF8^@db-prod-6.internal.example.io/app`,
 			`mysql://root:${'s3cr3t'}!@10.0.0.5:3306`,
 			`redis://:${'hunter2hunter2'}@cache.internal:6379/0`,
-			`amqps://svc:${'p4ss'}word@mq.example.com/vhost`
+			`amqps://svc:${'p4ss'}word@mq.example.com/vhost`,
+			`postgres://u:${'$ecret1'}@db.host/app`,
+			`postgres://u:${'*pass9'}@db.host/app`,
+			`postgres://u:${'pa/ss'}@db.host/app`,
+			`postgres://u:${'p@ss'}@db.host/app`
 		])('finds %s, the whole URL', (url) => {
 			const text = `DATABASE_URL=${url}\nnext line`;
 			expect(secretsDetector.detect(text).map((s) => text.slice(s.start, s.end))).toEqual([url]);

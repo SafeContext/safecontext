@@ -117,13 +117,14 @@ export const SECRET_RULES: readonly SecretRule[] = [
 	{ id: 'openai-prefixed-key', regex: new RegExp(String.raw`\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}${END}`, 'g') },
 	{ id: 'anthropic-prefixed-key', regex: new RegExp(String.raw`\bsk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_-]{20,}${END}`, 'g') },
 	// SafeContext: a database or broker URL with a password in it (#111). The password is anything
-	// up to the "@" before the host (special characters included); a placeholder such as
-	// "${DB_PASSWORD}", "<password>" or "****" is not a secret. Covers the URL up to the database
+	// up to the last "@" before the host, so "/", "@", "$" and "*" in it are fine; a placeholder
+	// such as "${DB_PASSWORD}", "$DB_PASSWORD" (upper case, as variables are), "<password>" or "****"
+	// is not a secret. Covers the URL up to the database
 	// name, so the host goes too (not a query string, which rarely holds secrets).
 	{
 		id: 'connection-string-password',
 		regex: new RegExp(
-			String.raw`\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlserver|clickhouse|cockroachdb|jdbc:[a-z]+)://[^\s:@/]*:(?![$<{*])[^\s@/]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\d{1,5})?(?:/[\w-]*)?`,
+			String.raw`\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlserver|clickhouse|cockroachdb|jdbc:[a-z]+)://[^\s:@/]*:(?!\$\{[^}\s]*\}@|\$[A-Z_][A-Z0-9_]*@|<[^>\s]*>@|\*+@)[^\s]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\d{1,5})?(?:/[\w-]*)?`,
 			'g'
 		)
 	},
