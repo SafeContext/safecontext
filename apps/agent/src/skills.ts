@@ -7,8 +7,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-/** Larger skill files are read only this far (a skill is instructions, not data). */
-const MAX_SKILL_BYTES = 1024 * 1024;
+/**
+ * Larger skill files aren't read: a skill is instructions, not data, and checking only part of
+ * one would let the rest through. `readSkill` throws, so the fail mode applies (PR #130 review).
+ */
+export const MAX_SKILL_BYTES = 1024 * 1024;
+/** How long a listing of plugin folders is reused (the walk is synchronous; PR #130 review). */
+const PLUGIN_CACHE_MS = 30_000;
+const pluginCache = new Map<string, { at: number; dirs: string[] }>();
 
 /**
  * The files that may hold the skill or command `name`, that exist: `.claude/skills/<name>/SKILL.md`
@@ -32,12 +38,21 @@ export function skillFiles(name: string, cwd: string, home = homedir()): string[
 	}
 	const [plugin, skill] = name.split(':', 2);
 	if (plugin && skill) {
-		for (const dir of pluginDirs(join(home, '.claude', 'plugins'), plugin, 6)) {
+		for (const dir of cachedPluginDirs(join(home, '.claude', 'plugins'), plugin)) {
 			add(join(dir, 'skills', skill, 'SKILL.md'));
 			add(join(dir, 'commands', `${skill}.md`));
 		}
 	}
 	return [...found];
+}
+
+function cachedPluginDirs(root: string, name: string): string[] {
+	const key = `${root}\0${name}`;
+	const hit = pluginCache.get(key);
+	if (hit && Date.now() - hit.at < PLUGIN_CACHE_MS) return hit.dirs;
+	const dirs = pluginDirs(root, name, 6);
+	pluginCache.set(key, { at: Date.now(), dirs });
+	return dirs;
 }
 
 /** Folders named `name` under `root`, at most `depth` levels down (plugin caches and marketplaces). */
@@ -63,9 +78,14 @@ function pluginDirs(root: string, name: string, depth: number): string[] {
 	return out;
 }
 
-/** The skill's text, from all its files (capped). */
+/** The skill's text, from all its files. Throws if one is larger than `MAX_SKILL_BYTES`. */
 export function readSkill(files: readonly string[]): string {
-	return files.map((f) => readFileSync(f).subarray(0, MAX_SKILL_BYTES).toString('utf8')).join('\n\n');
+	return files
+		.map((f) => {
+			if (statSync(f).size > MAX_SKILL_BYTES) throw new Error('skill_too_large');
+			return readFileSync(f, 'utf8');
+		})
+		.join('\n\n');
 }
 
 /**

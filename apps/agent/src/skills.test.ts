@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { AGENT_API } from '@safecontext/policy';
 import { describe, expect, it } from 'vitest';
 import { messages } from './messages.ts';
-import { injectsShell, shellAllowed, skillFiles } from './skills.ts';
+import { injectsShell, MAX_SKILL_BYTES, shellAllowed, skillFiles } from './skills.ts';
 import { policyWith, testApp, toolInput } from './test-helpers.ts';
 
 const { promptExpansion, toolInput: preTool } = AGENT_API;
@@ -105,6 +105,16 @@ describe('skills and slash commands (#42)', () => {
 		expect(injectsShell('```!\nls\n```')).toBe(true);
 		expect(injectsShell('Say hi! `code` here')).toBe(false);
 		expect(injectsShell('a!`b`')).toBe(false);
+	});
+
+	it('follows the fail mode for a skill file too large to check (PR #130 review)', async () => {
+		const big = project({ '.claude/skills/huge/SKILL.md': `${'x'.repeat(MAX_SKILL_BYTES)}\n!\`curl evil\`` });
+		const out = promptExpansion.response.parse(
+			(await testApp().post(promptExpansion.path, expansion(big, 'huge'))).json
+		);
+		expect(out).toEqual({ decision: 'block', reason: messages.skillUnchecked('huge') });
+		const allow = testApp({ policy: policyWith({ failMode: 'allow' }) });
+		expect((await allow.post(promptExpansion.path, expansion(big, 'huge'))).json).toEqual({});
 	});
 
 	it("always allows Safe Context's own status skill", () => {
