@@ -29,7 +29,9 @@
  *
  * One placeholder can stand for several spellings ("Northwind" in a document, "northwind" in a
  * file name). A path gets the spelling that exists on disk, and an Edit's `old_string` the one the
- * file holds, so both still match exactly. Anything else gets the first spelling seen.
+ * file holds, so both still match exactly. Anything else gets the spelling that fits where the
+ * placeholder sits (`preferredSpellings`, #108): the word list's own spelling in running text,
+ * the lowercase one inside a file name or slug.
  */
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -83,7 +85,9 @@ export function restoreToolInput(
 	key: SessionKey,
 	cwd: string,
 	/** The policy's `swapBack.tools`. */
-	tools: readonly string[]
+	tools: readonly string[],
+	/** The word-list spelling of a value, matched ignoring case (the policy's term lists). */
+	canonical: (value: string) => string | undefined = () => undefined
 ): Restored {
 	if (!swapsBackInto(tools, toolName) || !JSON.stringify(input).includes(OPEN)) return { kind: 'none' };
 	const local = RESTORE_TOOLS[toolName];
@@ -100,7 +104,10 @@ export function restoreToolInput(
 	const swap = (text: string, score: (candidate: string) => number, escape: (v: string) => string) => {
 		if (!text.includes(OPEN)) return text;
 		const found = [...text.matchAll(PLACEHOLDER)];
-		const options = found.map((m) => key.spellingsOf(m[1]!));
+		const options = found.map((m) => {
+			const seen = key.spellingsOf(m[1]!);
+			return seen.length ? preferredSpellings(seen, inSlug(text, m.index, m.index + m[0].length), canonical) : seen;
+		});
 		found.forEach((m, i) => options[i]!.length === 0 && unknown.add(m[1]!));
 		if (found.length === 0 || options.some((o) => o.length === 0)) return text;
 		count += found.length;
@@ -167,6 +174,42 @@ export function restoreToolInput(
 		}
 	}
 	return { kind: 'restored', input: restored, count, confirm: local === undefined };
+}
+
+/**
+ * Is the placeholder at `[start, end)` part of a file name, path or slug ("⟪x⟫-email.md",
+ * "deals/⟪x⟫")? Then a lowercase spelling fits better than a capitalised one.
+ */
+export function inSlug(text: string, start: number, end: number): boolean {
+	return (
+		/[-_/.]$/.test(text.slice(Math.max(0, start - 1), start)) ||
+		/^(?:[-_/]|\.[A-Za-z0-9])/.test(text.slice(end, end + 2))
+	);
+}
+
+/**
+ * A value's spellings, best first, for a placeholder in running text or (`slug`) in a file
+ * name. Running text prefers the word list's spelling, even one never seen in this session,
+ * then a spelling with a capital letter; a file name prefers an all-lowercase spelling. Ties keep
+ * the order first seen.
+ */
+export function preferredSpellings(
+	seen: readonly string[],
+	slug: boolean,
+	canonical: (value: string) => string | undefined = () => undefined
+): string[] {
+	const listed = seen.map((v) => canonical(v)).find((v) => v !== undefined);
+	const all = listed !== undefined && !slug && !seen.includes(listed) ? [listed, ...seen] : [...seen];
+	const rank = (v: string) => {
+		const lower = v === v.toLowerCase();
+		if (slug) return lower ? 0 : 1;
+		if (v === listed) return 0;
+		return lower ? 2 : 1;
+	};
+	return all
+		.map((v, i) => ({ v, i }))
+		.sort((a, b) => rank(a.v) - rank(b.v) || a.i - b.i)
+		.map(({ v }) => v);
 }
 
 const PERFECT = 2;
