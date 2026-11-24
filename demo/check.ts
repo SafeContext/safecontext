@@ -20,6 +20,8 @@ const flag = (name: string) => {
 	return i === -1 ? undefined : args[i + 1];
 };
 const port = Number(flag('--port') ?? 4747);
+/** Each run gets its own sessions, so placeholders from an earlier run against the same agent don't carry over. */
+const RUN = Date.now().toString(36);
 const dir = flag('--dir') ?? join(homedir(), 'github', 'MacroHard');
 /** In every message the agent gives when it couldn't finish a check (apps/agent/src/messages.ts). */
 const unchecked = (text: string | undefined) => text !== undefined && /couldn't (?:be )?check/.test(text);
@@ -124,7 +126,7 @@ async function post(path: string, body: unknown): Promise<Record<string, unknown
 }
 
 async function run(s: Scenario, keys: Record<string, string>): Promise<{ got: string; detail?: string }> {
-	const common = { session_id: `demo-${s.persona}`, cwd: join(dir, FOLDERS[s.persona]), transcript_path: '/dev/null' };
+	const common = { session_id: `demo-${s.persona}-${RUN}`, cwd: join(dir, FOLDERS[s.persona]), transcript_path: '/dev/null' };
 	const toolUseId = `toolu_demo_${Math.random().toString(36).slice(2, 12)}`;
 	if (s.kind === 'prompt') {
 		const out = await post('/v1/prompt', { ...common, hook_event_name: 'UserPromptSubmit', prompt: fill(s.text, keys) });

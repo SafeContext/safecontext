@@ -259,6 +259,7 @@ Playwright needs its test browser once per machine:
 | `SC_TIER1_MODEL_FILE` | `model.onnx` | ONNX file in that folder |
 | `SC_TIER1_THRESHOLD` | the model's `tier1.json`, else 0.5 | Lowest score that counts as a match |
 | `SC_TIER1_THREADS` | `0` (all cores) | onnxruntime threads |
+| `SC_TIER1_WINDOW_WORDS` | `48` | Most words tier 1 looks at in one go; longer text is cut into overlapping windows. Shorter windows find more in long documents (#107) |
 | `SC_TIER1_LABEL` | `{name}` | Label the model sees for a data type, when `labels.json` has none |
 | `SC_TIER2_MODEL` | `gemma4:e4b-it-q4_K_M` once tier 2 is on | Tier 2 model name. Setting this or `SC_TIER2_BASE_URL` turns tier 2 on; unset both: off |
 | `SC_TIER2_BASE_URL` | `http://127.0.0.1:11434/v1` (Ollama) | Any OpenAI-compatible server. Must be https, except on this Mac (localhost) |

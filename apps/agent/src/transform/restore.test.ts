@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { knownValueFinder } from './known.ts';
+import { isGenericValue, knownValueFinder } from './known.ts';
 import { createPlaceholderStore, type SessionKey } from './placeholders.ts';
 import { isSafeWriteTarget, restoreToolInput } from './restore.ts';
 import { LOCAL_SWAP_BACK_TOOLS } from '@safecontext/policy';
@@ -242,5 +242,12 @@ describe('knownValueFinder', () => {
 
 	it('leaves very short values to the tiers', () => {
 		expect(knownValueFinder(keyWith({ '42': 'internal-metrics' }))('42 and 42')).toEqual([]);
+	});
+
+	it('leaves generic values (percentages, years, short numbers) to the tiers (#107)', () => {
+		const find = knownValueFinder(keyWith({ '12%': 'deal-sizes', '2027': 'unreleased-roadmap', '1400': 'deal-sizes' }));
+		expect(find('Up to 12% off in 2027 for 1400 seats')).toEqual([]);
+		for (const v of ['12%', '3.1%', '18 %', '2027', '1400']) expect(isGenericValue(v)).toBe(true);
+		for (const v of ['$4.2M', '1,400 seats', '£520', '120000', 'Northwind']) expect(isGenericValue(v)).toBe(false);
 	});
 });
