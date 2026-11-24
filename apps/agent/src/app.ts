@@ -43,6 +43,8 @@ import {
 	type SessionKey
 } from './transform/placeholders.ts';
 import { restoreToolInput, type Restored } from './transform/restore.ts';
+import { mediaKind, type Extractor } from './extract.ts';
+import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { createRewriter } from './transform/rewrite.ts';
 
 export interface AppDeps {
@@ -59,6 +61,11 @@ export interface AppDeps {
 	 * the start of the check. Default `DEFAULT_CHECK_BUDGET_MS`.
 	 */
 	checkBudgetMs?: number;
+	/**
+	 * Text from images and PDFs before Claude reads one (#40). Without it, such a Read can't be
+	 * checked, so the policy's fail mode applies.
+	 */
+	extractor?: Extractor;
 	/** Clock in ms. Injected for tests. */
 	now?: () => number;
 }
@@ -88,7 +95,7 @@ export function createApp(deps: AppDeps): Hono {
 	const { policy: policySource, classifier, logger = silentLogger, events = noopEventSink } = deps;
 	const now = deps.now ?? (() => performance.now());
 	const placeholders = deps.placeholders ?? createPlaceholderStore();
-	const { generalizer, checkBudgetMs = DEFAULT_CHECK_BUDGET_MS } = deps;
+	const { generalizer, extractor, checkBudgetMs = DEFAULT_CHECK_BUDGET_MS } = deps;
 	const app = new Hono();
 
 	app.get(AGENT_API.health.path, (c) =>
@@ -127,6 +134,57 @@ export function createApp(deps: AppDeps): Hono {
 		}
 		const chars = texts.reduce((n, t) => n + t.length, 0);
 		return { result, decision: decide(result, policy), fields: texts.length, chars, deadline };
+	}
+
+	/**
+	 * A Read of an image or PDF (#40): its text is pulled out on this device and checked as if it
+	 * were the tool's output. Anything sensitive stops the Read, since an image can't be cleaned;
+	 * if the text can't be pulled out or checked, the fail mode decides. Undefined for any other
+	 * call, which goes through the normal checks.
+	 */
+	async function checkMedia(input: PreToolUseInput, policy: Policy) {
+		const filePath = input.tool_name === 'Read' ? input.tool_input['file_path'] : undefined;
+		if (typeof filePath !== 'string') return undefined;
+		const kind = mediaKind(filePath);
+		if (!kind) return undefined;
+		const path = isAbsolute(filePath) ? filePath : resolvePath(input.cwd, filePath);
+		const deny = (reason: string) => ({
+			hookSpecificOutput: {
+				hookEventName: 'PreToolUse' as const,
+				permissionDecision: 'deny' as const,
+				permissionDecisionReason: reason
+			}
+		});
+		let text: string;
+		try {
+			if (!extractor) throw new Error('no extractor');
+			text = await extractor.extract(path, checkBudgetMs);
+		} catch {
+			const decision = failDecision(policy, 'error');
+			return {
+				decision,
+				toolName: input.tool_name,
+				output: decision.verdict === 'block' ? deny(messages.mediaUnchecked(kind)) : {}
+			};
+		}
+		if (!text.trim()) return undefined;
+		const checked = await check([text], policy, 'PostToolUse', placeholders.session(input.session_id), true);
+		const { decision } = checked;
+		if (decision.cause === 'fail') {
+			return {
+				...checked,
+				toolName: input.tool_name,
+				output: decision.verdict === 'block' ? deny(messages.mediaUnchecked(kind)) : {}
+			};
+		}
+		if (decision.verdict === 'allow') return undefined;
+		// Anything to hide stops the Read: an image or PDF can't be shown with placeholders in it.
+		return {
+			...checked,
+			decision: { ...decision, verdict: 'block' as const },
+			toolName: input.tool_name,
+			output: deny(messages.mediaBlocked(kind, decision.hits))
+		};
 	}
 
 	/**
@@ -260,6 +318,8 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.toolInput,
 			'PreToolUse',
 			async (input, policy) => {
+				const media = await checkMedia(input, policy);
+				if (media) return media;
 				const checked = await check(
 					toolInputTexts(input.tool_input),
 					policy,

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { readConfig } from './config.ts';
+import { DEFAULT_EXTRACT_BIN, readConfig } from './config.ts';
 import { memoryLogger } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
 import { policyWith } from './test-helpers.ts';
@@ -46,14 +46,27 @@ describe('filePolicySource', () => {
 
 describe('readConfig', () => {
 	it('has defaults', () => {
-		expect(readConfig({})).toEqual({ port: 4747, policyFile: undefined, checkBudgetMs: 8_000 });
+		expect(readConfig({})).toEqual({
+			port: 4747,
+			policyFile: undefined,
+			checkBudgetMs: 8_000,
+			extractBin: DEFAULT_EXTRACT_BIN
+		});
 	});
 
 	it('reads the env', () => {
-		expect(readConfig({ SC_AGENT_PORT: '5000', SC_POLICY_FILE: '/p.json', SC_CHECK_BUDGET_MS: '250' })).toEqual({
+		expect(
+			readConfig({
+				SC_AGENT_PORT: '5000',
+				SC_POLICY_FILE: '/p.json',
+				SC_CHECK_BUDGET_MS: '250',
+				SC_EXTRACT_BIN: '/opt/sc-extract'
+			})
+		).toEqual({
 			port: 5000,
 			policyFile: '/p.json',
-			checkBudgetMs: 250
+			checkBudgetMs: 250,
+			extractBin: '/opt/sc-extract'
 		});
 	});
 

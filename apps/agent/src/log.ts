@@ -21,6 +21,8 @@ export type LogMessage =
 	| 'tier1_ready'
 	| 'tier1_failed'
 	| 'tier1_off'
+	| 'extract_ready'
+	| 'extract_missing'
 	/**
 	 * Tier 2 (#16): the model server has the pinned model and answered a warm-up call
 	 * (`totalMs`), can't be used yet (`reason`), or isn't configured. Tier 2 stays on when it is

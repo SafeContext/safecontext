@@ -18,6 +18,14 @@ function listNames(hits: readonly Hit[]): string {
 	return (names.length > 0 ? names : hits.map((h) => h.name)).join(', ');
 }
 
+/** Names of the data types that get hidden (any action but allow). */
+function listActing(hits: readonly Hit[]): string {
+	return hits
+		.filter((h) => h.action !== 'allow')
+		.map((h) => h.name)
+		.join(', ');
+}
+
 /** "a", "a and b", "a, b and c". */
 function and(items: readonly string[]): string {
 	return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
@@ -83,6 +91,11 @@ export const messages = {
 		`${PRODUCT} blocked this tool call because its input contains: ${listNames(hits)}.`,
 	toolInputUnchecked: () => `${PRODUCT} couldn't check this tool call, so your company's policy blocked it.`,
 	toolOutputUnchecked: () => `[${PRODUCT}: withheld because it couldn't be checked]`,
+	/** A Read of an image or PDF whose text holds sensitive data (#40). Data type names only. */
+	mediaBlocked: (kind: 'image' | 'PDF', hits: readonly Hit[]) =>
+		`${PRODUCT} stopped Claude reading this ${kind} because it contains: ${listActing(hits)}. It can't be shown with those parts hidden. Share a copy without them, or describe what you need from it.`,
+	mediaUnchecked: (kind: 'image' | 'PDF') =>
+		`${PRODUCT} couldn't check the text in this ${kind}, so your company's policy blocked it.`,
 	/** Shown to Claude when a placeholder in a file tool's input can't be swapped back (transform/restore.ts). */
 	restoreUnknown: (ids: readonly string[]) =>
 		`${PRODUCT} can't put back the hidden value for ${ids.map((id) => `⟪${id}⟫`).join(', ')}: it no longer holds it (the Safe Context agent restarted, or the session is too old). Nothing was run. Read the file or output it came from again to get a current placeholder.`,

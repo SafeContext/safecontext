@@ -45,6 +45,12 @@ if ! curl -s -m 1 http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
 	fi
 fi
 
+# The helper that reads text in images and PDFs (#40). Built once, if Swift is available.
+if [ ! -x "$REPO/apps/agent/native/bin/sc-extract" ] && command -v swiftc >/dev/null 2>&1; then
+	echo "Building the image and PDF text helper (once)…"
+	pnpm --filter @safecontext/agent build:extract >/dev/null || echo "Couldn't build it; image and PDF reads will follow the fail mode." >&2
+fi
+
 export SC_TIER1_MODEL_DIR
 export SC_TIER2_MODEL="${SC_TIER2_MODEL:-gemma4:e4b-it-q4_K_M}"
 
