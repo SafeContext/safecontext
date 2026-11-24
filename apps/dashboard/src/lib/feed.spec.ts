@@ -10,7 +10,8 @@ import {
 	toolLabel,
 	addToDays,
 	emptyDays,
-	weekday
+	weekday,
+	windowStart
 } from './feed.ts';
 
 const none = { generalize: 0, pseudonymize: 0, mask: 0, block: 0 };
@@ -145,5 +146,16 @@ describe('checks per day (#96)', () => {
 
 	it('names the weekday in UTC', () => {
 		expect(weekday('2026-11-12')).toBe('Thu');
+	});
+});
+
+describe('windowStart (#114)', () => {
+	it('starts at 00:00 UTC on the first of the chart’s days', () => {
+		expect(windowStart(new Date('2026-11-24T15:00:00Z')).toISOString()).toBe(
+			'2026-11-18T00:00:00.000Z'
+		);
+		expect(windowStart(new Date('2026-11-24T00:00:00Z'), 1).toISOString()).toBe(
+			'2026-11-24T00:00:00.000Z'
+		);
 	});
 });

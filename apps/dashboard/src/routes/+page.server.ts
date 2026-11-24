@@ -1,4 +1,4 @@
-import { STATS_WINDOW_MS } from '#lib/feed.ts';
+import { windowStart } from '#lib/feed.ts';
 import { currentOrganization } from '#lib/server/current-org.ts';
 import {
 	dailyCounts,
@@ -12,7 +12,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async () => {
 	const org = currentOrganization();
 	const asOf = new Date();
-	const since = new Date(asOf.getTime() - STATS_WINDOW_MS);
+	const since = windowStart(asOf);
 	const [stats, events, days, types, rollout] = await Promise.all([
 		statsSince(org.id, since),
 		recentEvents(org.id),

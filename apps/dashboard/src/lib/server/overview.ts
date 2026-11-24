@@ -6,7 +6,8 @@ import {
 	FeedEvent,
 	type DayCounts,
 	type OverviewStats,
-	type ProtectedCount
+	type ProtectedCount,
+	windowStart
 } from '#lib/feed.ts';
 import type { EventNotification } from '#lib/server/live-events.ts';
 import { prisma } from '#lib/server/prisma.ts';
@@ -97,7 +98,7 @@ export async function dailyCounts(
 	days?: number
 ): Promise<DayCounts[]> {
 	const out = emptyDays(now, days);
-	const from = new Date(`${out[0]!.day}T00:00:00Z`);
+	const from = windowStart(now, days);
 	// Days are UTC days. Every session runs in UTC (pg-session.ts, #97), but say so explicitly.
 	const rows = await prisma.$queryRaw<
 		{ day: string; blocked: bigint; vague: bigint; checked: bigint }[]

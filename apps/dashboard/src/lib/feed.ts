@@ -6,9 +6,6 @@
 import { HookEventName } from '@safecontext/policy';
 import * as z from 'zod';
 
-/** How long the stat cards look back. */
-export const STATS_WINDOW_MS = 7 * 24 * 3600 * 1000;
-
 /** How many rows the feed shows. */
 export const FEED_LIMIT = 50;
 
@@ -135,6 +132,15 @@ export function emptyDays(now: Date, count = CHART_DAYS): DayCounts[] {
 		d.setUTCDate(d.getUTCDate() - (count - 1 - i));
 		return { day: d.toISOString().slice(0, 10), safe: 0, vague: 0, blocked: 0 };
 	});
+}
+
+/**
+ * Where the Overview's "last 7 days" starts: 00:00 UTC on the first chart day. The totals, the
+ * per-type list, the chart and the live feed all count from here, so the totals always equal the
+ * chart's bars (#114).
+ */
+export function windowStart(now: Date, count = CHART_DAYS): Date {
+	return new Date(`${emptyDays(now, count)[0]!.day}T00:00:00Z`);
 }
 
 /** Adds events to the days they fall on (returns new objects; events outside the days are ignored). */
