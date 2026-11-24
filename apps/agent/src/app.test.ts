@@ -210,14 +210,35 @@ describe('prompts and tool input with data that can be transformed', () => {
 		);
 	});
 
-	// TEMPORARY rule, issue #50: yellow data doesn't stop a prompt or a tool call.
-	it('lets yellow-only data through in prompts and tool input (issue #50)', async () => {
+	// Issue #50: yellow data doesn't stop a prompt or a tool call unless IT turns that on.
+	it('lets yellow-only data through in prompts and tool input by default (issue #50)', async () => {
 		const { post, reports } = testApp({
 			tiers: [termTier({ Northwind: 'customer-names', '$4.2M': 'revenue-figures' })]
 		});
 		expect((await post(prompt.path, promptInput('Northwind paid $4.2M'))).json).toEqual({});
 		expect((await post(preTool.path, toolInput('Bash', { command: 'echo Northwind' }))).json).toEqual({});
 		expect(reports.map((r) => r.blocked)).toEqual([false, false]);
+		// Still counted on the dashboard (metadata only).
+		expect(reports[0]?.counts).toMatchObject({ 'customer-names': 1, 'revenue-figures': 1 });
+	});
+
+	it('stops prompts and tool calls with a yellow type IT set to stop them (issue #50)', async () => {
+		const policy = policyWith({
+			dataTypes: defaultPolicy().dataTypes.map((d) => (d.id === 'customer-names' ? { ...d, stopsPrompts: true } : d))
+		});
+		const { post, reports } = testApp({
+			policy,
+			tiers: [termTier({ Northwind: 'customer-names', '$4.2M': 'revenue-figures' })]
+		});
+		const res = await post(prompt.path, promptInput('Northwind paid $4.2M'));
+		expect(prompt.response.parse(res.json).decision).toBe('block');
+		expect(prompt.response.parse(res.json).reason).toContain('Customer names');
+		expect(prompt.response.parse(res.json).reason).not.toContain('Revenue figures');
+		const tool = await post(preTool.path, toolInput('Bash', { command: 'echo Northwind' }));
+		expect(preTool.response.parse(tool.json).hookSpecificOutput?.permissionDecision).toBe('deny');
+		// Revenue alone (no stopsPrompts) still goes through.
+		expect((await post(prompt.path, promptInput('We made $4.2M'))).json).toEqual({});
+		expect(reports.map((r) => r.blocked)).toEqual([true, true, false]);
 	});
 
 	it('denies a tool call whose input has red data, even if its action is a transformation', async () => {

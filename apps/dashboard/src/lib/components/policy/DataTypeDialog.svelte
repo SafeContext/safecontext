@@ -24,6 +24,7 @@
 		description: string;
 		tier: BoardTier;
 		action: Action;
+		stopsPrompts: boolean;
 		terms: string[];
 	};
 
@@ -51,6 +52,7 @@
 					description: '',
 					tier: target.tier,
 					action: columnFor(target.tier).actions[0]!,
+					stopsPrompts: false,
 					terms: []
 				}
 	);
@@ -62,6 +64,7 @@
 	let tier = $state<BoardTier>(start.tier);
 	let action = $state<Action>(start.action);
 	let terms = $state(start.terms.join('\n'));
+	let stopsPrompts = $state(start.stopsPrompts);
 	let message = $state('');
 	let busy = $state(false);
 
@@ -219,6 +222,25 @@
 				</fieldset>
 			{:else}
 				<input type="hidden" name="action" value={column.actions[0]} />
+			{/if}
+
+			{#if tier === 'yellow'}
+				<label class="flex cursor-pointer items-start gap-3 text-sm">
+					<input
+						type="checkbox"
+						name="stopsPrompts"
+						class="mt-1 accent-ink"
+						disabled={!canEdit}
+						bind:checked={stopsPrompts}
+					/>
+					<span class="flex flex-col">
+						<span class="font-medium">Also stop prompts and tool calls that contain it</span>
+						<span class="text-xs text-ink/60">
+							Off: when someone types it themselves, it goes through, and it's still counted on the
+							Overview. Claude always gets it hidden in files and command output.
+						</span>
+					</span>
+				</label>
 			{/if}
 
 			<div class="flex flex-col gap-1.5">

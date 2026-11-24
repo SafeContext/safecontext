@@ -324,9 +324,11 @@ memory), keeping placeholders across agent restarts or sessions, and a usefulnes
 
 Tool output is always cleaned span by span. Prompts can't be edited (§2), and the agent never
 cleans what Claude itself wrote in a tool input (it only swaps placeholders back), so both are
-blocked or passed whole. **Temporary rule (#50):** only red data, or a data type whose action is
-`block`, stops them; yellow data goes through unchanged. The rule is one function,
-`stopsPromptsAndToolCalls` in `apps/agent/src/decide.ts`. A blocked prompt's message offers a
+blocked or passed whole. **Rule (#50, decided 23 Nov 2026):** red data, or a data type whose action
+is `block`, always stops them. Any other data type stops them only when IT turns on its
+`stopsPrompts` setting ("Also stop prompts and tool calls that contain it" on the Policy page),
+off by default: what someone types themselves goes through, and is still counted on the Overview.
+The rule is one function, `stopsPromptsAndToolCalls` in `apps/agent/src/decide.ts`. A blocked prompt's message offers a
 cleaned version the user can send instead. Its placeholders are in the session's key, so they work
 like any other.
 
@@ -419,7 +421,8 @@ Each item says where it was decided, or which issue holds the open question.
 9. ~~Tier 1 model~~: **decided** in
    [#13](https://github.com/SafeContext/safecontext/issues/13#issuecomment-6461207888), GLiNER
    small v2.1 fine-tuned. See §4.
-10. **Yellow data in prompts and tool inputs** (allow or block?). **Open:** #50. Temporary rule in §4.
+10. ~~Yellow data in prompts and tool inputs~~: **decided** on #50 (Joe, 23 Nov 2026), a setting per
+    data type (`stopsPrompts`), allow by default. See §4.
     ~~Mapping stand-ins back in tool input~~: **decided** in #83, labelled placeholders with swap-back
     into local file tools only. See §4.
 11. **How devices join an organisation** (enrollment key is a placeholder). **Open:** #51.
