@@ -28,10 +28,10 @@ const prisma = new PrismaClient({
 
 const ORG_SLUG = 'macrohard-demo';
 
-/** Demo term lists (codenames, customers) attached to default data types. */
 /** "Always share" (#117): Macrohard's own product and its payment provider. */
 const DEMO_ALLOW = ['Flow', 'Stripe'];
 
+/** Demo term lists (codenames, customers) attached to default data types. */
 const DEMO_LISTS: TermList[] = [
 	{ dataTypeId: 'customer-names', terms: ['Northwind', 'Acme Corp', 'Contoso'] },
 	{ dataTypeId: 'unreleased-roadmap', terms: ['Project Atlas', 'Project Helios'] }
