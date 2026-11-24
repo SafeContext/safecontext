@@ -66,6 +66,9 @@ model Organization {
   /// (`Policy.swapBack.tools`, issue #83). Defaults to `LOCAL_SWAP_BACK_TOOLS`; keep them in step.
   /// Copied into each PolicyVersion when published.
   swapBackTools          String[]  @default(["Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep"])
+  /// Draft setting: names that are always fine to share, such as the company's own products and
+  /// vendors (`Policy.allow`, issue #117). The models never flag them and agents never re-hide them.
+  allowTerms             String[]  @default([])
   /// SHA-256 (hex) of the enrollment key a device presents to `POST /api/devices` to join this
   /// organisation. The key itself is never stored. Null = devices can't register.
   enrollmentKeyHash      String?   @unique @db.Char(64)
