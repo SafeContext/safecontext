@@ -96,6 +96,13 @@ export const messages = {
 		`${PRODUCT} stopped Claude reading this ${kind} because it contains: ${listActing(hits)}. It can't be shown with those parts hidden. Share a copy without them, or describe what you need from it.`,
 	mediaUnchecked: (kind: 'image' | 'PDF') =>
 		`${PRODUCT} couldn't check the text in this ${kind}, so your company's policy blocked it.`,
+	/** A skill or slash command whose own text holds data that stops prompts (#42). */
+	skillBlocked: (name: string, hits: readonly Hit[]) =>
+		`${PRODUCT} blocked /${name} because the skill itself contains: ${listNames(hits)}. Ask whoever maintains it to take that out.`,
+	/** A skill that runs shell commands before Claude sees it, and IT hasn't allowed (#42). */
+	skillRunsCommands: (name: string) =>
+		`${PRODUCT} blocked /${name} because it runs commands whose output would reach Claude unchecked. Your IT team can allow it on the Safe Context Policy page.`,
+	skillUnchecked: (name: string) => `${PRODUCT} couldn't check /${name}, so your company's policy blocked it.`,
 	/** Appended where a large tool output stops being checked in time (#110). */
 	toolOutputPartlyUnchecked: (lines: number) =>
 		`\n[${PRODUCT}: the remaining ${lines} ${lines === 1 ? 'line was' : 'lines were'} withheld because ${lines === 1 ? 'it' : 'they'} couldn't be checked in time. Read a smaller part to see ${lines === 1 ? 'it' : 'them'}.]`,

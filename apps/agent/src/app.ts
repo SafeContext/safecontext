@@ -19,9 +19,12 @@ import {
 	type PreToolUseInput,
 	type PreToolUseOutput,
 	type SessionStartOutput,
+	type UserPromptExpansionInput,
+	type UserPromptExpansionOutput,
 	type UserPromptSubmitInput,
 	type UserPromptSubmitOutput
 } from '@safecontext/policy';
+import { injectsShell, readSkill, shellAllowed, skillFiles } from './skills.ts';
 import { Hono, type Context } from 'hono';
 import type { Classifier, ClassifyResult } from './classifier/types.ts';
 import { DEFAULT_CHECK_BUDGET_MS } from './config.ts';
@@ -248,6 +251,40 @@ export function createApp(deps: AppDeps): Hono {
 	}
 
 	/**
+	 * A skill or slash command about to run (#42): its own file is checked like a prompt, and a
+	 * skill that injects shell output is stopped unless the policy allows it by name. Returns the
+	 * reason to stop it, or undefined to let it run. A skill whose files can't be found (a bundled
+	 * one, an MCP prompt) isn't checked: its text never comes from the company.
+	 */
+	async function checkSkill(name: string, cwd: string, sessionId: string, policy: Policy) {
+		const files = skillFiles(name, cwd);
+		if (files.length === 0) {
+			logger.log('info', 'skill_unknown');
+			return { decision: { verdict: 'allow' as const, cause: 'clean' as const, hits: [] }, reason: undefined };
+		}
+		let text: string;
+		try {
+			text = readSkill(files);
+		} catch {
+			const decision = failDecision(policy, 'error');
+			return { decision, reason: decision.verdict === 'block' ? messages.skillUnchecked(name) : undefined };
+		}
+		if (injectsShell(text) && !shellAllowed(policy.shellSkills, name)) {
+			const decision: Decision = { verdict: 'block', cause: 'policy', hits: [], spans: [[]] };
+			return { decision, reason: messages.skillRunsCommands(name) };
+		}
+		const checked = await check([text], policy, 'UserPromptSubmit', placeholders.session(sessionId));
+		const { decision } = checked;
+		const reason =
+			decision.verdict !== 'block'
+				? undefined
+				: decision.cause === 'fail'
+					? messages.skillUnchecked(name)
+					: messages.skillBlocked(name, decision.hits);
+		return { ...checked, reason };
+	}
+
+	/**
 	 * Each text with its flagged spans transformed, or undefined if nothing needs transforming.
 	 * Placeholders come from the Claude Code session's key. Generalize may call tier 2 within the check's
 	 * `deadline`; texts go one at a time (the model server answers one call at a time).
@@ -380,6 +417,23 @@ export function createApp(deps: AppDeps): Hono {
 			async (input, policy) => {
 				const media = await checkMedia(input, policy);
 				if (media) return media;
+				const skill = input.tool_name === 'Skill' ? input.tool_input['skill'] : undefined;
+				if (typeof skill === 'string') {
+					const checkedSkill = await checkSkill(skill.replace(/^\//, ''), input.cwd, input.session_id, policy);
+					if (checkedSkill.reason) {
+						return {
+							...checkedSkill,
+							toolName: input.tool_name,
+							output: {
+								hookSpecificOutput: {
+									hookEventName: 'PreToolUse' as const,
+									permissionDecision: 'deny' as const,
+									permissionDecisionReason: checkedSkill.reason
+								}
+							}
+						};
+					}
+				}
 				const checked = await check(
 					toolInputTexts(input.tool_input),
 					policy,
@@ -406,6 +460,35 @@ export function createApp(deps: AppDeps): Hono {
 				};
 			},
 			(decision, body) => ({ decision, toolName: toolNameOf(body), output: toolInputResponse(decision) })
+		)
+	);
+
+	// Typed slash commands and skills (#42). Counted on the dashboard as prompt checks.
+	app.post(
+		AGENT_API.promptExpansion.path,
+		route<UserPromptExpansionInput, UserPromptExpansionOutput>(
+			AGENT_API.promptExpansion,
+			'UserPromptSubmit',
+			async (input, policy) => {
+				if (input.expansion_type !== 'slash_command') {
+					return { decision: { verdict: 'allow', cause: 'clean', hits: [] }, output: {} };
+				}
+				const checked = await checkSkill(input.command_name, input.cwd, input.session_id, policy);
+				return { ...checked, output: checked.reason ? { decision: 'block' as const, reason: checked.reason } : {} };
+			},
+			(decision, body) => {
+				const name = (body as { command_name?: unknown } | undefined)?.command_name;
+				return {
+					decision,
+					output:
+						decision.verdict === 'block'
+							? {
+									decision: 'block' as const,
+									reason: messages.skillUnchecked(typeof name === 'string' ? name : 'this command')
+								}
+							: {}
+				};
+			}
 		)
 	);
 

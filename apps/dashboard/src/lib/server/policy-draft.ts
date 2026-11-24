@@ -10,6 +10,7 @@
 import {
 	AllowTerms,
 	DataType as DataTypeContract,
+	ShellSkills,
 	FailMode,
 	Policy,
 	SwapBack,
@@ -52,6 +53,8 @@ export type Draft = {
 	swapBackTools: string[];
 	/** "Always share" (#117). */
 	allowTerms: string[];
+	/** Skills allowed to inject shell output (#42). */
+	shellSkills: string[];
 };
 
 export async function loadDraft(organizationId: string): Promise<Draft> {
@@ -61,6 +64,7 @@ export async function loadDraft(organizationId: string): Promise<Draft> {
 			failMode: true,
 			swapBackTools: true,
 			allowTerms: true,
+			shellSkills: true,
 			dataTypes: {
 				// Postgres sorts an enum in declaration order: green, yellow, red.
 				orderBy: [{ tier: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }],
@@ -81,6 +85,7 @@ export async function loadDraft(organizationId: string): Promise<Draft> {
 		failMode: org.failMode,
 		swapBackTools: org.swapBackTools,
 		allowTerms: org.allowTerms,
+		shellSkills: org.shellSkills,
 		dataTypes: org.dataTypes.map(({ termList, ...dt }) => ({ ...dt, terms: termList?.terms ?? [] }))
 	};
 }
@@ -104,7 +109,8 @@ export function policyFromDraft(draft: Draft, version: number, updatedAt: Date):
 			.map((dt) => ({ dataTypeId: dt.key, terms: dt.terms })),
 		failMode: draft.failMode,
 		swapBack: { tools: draft.swapBackTools },
-		allow: draft.allowTerms
+		allow: draft.allowTerms,
+		shellSkills: draft.shellSkills
 	});
 	if (!parsed.success) {
 		throw new DraftError(`The policy isn't valid yet: ${parsed.error.issues[0]?.message}`);
@@ -124,7 +130,8 @@ function content(policy: Policy): string {
 		lists: [...policy.lists].sort(byId),
 		failMode: policy.failMode,
 		swapBack: policy.swapBack,
-		allow: [...policy.allow].sort()
+		allow: [...policy.allow].sort(),
+		shellSkills: [...policy.shellSkills].sort()
 	});
 }
 
@@ -397,6 +404,25 @@ export async function setAllowTerms(organizationId: string, terms: string[]): Pr
 	});
 }
 
+/** Replaces the list of skills allowed to inject shell output (#42), one per name, ignoring case. */
+export async function setShellSkills(organizationId: string, names: string[]): Promise<void> {
+	const seen = new Set<string>();
+	const cleaned = names
+		.map((n) => n.trim().replace(/^\//, ''))
+		.filter((n) => n && !seen.has(n.toLowerCase()) && seen.add(n.toLowerCase()));
+	if (cleaned.some((n) => !/^[\w.:-]{1,200}$/.test(n))) {
+		throw new DraftError(
+			'Use the skill name as typed after the slash, e.g. deploy-brief or my-plugin:review.'
+		);
+	}
+	const parsed = ShellSkills.safeParse(cleaned);
+	if (!parsed.success) throw new DraftError('That list is too long.');
+	await prisma.organization.update({
+		where: { id: organizationId },
+		data: { shellSkills: parsed.data }
+	});
+}
+
 /** Publishes the draft as the next version. Agents pick it up on their next sync (≤ 30 s). */
 export async function publish(organizationId: string, memberId: string): Promise<number> {
 	const draft = await loadDraft(organizationId);
@@ -464,7 +490,8 @@ export async function discardDraft(organizationId: string): Promise<void> {
 			data: {
 				failMode: policy.failMode,
 				swapBackTools: policy.swapBack.tools,
-				allowTerms: policy.allow
+				allowTerms: policy.allow,
+				shellSkills: policy.shellSkills
 			}
 		});
 	});

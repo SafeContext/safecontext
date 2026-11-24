@@ -23,6 +23,8 @@ export type LogMessage =
 	| 'tier1_off'
 	| 'extract_ready'
 	| 'extract_missing'
+	/** A skill whose files the agent couldn't find, so it wasn't checked (#42). */
+	| 'skill_unknown'
 	/**
 	 * Tier 2 (#16): the model server has the pinned model and answered a warm-up call
 	 * (`totalMs`), can't be used yet (`reason`), or isn't configured. Tier 2 stays on when it is

@@ -100,10 +100,21 @@ test('adds a name to always share, then removes it (#117)', async ({ page }) => 
 	await page.goto('/policy');
 	const name = `Kite ${Date.now().toString(36)}`;
 	await page.getByLabel('Name to always share').fill(name);
-	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await page.getByLabel('Name to always share').press('Enter');
 	await expect(page.getByTestId('notice')).toContainText(`Added ${name}`);
 	await expect(page.getByTestId('always-share').getByText(name)).toBeVisible();
 	await page.getByRole('button', { name: `Remove ${name}` }).click();
 	await expect(page.getByTestId('notice')).toContainText(`Removed ${name}`);
 	await expect(page.getByTestId('always-share').getByText(name)).toHaveCount(0);
+});
+
+test('lists a skill that may run commands, then removes it (#42)', async ({ page }) => {
+	await page.goto('/policy');
+	const name = `brief-${Date.now().toString(36)}`;
+	await page.getByLabel('Skill name').fill(name);
+	await page.getByLabel('Skill name').press('Enter');
+	await expect(page.getByTestId('notice')).toContainText(`Added ${name}`);
+	await page.getByRole('button', { name: `Remove ${name}` }).click();
+	await expect(page.getByTestId('notice')).toContainText(`Removed ${name}`);
+	await expect(page.getByTestId('shell-skills').getByText(name)).toHaveCount(0);
 });

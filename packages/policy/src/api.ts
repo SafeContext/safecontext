@@ -12,6 +12,8 @@ import {
 	PreToolUseInput,
 	PreToolUseOutput,
 	SessionStartOutput,
+	UserPromptExpansionInput,
+	UserPromptExpansionOutput,
 	UserPromptSubmitInput,
 	UserPromptSubmitOutput
 } from './hooks.ts';
@@ -40,6 +42,13 @@ export const AGENT_API = {
 	prompt: { method: 'POST', path: '/v1/prompt', request: UserPromptSubmitInput, response: UserPromptSubmitOutput },
 	toolInput: { method: 'POST', path: '/v1/tool-input', request: PreToolUseInput, response: PreToolUseOutput },
 	toolOutput: { method: 'POST', path: '/v1/tool-output', request: PostToolUseInput, response: PostToolUseOutput },
+	/** A typed slash command or skill, before it expands (#42). */
+	promptExpansion: {
+		method: 'POST',
+		path: '/v1/prompt-expansion',
+		request: UserPromptExpansionInput,
+		response: UserPromptExpansionOutput
+	},
 	/** For the plugin's SessionStart script: what to tell Claude about placeholders, from the policy (#83). */
 	sessionStart: { method: 'GET', path: '/v1/session-start', response: SessionStartOutput }
 } as const;
