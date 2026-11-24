@@ -97,9 +97,8 @@ export const SCENARIOS: Scenario[] = [
 		persona: 'dev',
 		kind: 'read',
 		file: 'src/routes/checkout.ts',
-		expect: 'clean',
-		why: 'Plain source code goes through untouched.',
-		gap: 'After the incident doc, where tier 1 tags the payment provider "Stripe" as a customer name, the session re-hides "stripe" everywhere, including the import path ../billing/stripe.ts. An "always share" list (#117) with Stripe on it fixes this.'
+		expect: 'unchanged',
+		why: 'Plain source code goes through untouched. The payment provider "Stripe" is on the always-share list (#117), so it isn\'t hidden here or in the incident doc.'
 	},
 	{
 		persona: 'dev',
@@ -192,9 +191,8 @@ export const SCENARIOS: Scenario[] = [
 		persona: 'pm',
 		kind: 'read',
 		file: 'press/2026-09-flow-canvas-launch.md',
-		expect: 'clean',
-		why: 'A press release that has gone out is public; tier 2 sees the context and lets it through.',
-		gap: 'After the roadmap, where tier 1 tags the product name "Flow" in its heading as roadmap, the session re-hides "Flow" in this press release too. An "always share" list (#117) with Flow on it fixes this.'
+		expect: 'unchanged',
+		why: 'A press release that has gone out is public; tier 2 sees the context and lets it through. The product name "Flow" is on the always-share list (#117).'
 	},
 	{
 		persona: 'pm',

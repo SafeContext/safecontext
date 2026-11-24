@@ -67,3 +67,15 @@ test('the fail mode section names the time limit and both choices', async ({ pag
 	await expect(page.getByRole('radio', { name: /Let it through/ })).toBeVisible();
 	await expect(page.getByTestId('agent-down-note')).toContainText('everything there is blocked');
 });
+
+test('adds a name to always share, then removes it (#117)', async ({ page }) => {
+	await page.goto('/policy');
+	const name = `Kite ${Date.now().toString(36)}`;
+	await page.getByLabel('Name to always share').fill(name);
+	await page.getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(page.getByTestId('notice')).toContainText(`Added ${name}`);
+	await expect(page.getByTestId('always-share').getByText(name)).toBeVisible();
+	await page.getByRole('button', { name: `Remove ${name}` }).click();
+	await expect(page.getByTestId('notice')).toContainText(`Removed ${name}`);
+	await expect(page.getByTestId('always-share').getByText(name)).toHaveCount(0);
+});

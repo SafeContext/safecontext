@@ -212,7 +212,13 @@ async function run(s: Scenario, keys: Record<string, string>): Promise<{ got: st
 	if (cleaned === undefined) return { got: 'unchanged' };
 	if (unchecked(cleaned)) return { got: 'check failed', detail: cleaned };
 	const leaked = (s.hides ?? []).filter((h) => cleaned.includes(h));
-	return { got: leaked.length ? `clean, but leaked ${leaked.join(', ')}` : 'clean', detail: cleaned };
+	if (leaked.length) return { got: `clean, but leaked ${leaked.join(', ')}`, detail: cleaned };
+	// Cleaning replaces values, never lines: rows and list items must survive (#106).
+	const lines = (t: string) => t.split('\n').length;
+	if (lines(cleaned) !== lines(content)) {
+		return { got: `clean, but ${lines(content)} lines became ${lines(cleaned)}`, detail: cleaned };
+	}
+	return { got: 'clean', detail: cleaned };
 }
 
 async function runChecks(): Promise<number> {

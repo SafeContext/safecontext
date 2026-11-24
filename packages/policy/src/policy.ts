@@ -94,6 +94,15 @@ export const SwapBack = z
 	});
 export type SwapBack = z.infer<typeof SwapBack>;
 
+/**
+ * "Always share" (#117): names IT says are fine to share, such as the company's own shipped
+ * products and its vendors. The models (tiers 1 and 2) never flag them and the agent never
+ * re-hides them. Rules (secrets, personal data) and word lists still apply, so a listed word
+ * can't unhide a key or an email. Matched whole, ignoring case.
+ */
+export const AllowTerms = z.array(z.string().trim().min(1).max(200)).max(5_000);
+export type AllowTerms = z.infer<typeof AllowTerms>;
+
 /** What the agent does when it can't finish checking (error or time budget). See SPEC.md §2a. */
 export const FailMode = z.enum(['block', 'allow']);
 export type FailMode = z.infer<typeof FailMode>;
@@ -109,7 +118,8 @@ export const Policy = z
 		dataTypes: z.array(DataType).min(1),
 		lists: z.array(TermList).default([]),
 		failMode: FailMode.default('block'),
-		swapBack: SwapBack.default(() => ({ tools: [...LOCAL_SWAP_BACK_TOOLS] }))
+		swapBack: SwapBack.default(() => ({ tools: [...LOCAL_SWAP_BACK_TOOLS] })),
+		allow: AllowTerms.default([])
 	})
 	.superRefine((policy, ctx) => {
 		const ids = new Set<string>();

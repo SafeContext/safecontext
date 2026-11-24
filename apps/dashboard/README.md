@@ -17,7 +17,7 @@ and `policy/` (design rules: `AGENTS.md` in this folder, "Design").
   `create-admin` (or the seed's demo admin, credentials in `prisma/demo-admin.ts`).
 - **Overview** (`/`): checks in the last 7 days, checks per day, items found per data type, how many devices run the latest policy, and a live feed (#24, #96). Counts only.
 - **Policy** (`/policy`, #23): the policy editor. Edits save to the draft rows (`DataType`,
-  `TermList`, `Organization.failMode` / `swapBackTools`) at once; Publish copies them into a new
+  `TermList`, `Organization.failMode` / `swapBackTools` / `allowTerms`) at once; Publish copies them into a new
   `PolicyVersion` (`src/lib/server/policy-draft.ts`). Board rules shared with the page are in
   `src/lib/policy-board.ts`. Only members with `role = admin` can change anything; `viewer`s
   see the page read-only.
