@@ -15,8 +15,7 @@
 // settings are set, as for the agent itself. `--terms` adds a term list to the default policy
 // (one term per line, or a JSON array), like a company's own list from the dashboard.
 // The documents are made-up test data, so the report may quote missed items.
-import { spawn, type ChildProcess } from 'node:child_process';
-import { execSync } from 'node:child_process';
+import { execSync, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join, resolve } from 'node:path';
@@ -142,6 +141,9 @@ try {
 // Scores.
 const items = results.flatMap((r) => r.spans);
 const caught = items.filter((s) => !s.leaked).length;
+// Withholding a whole document hides every item in it, so also score detection on its own.
+const checkedItems = results.filter((r) => !r.withheld).flatMap((r) => r.spans);
+const detected = checkedItems.filter((s) => !s.leaked).length;
 const safe = results.filter((r) => r.safe);
 const byLabel = new Map<string, { n: number; caught: number; missed: string[] }>();
 for (const s of items) {
@@ -177,6 +179,8 @@ const summary = {
 	documents: results.length,
 	items: items.length,
 	caught,
+	checkedItems: checkedItems.length,
+	detected,
 	safeDocuments: safe.length,
 	safeChanged: safe.filter((r) => r.changed && !r.withheld).length,
 	withheld: results.filter((r) => r.withheld).length,
@@ -199,6 +203,7 @@ const md = [
 	'| | |',
 	'| --- | ---: |',
 	`| **Items caught** | **${caught}/${items.length} (${percent(caught, items.length)})** |`,
+	`| Items caught in documents that weren't withheld | ${detected}/${checkedItems.length} (${percent(detected, checkedItems.length)}) |`,
 	`| Safe documents changed | ${summary.safeChanged}/${safe.length} |`,
 	`| Documents withheld (check couldn't finish) | ${summary.withheld}/${results.length} |`,
 	`| Check time p50 / p95 | ${summary.msP50} / ${summary.msP95} ms |`,
@@ -250,7 +255,7 @@ function startAgent(policyFile: string): Promise<{ port: number; stop: () => Pro
 	});
 	const stop = () =>
 		new Promise<void>((done) => {
-			if (child.exitCode !== null) return done();
+			if (child.exitCode !== null || child.signalCode !== null) return done();
 			child.once('exit', () => done());
 			child.kill('SIGTERM');
 		});
