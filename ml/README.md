@@ -346,6 +346,28 @@ Two backends, `--judge-backend`:
 
 Get the OK for a run before passing `--yes`, whichever backend.
 
+### Leak score through the agent
+
+The scores above test the models on their own. `apps/agent/scripts/leak-eval.ts` (#115) tests
+the product instead. It starts the real agent with the default policy, sends each document to
+`/v1/tool-output` as if Claude had opened it with `Read`, and checks what Claude would see:
+
+- **Items caught:** a sensitive item's exact text is gone.
+- **Safe documents changed:** a document with nothing sensitive came back different.
+- **Withheld:** the check couldn't finish, so Claude got a notice instead of the document.
+
+```bash
+export SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" SC_TIER2_MODEL=gemma4:e4b-it-q4_K_M
+pnpm --filter @safecontext/agent leak-eval --data "$PWD/ml/data/llm-test/llm-test.jsonl" --name llm-test
+pnpm --filter @safecontext/agent leak-eval --data "$PWD/ml/data/splits/test.jsonl" \
+  --source macrohard-offline --name templates
+```
+
+Each run writes `ml/results/leak-<name>.md`. Add a company's own term list with
+`--terms unreleased-roadmap=codenames.txt` (one term per line), and name that run differently.
+Re-run both sets for any change to the detectors, the models or how the agent cleans text, and
+put the before and after numbers in the PR.
+
 ## Tier 1 tagger (GLiNER)
 
 Issue #13. Scores, the chosen model and why: [`results/tier1-gliner.md`](results/tier1-gliner.md).
