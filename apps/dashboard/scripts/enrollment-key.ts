@@ -8,12 +8,15 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/lib/server/generated/prisma/client.ts';
+import { PG_SESSION_OPTIONS } from '../src/lib/server/pg-session.ts';
 import { hashSecret, newSecret } from '../src/lib/server/agent-api/secrets.ts';
 
 const connectionString = process.env['DATABASE_URL'];
 if (!connectionString) throw new Error('DATABASE_URL is not set (see apps/dashboard/.env.example)');
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({
+	adapter: new PrismaPg({ connectionString, options: PG_SESSION_OPTIONS })
+});
 const slug = process.argv[2] ?? 'macrohard-demo';
 
 try {

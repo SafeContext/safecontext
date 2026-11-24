@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/lib/server/generated/prisma/client.ts';
+import { PG_SESSION_OPTIONS } from '../src/lib/server/pg-session.ts';
 import { ensureAdmin } from '../src/lib/server/admin-accounts.ts';
 
 const connectionString = process.env['DATABASE_URL'];
@@ -30,7 +31,9 @@ if (!slug || !email?.includes('@') || unknown.length > 0 || flags.length > 1) {
 }
 const role = flags[0] === '--viewer' ? 'viewer' : flags[0] === '--admin' ? 'admin' : undefined;
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({
+	adapter: new PrismaPg({ connectionString, options: PG_SESSION_OPTIONS })
+});
 
 try {
 	const org = await prisma.organization.findUniqueOrThrow({

@@ -98,13 +98,11 @@ export async function dailyCounts(
 ): Promise<DayCounts[]> {
 	const out = emptyDays(now, days);
 	const from = new Date(`${out[0]!.day}T00:00:00Z`);
-	// Prisma's Postgres adapter writes and reads timestamps as wall-clock UTC in the database
-	// session's time zone, so the UTC day Prisma would report is the wall-clock day in that zone
-	// (identical to UTC on a server set to UTC). See the issue linked in the PR.
+	// Days are UTC days. Every session runs in UTC (pg-session.ts, #97), but say so explicitly.
 	const rows = await prisma.$queryRaw<
 		{ day: string; blocked: bigint; vague: bigint; checked: bigint }[]
 	>`
-		SELECT to_char("ts" AT TIME ZONE current_setting('TimeZone'), 'YYYY-MM-DD') AS "day",
+		SELECT to_char("ts" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS "day",
 			count(*) FILTER (WHERE "blocked") AS "blocked",
 			count(*) FILTER (WHERE NOT "blocked" AND
 				"actionGeneralize" + "actionPseudonymize" + "actionMask" + "actionBlock" > 0) AS "vague",

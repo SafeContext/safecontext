@@ -165,6 +165,23 @@ describe('stats and feed rows', () => {
 	});
 });
 
+describe('stored times (#97)', () => {
+	it('runs the database session in UTC, so SQL reads the same instant Prisma wrote', async () => {
+		const [{ zone }] = await prisma.$queryRaw<
+			{ zone: string }[]
+		>`SELECT current_setting('TimeZone') AS "zone"`;
+		expect(zone).toBe('UTC');
+		const ts = new Date('2026-11-24T12:00:00.000Z');
+		await storeEvents(mine, {
+			events: [agentEvent({ ts: ts.toISOString(), toolName: 'TzProbe' })]
+		});
+		const [row] = await prisma.$queryRaw<{ epoch: number; text: string }[]>`
+			SELECT extract(epoch FROM "ts")::float8 AS "epoch", to_char("ts" AT TIME ZONE 'UTC', 'HH24:MI') AS "text"
+			FROM "Event" WHERE "organizationId" = ${mine.organizationId}::uuid AND "toolName" = 'TzProbe'`;
+		expect(row).toEqual({ epoch: ts.getTime() / 1000, text: '12:00' });
+	});
+});
+
 describe('live feed', () => {
 	/** Reads server-sent events until one has `data:`, or gives up after `ms`. */
 	async function nextData(reader: ReadableStreamDefaultReader<Uint8Array>, ms: number) {
