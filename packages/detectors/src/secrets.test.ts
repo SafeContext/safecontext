@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRIVATE_KEY_RULE_ID, SECRET_RULES, findPrivateKeys, secretsDetector } from './secrets.ts';
+import { PRIVATE_KEY_RULE_ID, SECRET_RULES, findKeyedTokens, findPrivateKeys, secretsDetector } from './secrets.ts';
 import { ALNUM, HEX, LETTERS, fill } from './test-helpers.ts';
 
 const DIGITS10 = '1234567890';
@@ -67,7 +67,8 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 	},
 	'anthropic-api-key': {
 		secret: `sk-ant-api03-${fill(ALNUM, 93)}AA`,
-		nearMisses: [`sk-ant-api03-${fill(ALNUM, 40)}AA`, `sk-ant-${fill(ALNUM, 40)}`]
+		// A shorter sk-ant-api03- key is caught by anthropic-prefixed-key instead (#111).
+		nearMisses: [`sk-ant-${fill(ALNUM, 40)}`]
 	},
 	'gcp-api-key': {
 		secret: `AIza${fill(ALNUM, 35)}`,
@@ -102,6 +103,37 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 	jwt: {
 		secret: `eyJ${fill(ALNUM, 24)}.eyJ${fill(ALNUM, 24)}.${fill(ALNUM, 30)}`,
 		nearMisses: ['eyJhbGciOi.abc.def', `eyJ${fill(ALNUM, 24)}.${fill(ALNUM, 24)}`]
+	},
+	'jwt-any-payload': {
+		secret: `eyJ${fill(ALNUM, 24)}.${fill(ALNUM, 30)}.${fill(ALNUM, 30)}`,
+		nearMisses: [`eyJ${fill(ALNUM, 24)}.${fill(ALNUM, 24)}`, 'eyJhbGciOi.abcdefghijkl.mnopqrstuvwx']
+	},
+	'openai-prefixed-key': {
+		secret: `sk-${'proj'}-${fill(ALNUM, 48)}`,
+		nearMisses: [`sk-${'proj'}-${fill(ALNUM, 10)}`, 'sk-project-management']
+	},
+	'anthropic-prefixed-key': {
+		secret: `sk-${'ant'}-api03-${fill(ALNUM, 40)}`,
+		nearMisses: [`sk-${'ant'}-api03-${fill(ALNUM, 8)}`, 'sk-ant-colony']
+	},
+	'aws-secret-key-shape': {
+		secret: `re+UBWs49aLReufIgf6v${'wTRz3+ykGxFNIOIC31qo'}`,
+		nearMisses: [
+			`re8UBWs49aLReufIgf6v${'wTRz38ykGxFNIOIC31qo'}`,
+			`re+UBWs49aLReufIgf6v${'wTRz3+ykGxFNIOIC31q'}`,
+			`re+UBWs49aLReufIgf6v${'wTRz3+ykGxFNIOIC31qoX'}`,
+			`a94a8fe5ccb19ba61c4c/${'0873d391e987982fbbd3'}`.slice(0, 40)
+		]
+	},
+	'connection-string-password': {
+		secret: `postgresql://reporting_ro:${'Z4tij2DD'}N#Gv^@orders-4.internal.example.io:5432/billing`,
+		nearMisses: [
+			'postgres://orders@db.internal:5432/orders',
+			'postgres://db.internal/orders',
+			'postgres://app:${DB_PASSWORD}@db.internal/app',
+			'mysql://app:<password>@db/app',
+			'redis://:****@cache:6379'
+		]
 	},
 	'digitalocean-pat': {
 		secret: `dop_v1_${fill(HEX, 64)}`,
@@ -243,6 +275,46 @@ describe('secretsDetector', () => {
 			['a certificate', keyBlock('CERTIFICATE', 256)]
 		])('ignores %s', (_what, text) => {
 			expect(findPrivateKeys(text)).toEqual([]);
+		});
+	});
+
+	describe('connection strings (#111)', () => {
+		it.each([
+			`mongodb+srv://app:${'lkxpJuTh'}S5U&xzF8^@db-prod-6.internal.example.io/app`,
+			`mysql://root:${'s3cr3t'}!@10.0.0.5:3306`,
+			`redis://:${'hunter2hunter2'}@cache.internal:6379/0`,
+			`amqps://svc:${'p4ss'}word@mq.example.com/vhost`
+		])('finds %s, the whole URL', (url) => {
+			const text = `DATABASE_URL=${url}\nnext line`;
+			expect(secretsDetector.detect(text).map((s) => text.slice(s.start, s.end))).toEqual([url]);
+		});
+	});
+
+	describe('keyed tokens (#111)', () => {
+		const token = `dPCWR4cK${fill(ALNUM, 32)}`;
+		it.each([
+			`Rotated ${token} after the incident.`,
+			`api_key: "${token}"`,
+			`client_secret=${token}`,
+			`The token was ${token}`,
+			`AWS_SECRET = "${token}"`,
+			`the leaked key, ${token}, was rotated`
+		])(
+			'finds the token in: %s',
+			(text) => {
+				expect(findKeyedTokens(text).map(([a, b]) => text.slice(a, b))).toEqual([token]);
+			}
+		);
+		it.each([
+			`commit a94a8fe5ccb19ba61c4c0873d391e987982fbbd3`,
+			`token: ${'a'.repeat(40)}`,
+			`the secret is out of the bag`,
+			`the key point: ${'a'.repeat(10)}`,
+			`keyboard ${token}`,
+			`token = process.env.SLACK_SIGNING_SECRET_FOR_THE_ORDERS_APP`,
+			`Rotated ${token.slice(0, 20)}`
+		])('ignores: %s', (text) => {
+			expect(findKeyedTokens(text)).toEqual([]);
 		});
 	});
 

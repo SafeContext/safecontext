@@ -99,6 +99,34 @@ export const SECRET_RULES: readonly SecretRule[] = [
 			'g'
 		)
 	},
+	// SafeContext: the rule above wants the payload to start "ey" too; tokens in docs and test
+	// fixtures often don't. The "eyJ" header and three dot-separated parts are enough (#111).
+	{
+		id: 'jwt-any-payload',
+		regex: new RegExp(String.raw`\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}${END}`, 'g')
+	},
+	// SafeContext: an AWS secret access key's shape (#111): exactly 40 base64 characters with
+	// lower case, upper case, a digit and a "/" or "+", and no more base64 either side. Hex ids
+	// and git hashes have no upper case; longer base64 blobs carry on past 40.
+	{
+		id: 'aws-secret-key-shape',
+		regex:
+			/(?<![A-Za-z0-9/+=])(?=[A-Za-z0-9/+]{0,39}[/+])(?=[A-Za-z0-9/+]{0,39}[a-z])(?=[A-Za-z0-9/+]{0,39}[A-Z])(?=[A-Za-z0-9/+]{0,39}\d)[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])/g
+	},
+	// SafeContext: newer OpenAI and Anthropic keys by their prefix alone, whatever their length (#111).
+	{ id: 'openai-prefixed-key', regex: new RegExp(String.raw`\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}${END}`, 'g') },
+	{ id: 'anthropic-prefixed-key', regex: new RegExp(String.raw`\bsk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_-]{20,}${END}`, 'g') },
+	// SafeContext: a database or broker URL with a password in it (#111). The password is anything
+	// up to the "@" before the host (special characters included); a placeholder such as
+	// "${DB_PASSWORD}", "<password>" or "****" is not a secret. Covers the URL up to the database
+	// name, so the host goes too (not a query string, which rarely holds secrets).
+	{
+		id: 'connection-string-password',
+		regex: new RegExp(
+			String.raw`\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlserver|clickhouse|cockroachdb|jdbc:[a-z]+)://[^\s:@/]*:(?![$<{*])[^\s@/]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::\d{1,5})?(?:/[\w-]*)?`,
+			'g'
+		)
+	},
 	{ id: 'digitalocean-pat', regex: new RegExp(String.raw`\bdop_v1_[a-f0-9]{64}${END}`, 'g') },
 	{ id: 'huggingface-access-token', regex: new RegExp(String.raw`\bhf_[A-Za-z]{34}${END}`, 'g') },
 	{ id: 'pypi-upload-token', regex: /pypi-AgEIcHlwaS5vcmc[\w-]{50,1000}/g },
@@ -160,6 +188,31 @@ export function findPrivateKeys(text: string): Array<[start: number, end: number
 	return found;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Keyed tokens
+// ---------------------------------------------------------------------------------------------
+// SafeContext (#111), after Gitleaks' generic-api-key rule: a long random-looking token right
+// after a word such as "key", "secret", "token" or "rotated" ("Rotated dPCW…", "AWS_SECRET = …",
+// "the leaked key, …"). Random-
+// looking means 32+ characters with lower case, upper case and digits, so hex ids, words and
+// paths don't match.
+
+export const KEYED_TOKEN_RULE_ID = 'keyed-token';
+const KEYED_TOKEN =
+	/(?<![A-Za-z])(?:api[_-]?key|key|secret(?:[_-]?key)?|token|passw(?:or)?d|pwd|credentials?|access[_-]?key|client[_-]?secret|rotated|revoked|leaked)\b["']?\s{0,3}(?:[:=,]|is|was|to)?\s{0,3}["'`]?([A-Za-z0-9+/_=-]{32,200})(?![A-Za-z0-9+/_=-])/dgi;
+
+/** Offsets `[start, end)` of every keyed token in `text`. */
+export function findKeyedTokens(text: string): Array<[start: number, end: number]> {
+	const found: Array<[number, number]> = [];
+	for (const m of text.matchAll(KEYED_TOKEN)) {
+		const token = m[1]!;
+		if (!/[a-z]/.test(token) || !/[A-Z]/.test(token) || !/\d/.test(token)) continue;
+		const [start, end] = m.indices![1]!;
+		found.push([start, end]);
+	}
+	return found;
+}
+
 export const secretsDetector: Detector = {
 	id: 'secrets',
 	detect(text) {
@@ -171,6 +224,10 @@ export const secretsDetector: Detector = {
 		}
 		for (const [start, end] of findPrivateKeys(text)) {
 			spans.push(ruleSpan(start, end, BUILTIN_DATA_TYPE.secrets));
+		}
+		// A keyed token another rule already found ("token ghp_…") isn't added twice.
+		for (const [start, end] of findKeyedTokens(text)) {
+			if (!spans.some((s) => s.start < end && start < s.end)) spans.push(ruleSpan(start, end, BUILTIN_DATA_TYPE.secrets));
 		}
 		return spans;
 	}
