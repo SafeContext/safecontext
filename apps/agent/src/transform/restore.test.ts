@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isGenericValue, knownValueFinder } from './known.ts';
 import { createPlaceholderStore, type SessionKey } from './placeholders.ts';
-import { isSafeWriteTarget, restoreToolInput } from './restore.ts';
+import { inSlug, isSafeWriteTarget, preferredSpellings, restoreToolInput } from './restore.ts';
 import { LOCAL_SWAP_BACK_TOOLS } from '@safecontext/policy';
 
 const LOCAL = [...LOCAL_SWAP_BACK_TOOLS];
@@ -203,7 +203,7 @@ describe('spellings', () => {
 		});
 	});
 
-	it('uses the first spelling for a new file whose name matches nothing', () => {
+	it('uses the lowercase spelling for a new file whose name matches nothing (#108)', () => {
 		const r = restoreToolInput(
 			'Write',
 			{ file_path: 'deals/⟪customer_name_1⟫-notes.md', content: 'x' },
@@ -211,7 +211,7 @@ describe('spellings', () => {
 			project,
 			LOCAL
 		);
-		expect(r).toMatchObject({ kind: 'restored', input: { file_path: 'deals/Northwind-notes.md' } });
+		expect(r).toMatchObject({ kind: 'restored', input: { file_path: 'deals/northwind-notes.md' } });
 	});
 });
 
@@ -226,6 +226,96 @@ describe('isSafeWriteTarget', () => {
 	it('needs an absolute project folder and a file inside it', () => {
 		expect(isSafeWriteTarget('a.md', 'relative')).toBe(false);
 		expect(isSafeWriteTarget('.', project)).toBe(false);
+	});
+});
+
+describe('spellings (#108)', () => {
+	it('puts the capitalised spelling into running text, even if the lowercase one came first', () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'northwind'); // from inbox/northwind-email.md
+		key.idFor('customer-names', 'Northwind'); // from the pipeline CSV
+		const r = restoreToolInput(
+			'Write',
+			{ file_path: `${project}/review.html`, content: '<h2>⟪customer_name_1⟫: renewal</h2>' },
+			key,
+			project,
+			LOCAL
+		);
+		expect(r).toMatchObject({ kind: 'restored', input: { content: '<h2>Northwind: renewal</h2>' } });
+	});
+
+	it('keeps the lowercase spelling in a file name or slug', () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'Northwind');
+		key.idFor('customer-names', 'northwind');
+		const r = restoreToolInput(
+			'Write',
+			{ file_path: `${project}/⟪customer_name_1⟫-email.md`, content: 'See notes/⟪customer_name_1⟫-call.md' },
+			key,
+			project,
+			LOCAL
+		);
+		expect(r).toMatchObject({
+			kind: 'restored',
+			input: { file_path: `${project}/northwind-email.md`, content: 'See notes/northwind-call.md' }
+		});
+	});
+
+	it('uses the word list’s spelling in running text when only another spelling was seen', () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'NORTHWIND');
+		const listed = (v: string) => (v.toLowerCase() === 'northwind' ? 'Northwind' : undefined);
+		const r = restoreToolInput(
+			'Write',
+			{ file_path: `${project}/a.md`, content: 'Hi ⟪customer_name_1⟫' },
+			key,
+			project,
+			LOCAL,
+			listed
+		);
+		expect(r).toMatchObject({ kind: 'restored', input: { content: 'Hi Northwind' } });
+	});
+
+	it('orders spellings for running text and for slugs', () => {
+		expect(preferredSpellings(['northwind', 'NORTHWIND', 'Northwind'], false)).toEqual([
+			'NORTHWIND',
+			'Northwind',
+			'northwind'
+		]);
+		expect(preferredSpellings(['Northwind', 'northwind'], true)).toEqual(['northwind', 'Northwind']);
+		expect(preferredSpellings(['northwind'], false, () => 'Northwind')).toEqual(['Northwind', 'northwind']);
+		expect(preferredSpellings(['northwind'], true, () => 'Northwind')).toEqual(['northwind']);
+	});
+
+	it('spots placeholders inside file names and paths, not in prose (#108)', () => {
+		const at = (t: string) => {
+			const i = t.indexOf('⟪');
+			return inSlug(t, i, t.indexOf('⟫') + 1);
+		};
+		expect(at('inbox/⟪x_1⟫-email.md')).toBe(true);
+		expect(at('⟪x_1⟫.md')).toBe(true);
+		expect(at('see /deals/⟪x_1⟫ for more')).toBe(true);
+		expect(at('open "notes/⟪x_1⟫-call.md".')).toBe(true);
+		expect(at('Call ⟪x_1⟫ today.')).toBe(false);
+		expect(at('<h2>⟪x_1⟫: renewal')).toBe(false);
+		expect(at('⟪x_1⟫-based pricing')).toBe(false);
+		expect(at('the ⟪x_1⟫/⟪y_1⟫ merger')).toBe(false);
+		expect(at('the ⟪x_1⟫-Contoso deal')).toBe(false);
+		expect(at('That was the end.⟪x_1⟫ said yes')).toBe(false);
+	});
+
+	it('keeps the capitalised spelling in prose next to a hyphen or slash', () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'northwind');
+		key.idFor('customer-names', 'Northwind');
+		const r = restoreToolInput(
+			'Write',
+			{ file_path: `${project}/a.md`, content: '⟪customer_name_1⟫-based pricing for ⟪customer_name_1⟫/partners' },
+			key,
+			project,
+			LOCAL
+		);
+		expect(r).toMatchObject({ kind: 'restored', input: { content: 'Northwind-based pricing for Northwind/partners' } });
 	});
 });
 

@@ -271,7 +271,8 @@ export function createApp(deps: AppDeps): Hono {
 								input.tool_input,
 								placeholders.session(input.session_id),
 								input.cwd,
-								policy.swapBack.tools
+								policy.swapBack.tools,
+								canonicalSpelling(policy)
 							);
 				return {
 					...checked,
@@ -324,6 +325,20 @@ function outcomeOf(decision: Decision): Outcome {
 function wasBlocked(hook: HookEventName, decision: Decision): boolean {
 	if (decision.verdict !== 'block') return false;
 	return hook !== 'PostToolUse' || decision.cause === 'fail';
+}
+
+const canonicalCache = new WeakMap<Policy, (value: string) => string | undefined>();
+
+/** The word-list spelling of a value, matched ignoring case (#108). One lookup table per policy. */
+function canonicalSpelling(policy: Policy): (value: string) => string | undefined {
+	let find = canonicalCache.get(policy);
+	if (!find) {
+		const terms = new Map<string, string>();
+		for (const list of policy.lists) for (const term of list.terms) terms.set(term.trim().toLowerCase(), term.trim());
+		find = (value) => terms.get(value.trim().toLowerCase());
+		canonicalCache.set(policy, find);
+	}
+	return find;
 }
 
 function toolNameOf(body: unknown): string | undefined {
