@@ -1,0 +1,414 @@
+{
+ "model": "tier1-onnx",
+ "model_onnx_sha256": "350357851d2895c8bcb0a08d851aa5b252a76308be09c37adfdde444f769292d",
+ "provenance": {
+  "id": "urchade/gliner_small-v2.1",
+  "revision": "4e091416cf7c3481db542c2a3d26156916f3a47f"
+ },
+ "threshold": 0.5,
+ "flat_ner": true,
+ "labels": [
+  "person name",
+  "customer name",
+  "revenue figure",
+  "project codename",
+  "api key or token",
+  "internal hostname"
+ ],
+ "token_counts": [
+  32,
+  19,
+  38,
+  20,
+  19,
+  20,
+  27,
+  24,
+  20,
+  22,
+  12,
+  21,
+  299,
+  264,
+  299,
+  288,
+  291,
+  285,
+  288,
+  276
+ ],
+ "onnx_python": [
+  [
+   {
+    "start": 15,
+    "end": 30,
+    "label": "customer name",
+    "score": 0.9915
+   },
+   {
+    "start": 42,
+    "end": 47,
+    "label": "revenue figure",
+    "score": 0.99127
+   },
+   {
+    "start": 52,
+    "end": 55,
+    "label": "revenue figure",
+    "score": 0.83573
+   }
+  ],
+  [
+   {
+    "start": 23,
+    "end": 39,
+    "label": "project codename",
+    "score": 0.98476
+   }
+  ],
+  [
+   {
+    "start": 15,
+    "end": 39,
+    "label": "api key or token",
+    "score": 0.87833
+   }
+  ],
+  [
+   {
+    "start": 9,
+    "end": 26,
+    "label": "customer name",
+    "score": 0.99084
+   },
+   {
+    "start": 89,
+    "end": 93,
+    "label": "revenue figure",
+    "score": 0.67194
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 49,
+    "label": "project codename",
+    "score": 0.98549
+   }
+  ],
+  [],
+  [],
+  [
+   {
+    "start": 19,
+    "end": 24,
+    "label": "revenue figure",
+    "score": 0.91828
+   }
+  ],
+  [
+   {
+    "start": 4,
+    "end": 18,
+    "label": "customer name",
+    "score": 0.99896
+   },
+   {
+    "start": 37,
+    "end": 42,
+    "label": "revenue figure",
+    "score": 0.79395
+   }
+  ],
+  [],
+  [
+   {
+    "start": 9,
+    "end": 24,
+    "label": "customer name",
+    "score": 0.99533
+   }
+  ],
+  [],
+  [
+   {
+    "start": 82,
+    "end": 87,
+    "label": "revenue figure",
+    "score": 0.99559
+   },
+   {
+    "start": 152,
+    "end": 157,
+    "label": "revenue figure",
+    "score": 0.99791
+   },
+   {
+    "start": 211,
+    "end": 218,
+    "label": "customer name",
+    "score": 0.84041
+   },
+   {
+    "start": 223,
+    "end": 240,
+    "label": "customer name",
+    "score": 0.9972
+   },
+   {
+    "start": 675,
+    "end": 705,
+    "label": "api key or token",
+    "score": 0.9007
+   },
+   {
+    "start": 963,
+    "end": 978,
+    "label": "customer name",
+    "score": 0.80925
+   },
+   {
+    "start": 1060,
+    "end": 1074,
+    "label": "customer name",
+    "score": 0.70052
+   },
+   {
+    "start": 1240,
+    "end": 1252,
+    "label": "project codename",
+    "score": 0.60119
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 52,
+    "label": "customer name",
+    "score": 0.93689
+   },
+   {
+    "start": 134,
+    "end": 148,
+    "label": "customer name",
+    "score": 0.96118
+   },
+   {
+    "start": 911,
+    "end": 928,
+    "label": "customer name",
+    "score": 0.98371
+   }
+  ],
+  [
+   {
+    "start": 82,
+    "end": 99,
+    "label": "customer name",
+    "score": 0.99769
+   },
+   {
+    "start": 627,
+    "end": 632,
+    "label": "revenue figure",
+    "score": 0.94226
+   },
+   {
+    "start": 697,
+    "end": 702,
+    "label": "revenue figure",
+    "score": 0.98324
+   },
+   {
+    "start": 756,
+    "end": 763,
+    "label": "customer name",
+    "score": 0.83857
+   },
+   {
+    "start": 768,
+    "end": 785,
+    "label": "customer name",
+    "score": 0.99899
+   },
+   {
+    "start": 1220,
+    "end": 1250,
+    "label": "api key or token",
+    "score": 0.90339
+   }
+  ],
+  [
+   {
+    "start": 40,
+    "end": 56,
+    "label": "project codename",
+    "score": 0.51961
+   },
+   {
+    "start": 360,
+    "end": 375,
+    "label": "customer name",
+    "score": 0.68274
+   },
+   {
+    "start": 457,
+    "end": 471,
+    "label": "customer name",
+    "score": 0.69629
+   },
+   {
+    "start": 1243,
+    "end": 1248,
+    "label": "revenue figure",
+    "score": 0.80109
+   },
+   {
+    "start": 1313,
+    "end": 1318,
+    "label": "revenue figure",
+    "score": 0.98261
+   },
+   {
+    "start": 1372,
+    "end": 1379,
+    "label": "customer name",
+    "score": 0.82606
+   },
+   {
+    "start": 1384,
+    "end": 1401,
+    "label": "customer name",
+    "score": 0.99546
+   }
+  ],
+  [
+   {
+    "start": 36,
+    "end": 66,
+    "label": "api key or token",
+    "score": 0.61191
+   },
+   {
+    "start": 639,
+    "end": 656,
+    "label": "customer name",
+    "score": 0.99137
+   },
+   {
+    "start": 905,
+    "end": 910,
+    "label": "revenue figure",
+    "score": 0.79923
+   },
+   {
+    "start": 975,
+    "end": 980,
+    "label": "revenue figure",
+    "score": 0.96885
+   },
+   {
+    "start": 1034,
+    "end": 1041,
+    "label": "customer name",
+    "score": 0.82904
+   },
+   {
+    "start": 1046,
+    "end": 1063,
+    "label": "customer name",
+    "score": 0.99757
+   },
+   {
+    "start": 1176,
+    "end": 1191,
+    "label": "customer name",
+    "score": 0.68053
+   },
+   {
+    "start": 1273,
+    "end": 1287,
+    "label": "customer name",
+    "score": 0.75793
+   }
+  ],
+  [
+   {
+    "start": 361,
+    "end": 366,
+    "label": "revenue figure",
+    "score": 0.98478
+   },
+   {
+    "start": 431,
+    "end": 436,
+    "label": "revenue figure",
+    "score": 0.99306
+   },
+   {
+    "start": 490,
+    "end": 497,
+    "label": "customer name",
+    "score": 0.80519
+   },
+   {
+    "start": 502,
+    "end": 519,
+    "label": "customer name",
+    "score": 0.99512
+   }
+  ],
+  [
+   {
+    "start": 360,
+    "end": 377,
+    "label": "customer name",
+    "score": 0.88849
+   },
+   {
+    "start": 584,
+    "end": 600,
+    "label": "project codename",
+    "score": 0.82922
+   },
+   {
+    "start": 903,
+    "end": 933,
+    "label": "api key or token",
+    "score": 0.92494
+   },
+   {
+    "start": 1187,
+    "end": 1199,
+    "label": "project codename",
+    "score": 0.76398
+   }
+  ],
+  [
+   {
+    "start": 37,
+    "end": 52,
+    "label": "customer name",
+    "score": 0.91283
+   },
+   {
+    "start": 134,
+    "end": 148,
+    "label": "customer name",
+    "score": 0.94378
+   },
+   {
+    "start": 596,
+    "end": 626,
+    "label": "api key or token",
+    "score": 0.80528
+   },
+   {
+    "start": 929,
+    "end": 946,
+    "label": "customer name",
+    "score": 0.9858
+   }
+  ]
+ ]
+}

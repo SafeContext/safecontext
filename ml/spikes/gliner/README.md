@@ -8,6 +8,7 @@ Reproduce (from the repo root, Node 24):
 cd ml
 uv run python spikes/gliner/export_onnx.py [--quantize]   # -> ml/models/gliner_small-v2.1-onnx/ (gitignored)
 uv run python spikes/gliner/reference_spans.py            # -> reference_spans.json (PyTorch + Python onnxruntime)
+uv run python spikes/gliner/reference_spans.py --model-dir models/tier1-onnx --out reference_spans.tier1-onnx.json  # the shipped model (#113)
 cd ../apps/agent
 pnpm exec tsx scripts/gliner/run.ts [--runs 25] [--threads N] [--quantized]
 ```

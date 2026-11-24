@@ -1,10 +1,13 @@
 /**
  * Runs only with a real model: `SC_TIER1_MODEL_DIR=<export dir> pnpm --filter @safecontext/agent test`.
- * Checks the agent's GLiNER code against the Python reference from the #5 spike
- * (ml/spikes/gliner/reference_spans.json, made with urchade/gliner_small-v2.1), and times it.
+ * Checks the agent's GLiNER code against Python gliner on the same model (the #5 spike's texts in
+ * ml/spikes/gliner/samples.json), and times it. The reference is the `reference_spans*.json` whose
+ * `model_onnx_sha256` matches the model given (#113); make one for a new model with
+ * `uv run python spikes/gliner/reference_spans.py --model-dir <dir> --out reference_spans.<name>.json`.
  * Without the env var it is skipped, so `pnpm test` never needs the model.
  */
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { policyWith } from '../../test-helpers.ts';
@@ -23,15 +26,25 @@ interface RefSpan {
 	score: number;
 }
 
+interface Reference {
+	model: string;
+	model_onnx_sha256?: string;
+	threshold: number;
+	onnx_python: RefSpan[][];
+}
+
+async function sha256(path: string): Promise<string> {
+	const hash = createHash('sha256');
+	for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
+	return hash.digest('hex');
+}
+
 describe.skipIf(!dir)('GLiNER with the real model (SC_TIER1_MODEL_DIR)', () => {
 	const samples = JSON.parse(readFileSync(join(spike, 'samples.json'), 'utf8')) as {
 		labels: string[];
 		texts: string[];
 	};
-	const ref = JSON.parse(readFileSync(join(spike, 'reference_spans.json'), 'utf8')) as {
-		threshold: number;
-		onnx_python: RefSpan[][];
-	};
+	let ref: Reference;
 	// One data type per spike label, so the label texts match the reference exactly.
 	const policy = policyWith({
 		dataTypes: samples.labels.map((name, i) => ({
@@ -45,6 +58,18 @@ describe.skipIf(!dir)('GLiNER with the real model (SC_TIER1_MODEL_DIR)', () => {
 	});
 	let model: TaggerModel;
 	beforeAll(async () => {
+		const sha = await sha256(join(dir!, 'model.onnx'));
+		const refs = readdirSync(spike)
+			.filter((f) => /^reference_spans.*\.json$/.test(f))
+			.map((f) => JSON.parse(readFileSync(join(spike, f), 'utf8')) as Reference);
+		const found = refs.find((r) => r.model_onnx_sha256 === sha);
+		if (!found) {
+			throw new Error(
+				`No Python reference for this model (model.onnx sha256 ${sha.slice(0, 12)}…). From ml/, run: ` +
+					`uv run python spikes/gliner/reference_spans.py --model-dir ${dir} --out reference_spans.<name>.json`
+			);
+		}
+		ref = found;
 		model = await loadGliner(dir!);
 	}, 60_000);
 	afterAll(() => model?.close());
