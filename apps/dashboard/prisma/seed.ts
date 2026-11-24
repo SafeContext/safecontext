@@ -29,6 +29,9 @@ const prisma = new PrismaClient({
 const ORG_SLUG = 'macrohard-demo';
 
 /** Demo term lists (codenames, customers) attached to default data types. */
+/** "Always share" (#117): Macrohard's own product and its payment provider. */
+const DEMO_ALLOW = ['Flow', 'Stripe'];
+
 const DEMO_LISTS: TermList[] = [
 	{ dataTypeId: 'customer-names', terms: ['Northwind', 'Acme Corp', 'Contoso'] },
 	{ dataTypeId: 'unreleased-roadmap', terms: ['Project Atlas', 'Project Helios'] }
@@ -97,7 +100,7 @@ async function main() {
 	const org = await prisma.organization.upsert({
 		where: { slug: ORG_SLUG },
 		update: {},
-		create: { slug: ORG_SLUG, name: 'Macrohard (demo)' }
+		create: { slug: ORG_SLUG, name: 'Macrohard (demo)', allowTerms: DEMO_ALLOW }
 	});
 
 	// Keeps a password the admin already has (resetPassword is off).
@@ -146,7 +149,8 @@ async function main() {
 			dataTypes: DEFAULT_DATA_TYPES,
 			lists: DEMO_LISTS,
 			failMode: org.failMode,
-			swapBack: { tools: org.swapBackTools }
+			swapBack: { tools: org.swapBackTools },
+			allow: org.allowTerms
 		});
 		version = await prisma.policyVersion.create({
 			data: {

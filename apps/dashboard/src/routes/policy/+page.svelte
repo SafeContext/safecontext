@@ -9,6 +9,7 @@
 	import DataTypeDialog, { type Target } from '#lib/components/policy/DataTypeDialog.svelte';
 	import FailModeSection from '#lib/components/policy/FailModeSection.svelte';
 	import SwapBackEditor from '#lib/components/policy/SwapBackEditor.svelte';
+	import AlwaysShareEditor from '#lib/components/policy/AlwaysShareEditor.svelte';
 	import { send } from '#lib/components/policy/send.ts';
 	import type { PageProps } from './$types';
 
@@ -144,6 +145,13 @@
 		onopen={(t) => (target = t)}
 		onmessage={say}
 	/>
+</Card>
+
+<Card
+	title="Always share"
+	description="Names Safe Context should never hide, such as your own products and the vendors you use."
+>
+	<AlwaysShareEditor terms={data.draft.allowTerms} canEdit={data.canEdit} onmessage={say} />
 </Card>
 
 <div class="grid gap-4 lg:grid-cols-2">
