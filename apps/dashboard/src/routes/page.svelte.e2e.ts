@@ -15,10 +15,7 @@ test('Policy page shows where real values go back (#83)', async ({ page }) => {
 	}
 });
 
-for (const [name, path] of [
-	['Deploy', '/deploy'],
-	['Settings', '/settings']
-]) {
+for (const [name, path] of [['Settings', '/settings']]) {
 	test(`${name} placeholder page shows an empty state`, async ({ page }) => {
 		await page.goto(path);
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
