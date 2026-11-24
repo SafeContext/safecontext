@@ -20,6 +20,11 @@ export interface Tier1Options {
 	 * Default: its name (`labelTemplate('{name}')`).
 	 */
 	label?: (dataType: DataType) => string;
+	/**
+	 * Most words per model call. Longer text is cut into windows of this size, overlapping by the
+	 * model's longest span. Default: the model's limit. The agent passes `SC_TIER1_WINDOW_WORDS`.
+	 */
+	windowWords?: number;
 }
 
 export interface Tier1 extends ClassifierTier {
@@ -29,6 +34,11 @@ export interface Tier1 extends ClassifierTier {
 
 /** Below this, a window can't finish in time, so the classifier times out straight away. */
 const MIN_BUDGET_MS = 50;
+/**
+ * A year on its own ("2027") is never sensitive, but short windows tag it as roadmap (#107).
+ * Dates that include it ("3 March 2027") are still found.
+ */
+const BARE_YEAR = /^(?:19|20)\d{2}$/;
 /** A label prompt this close to the model's token limit leaves no room for text. */
 const MIN_TEXT_TOKENS = 32;
 
@@ -54,7 +64,7 @@ interface Labels {
  * the model can take; it checks the abort signal between windows, and windows from concurrent
  * checks take turns on the model rather than all running at once.
  */
-export function createTier1({ model, threshold, label = labelTemplate('{name}') }: Tier1Options): Tier1 {
+export function createTier1({ model, threshold, label = labelTemplate('{name}'), windowWords }: Tier1Options): Tier1 {
 	const ready = Promise.resolve(model);
 	ready.catch(() => {}); // reported by the caller; each check then fails (fail mode applies)
 
@@ -124,7 +134,8 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 					}
 					return { text: word, ids };
 				});
-				const limits = { maxWords: m.maxWords, maxTokens, overlap: m.maxWidth };
+				const maxWords = Math.min(windowWords ?? m.maxWords, m.maxWords);
+				const limits = { maxWords, maxTokens, overlap: Math.min(m.maxWidth, maxWords - 1) };
 				const spans: Span[] = [];
 				for (const [a, b] of windows(
 					encoded.map((e) => e.ids.length),
@@ -132,6 +143,7 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}') 
 				)) {
 					const logits = await queued(signal, () => m.score(promptIds, dataTypeIds.length, encoded.slice(a, b)));
 					for (const s of decode(logits, words.slice(a, b), dataTypeIds.length, m.maxWidth, minScore)) {
+						if (BARE_YEAR.test(text.slice(s.start, s.end))) continue;
 						spans.push({
 							start: s.start,
 							end: s.end,
@@ -165,7 +177,12 @@ export function tier1FromConfig(config: Tier1Config | undefined, logger: Logger)
 		() => logger.log('info', 'tier1_ready', { totalMs: Math.round(performance.now() - start) }),
 		() => logger.log('error', 'tier1_failed')
 	);
-	return createTier1({ model, threshold: config.threshold, label: labelTemplate(config.labelTemplate) });
+	return createTier1({
+		model,
+		threshold: config.threshold,
+		label: labelTemplate(config.labelTemplate),
+		windowWords: config.windowWords
+	});
 }
 
 /**

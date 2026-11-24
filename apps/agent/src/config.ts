@@ -44,6 +44,14 @@ export const PINNED_TIER2_DIGEST = 'sha256:dc35e8d9c6061baa6f0fa870975ab6932e254
 /** The prompt files the evaluation scored, in this repo. */
 export const DEFAULT_TIER2_PROMPTS_DIR = join(import.meta.dirname, '../../../ml/prompts/tier2');
 
+/**
+ * Tier 1's window, in words (#107). The model was fine-tuned on short records (median about 220
+ * characters) and finds much less in long windows: on the realistic test documents, 384-word
+ * windows (the model's limit) caught 76% of items with tier 1 alone, 48-word windows 93%, with
+ * fewer false flags. 32 words tripled the false flags on the template documents.
+ */
+export const DEFAULT_TIER1_WINDOW_WORDS = 48;
+
 export interface Tier1Config {
 	/** GLiNER ONNX export directory (`SC_TIER1_MODEL_DIR`). See classifier/tier1/gliner.ts. */
 	modelDir: string;
@@ -56,6 +64,11 @@ export interface Tier1Config {
 	threshold: number | undefined;
 	/** onnxruntime intra-op threads (`SC_TIER1_THREADS`, default 0: all cores). */
 	threads: number;
+	/**
+	 * Most words the model sees at once (`SC_TIER1_WINDOW_WORDS`, default
+	 * `DEFAULT_TIER1_WINDOW_WORDS`). Longer text is cut into overlapping windows of this size.
+	 */
+	windowWords: number;
 	/**
 	 * The label the model sees for each data type (`SC_TIER1_LABEL`, default `{name}`).
 	 * Placeholders: `{name}`, `{description}`.
@@ -125,6 +138,7 @@ function readTier1Config(env: NodeJS.ProcessEnv): Tier1Config | undefined {
 		modelFile: env.SC_TIER1_MODEL_FILE?.trim() || 'model.onnx',
 		threshold,
 		threads: int(env.SC_TIER1_THREADS, 0, 0, 256, 'SC_TIER1_THREADS'),
+		windowWords: int(env.SC_TIER1_WINDOW_WORDS, DEFAULT_TIER1_WINDOW_WORDS, 16, 512, 'SC_TIER1_WINDOW_WORDS'),
 		labelTemplate
 	};
 }

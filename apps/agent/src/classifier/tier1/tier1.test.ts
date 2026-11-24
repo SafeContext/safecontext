@@ -192,6 +192,28 @@ describe('tier 1 on long text', () => {
 		expect(text.slice(spans![0]!.start, spans![0]!.end)).toBe('Project Blue Bird');
 	});
 
+	it('uses windowWords when it is smaller than the model limit (#107)', async () => {
+		const { model, calls } = fakeModel({ Northwind: 'Customer names' }, { maxWords: 384 });
+		const text = Array.from({ length: 100 }, (_, i) => (i === 70 ? 'Northwind' : `w${i}`)).join(' ');
+		const [spans] = await createTier1({ model, windowWords: 20 }).detect([text], ctx());
+		expect(calls.length).toBeGreaterThan(4);
+		expect(calls.every((c) => c.words.length <= 20)).toBe(true);
+		expect(spans!.map((s) => text.slice(s.start, s.end))).toEqual(['Northwind']);
+	});
+
+	it('drops a bare year, but keeps a date that includes it (#107)', async () => {
+		const { model } = fakeModel({ '2027': 'Unreleased roadmap', '3 March 2027': 'Unreleased roadmap' });
+		const text = 'Roadmap 2027: GA on 3 March 2027';
+		const [spans] = await createTier1({ model }).detect([text], ctx());
+		expect(spans!.map((s) => text.slice(s.start, s.end))).toEqual(['3 March 2027']);
+	});
+
+	it('never uses windows larger than the model limit', async () => {
+		const { model, calls } = fakeModel({}, { maxWords: 10 });
+		await createTier1({ model, windowWords: 48 }).detect([Array(40).fill('w').join(' ')], ctx());
+		expect(calls.every((c) => c.words.length <= 10)).toBe(true);
+	});
+
 	it('returns no spans for empty text without calling the model', async () => {
 		const { model, calls } = fakeModel({});
 		expect(await createTier1({ model }).detect(['', '  \n'], ctx())).toEqual([[], []]);
@@ -333,6 +355,7 @@ describe('tier 1 config', () => {
 			modelFile: 'model.onnx',
 			threshold: undefined,
 			threads: 0,
+			windowWords: 48,
 			labelTemplate: '{name}'
 		});
 		expect(
@@ -341,12 +364,14 @@ describe('tier 1 config', () => {
 				SC_TIER1_MODEL_FILE: 'model_fp16.onnx',
 				SC_TIER1_THRESHOLD: '0.35',
 				SC_TIER1_THREADS: '4',
+				SC_TIER1_WINDOW_WORDS: '96',
 				SC_TIER1_LABEL: '{name}: {description}'
 			}).tier1
 		).toMatchObject({
 			modelFile: 'model_fp16.onnx',
 			threshold: 0.35,
 			threads: 4,
+			windowWords: 96,
 			labelTemplate: '{name}: {description}'
 		});
 	});
@@ -356,6 +381,7 @@ describe('tier 1 config', () => {
 		expect(() => readConfig({ ...dir, SC_TIER1_THRESHOLD: '1.5' })).toThrow(/SC_TIER1_THRESHOLD/);
 		expect(() => readConfig({ ...dir, SC_TIER1_THRESHOLD: 'high' })).toThrow(/SC_TIER1_THRESHOLD/);
 		expect(() => readConfig({ ...dir, SC_TIER1_THREADS: '-1' })).toThrow(/SC_TIER1_THREADS/);
+		expect(() => readConfig({ ...dir, SC_TIER1_WINDOW_WORDS: '4' })).toThrow(/SC_TIER1_WINDOW_WORDS/);
 		expect(() => readConfig({ ...dir, SC_TIER1_LABEL: 'no placeholder' })).toThrow(/SC_TIER1_LABEL/);
 	});
 
