@@ -24,14 +24,22 @@ export interface TestAppOptions {
 	policy?: Policy;
 	tiers?: ClassifierTier[];
 	budgetMs?: number;
+	/** The agent's budget per check (`SC_CHECK_BUDGET_MS`). Default: the agent's default. */
+	checkBudgetMs?: number;
 }
 
-export function testApp({ policy = policyWith(), tiers = [createTier0()], budgetMs = 1_000 }: TestAppOptions = {}) {
+export function testApp({
+	policy = policyWith(),
+	tiers = [createTier0()],
+	budgetMs = 1_000,
+	checkBudgetMs
+}: TestAppOptions = {}) {
 	const logger = memoryLogger();
 	const reports: CheckReport[] = [];
 	const app = createApp({
 		policy: staticPolicySource(policy),
 		classifier: createClassifier({ tiers, budgetMs }),
+		...(checkBudgetMs !== undefined && { checkBudgetMs }),
 		logger,
 		events: { record: (r) => reports.push(r) }
 	});

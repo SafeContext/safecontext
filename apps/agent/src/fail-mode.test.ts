@@ -3,6 +3,7 @@ import { AGENT_API, type FailMode } from '@safecontext/policy';
 import { describe, expect, it } from 'vitest';
 import { createTier0 } from './classifier/tier0.ts';
 import type { ClassifierTier } from './classifier/types.ts';
+import { lineParts, PARTIAL_MIN_CHARS } from './app.ts';
 import { messages } from './messages.ts';
 import { fakeTier, policyWith, promptInput, testApp, toolInput, toolOutput } from './test-helpers.ts';
 
@@ -137,5 +138,71 @@ describe('a span whose data type is not in the policy', () => {
 		const res = await post(prompt.path, promptInput('hello'));
 		expect(res.json.decision).toBe('block');
 		expect(res.json.reason).toContain('mystery-type');
+	});
+});
+
+describe("large tool output that can't all be checked in time (#110)", () => {
+	// 12 parts of ~8,000 characters, each with a fake secret; each part takes the slow tier 300 ms.
+	const secret = (n: number) => `ghp_${String(n).padStart(2, '0')}${'aB3dE5gH7jK9mN1pQ2rS4tU6vW8xY0zC12'}`;
+	const part = (n: number) => `line ${n} ${secret(n)}\n` + `${'x'.repeat(79)}\n`.repeat(98);
+	const text = Array.from({ length: 12 }, (_, n) => part(n)).join('');
+	const slow = () => [createTier0(), fakeTier({ ms: 300 })];
+	const run = async (failMode: FailMode) => {
+		const a = testApp({ tiers: slow(), budgetMs: 10_000, checkBudgetMs: 3_000, policy: policyWith({ failMode }) });
+		const res = await a.post(postTool.path, toolOutput('Bash', { stdout: text, stderr: '' }));
+		const stdout = (postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput as { stdout: string })
+			.stdout;
+		return { stdout, reports: a.reports };
+	};
+
+	it('block: cleans the part it checked and withholds the rest, saying how many lines', async () => {
+		expect(text.length).toBeGreaterThan(PARTIAL_MIN_CHARS);
+		const { stdout, reports } = await run('block');
+		const shown = Array.from({ length: 12 }, (_, n) => stdout.includes(`line ${n} `));
+		expect(shown[0]).toBe(true); // the first part was checked and is shown
+		expect(shown.at(-1)).toBe(false); // the last one wasn't
+		for (let n = 0; n < 12; n++) expect(stdout).not.toContain(secret(n));
+		expect(stdout).toMatch(
+			/\[Safe Context: the remaining \d+ lines were withheld because they couldn't be checked in time/
+		);
+		expect(reports.at(-1)).toMatchObject({ blocked: true });
+	});
+
+	it('allow: cleans the part it checked and passes the rest through unchecked', async () => {
+		const { stdout } = await run('allow');
+		expect(stdout).not.toContain(secret(0)); // checked and cleaned
+		expect(stdout).toContain(secret(11)); // not checked: the fail mode lets it through
+		expect(stdout).not.toContain('withheld');
+	});
+
+	it('still finds a private key that spans two parts (PR #125 review)', async () => {
+		const body = Array.from({ length: 30 }, () => 'MIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AHB7MaNG').join('\n');
+		const key = `-----${'BEGIN'} RSA PRIVATE KEY-----\n${body}\n-----${'END'} RSA PRIVATE KEY-----`;
+		const filler = `${'x'.repeat(79)}\n`;
+		const big = filler.repeat(90) + key + '\n' + filler.repeat(150); // the key crosses the 8,000-character boundary
+		expect(big.indexOf('BEGIN')).toBeLessThan(8_000);
+		expect(big.indexOf('END')).toBeGreaterThan(8_000);
+		const a = testApp();
+		const res = await a.post(postTool.path, toolOutput('Bash', { stdout: big, stderr: '' }));
+		const stdout = (postTool.response.parse(res.json).hookSpecificOutput?.updatedToolOutput as { stdout: string })
+			.stdout;
+		expect(stdout).not.toContain('MIIEowIBAAKCAQEA');
+	});
+
+	it('splits text into parts at line breaks', () => {
+		expect(lineParts('aaaa\nbbbb\ncc', 7)).toEqual([
+			[0, 5],
+			[5, 12]
+		]);
+		expect(lineParts('aaaa\nbbbb\ncc', 6)).toEqual([
+			[0, 5],
+			[5, 10],
+			[10, 12]
+		]);
+		expect(lineParts('abcdefgh', 3)).toEqual([
+			[0, 3],
+			[3, 6],
+			[6, 8]
+		]);
 	});
 });

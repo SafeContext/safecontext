@@ -31,8 +31,8 @@ import { promptResponse, toolInputResponse, toolOutputResponse } from './hooks.t
 import { messages } from './messages.ts';
 import { silentLogger, type Logger, type Outcome } from './log.ts';
 import type { PolicySource } from './policy-source.ts';
-import { toolInputTexts, toolOutputTexts } from './tool-text.ts';
-import { mergeSpans } from '@safecontext/detectors';
+import { mapToolOutputText, toolInputTexts, toolOutputTexts } from './tool-text.ts';
+import { mergeSpans, type Span } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
 import { allowedBy, dropAllowedModelSpans } from './transform/allow.ts';
 import { knownValueFinder } from './transform/known.ts';
@@ -127,6 +127,66 @@ export function createApp(deps: AppDeps): Hono {
 		}
 		const chars = texts.reduce((n, t) => n + t.length, 0);
 		return { result, decision: decide(result, policy), fields: texts.length, chars, deadline };
+	}
+
+	/**
+	 * `check` for a large tool output (#110): the texts are checked in line-aligned parts, one
+	 * after another, for as long as the budget lasts. `checkedUntil` (one offset per text) is set
+	 * when time ran out part way; everything before it was checked, nothing after it was. If not
+	 * even the first part could be checked, the result is the classifier's failure, as for `check`.
+	 */
+	async function checkInParts(texts: string[], policy: Policy, key: SessionKey) {
+		const deadline = now() + checkBudgetMs;
+		const spans: Span[][] = texts.map(() => []);
+		const checkedUntil = texts.map(() => 0);
+		const tiers = new Map<string, number>();
+		let ms = 0;
+		let cleared = 0;
+		let failure: ClassifyResult | undefined;
+		outer: for (const [i, text] of texts.entries()) {
+			for (const [a, b] of lineParts(text, PART_CHARS)) {
+				const left = deadline - REWRITE_RESERVE_MS - now();
+				if (left <= 0) break outer;
+				// Each part is checked with up to OVERLAP_CHARS before it, from a line start, so a
+				// multi-line secret across a boundary (a private key block) is still seen whole.
+				const from = a === 0 ? 0 : text.lastIndexOf('\n', Math.max(0, a - OVERLAP_CHARS)) + 1;
+				const r = await classifier.classify([text.slice(from, b)], policy, { hook: 'PostToolUse', budgetMs: left });
+				for (const t of r.tiers) tiers.set(t.id, (tiers.get(t.id) ?? 0) + t.ms);
+				ms += r.ms;
+				if (!r.ok) {
+					failure = r;
+					break outer;
+				}
+				cleared += r.cleared ?? 0;
+				for (const s of r.spans[0] ?? []) spans[i]!.push({ ...s, start: s.start + from, end: s.end + from });
+				checkedUntil[i] = b;
+			}
+		}
+		const fields = texts.length;
+		const chars = texts.reduce((n, t) => n + t.length, 0);
+		const timings = [...tiers].map(([id, t]) => ({ id, ms: t }));
+		if (checkedUntil.every((c) => c === 0)) {
+			const result: ClassifyResult = failure ?? { ok: false, failure: 'timeout', tiers: timings, ms };
+			return { result, decision: decide(result, policy), fields, chars, deadline, checkedUntil: undefined };
+		}
+		const known = knownValueFinder(key);
+		const rank = strictness(policy);
+		const allowed = allowedBy(policy);
+		const merged = texts.map((text, i) => {
+			const found = dropAllowedModelSpans(text, spans[i]!, allowed);
+			const again = known(text).filter((s) => s.end <= checkedUntil[i]! && !allowed(text.slice(s.start, s.end)));
+			return mergeSpans(dropPlaceholderSpans(text, [...found, ...again], key), rank);
+		});
+		const result: ClassifyResult = { ok: true, spans: merged, tiers: timings, ms, ...(cleared && { cleared }) };
+		const complete = checkedUntil.every((c, i) => c === texts[i]!.length);
+		return {
+			result,
+			decision: decide(result, policy),
+			fields,
+			chars,
+			deadline,
+			checkedUntil: complete ? undefined : checkedUntil
+		};
 	}
 
 	/**
@@ -296,7 +356,41 @@ export function createApp(deps: AppDeps): Hono {
 			'PostToolUse',
 			async (input, policy) => {
 				const texts = toolOutputTexts(input.tool_name, input.tool_response);
-				const checked = await check(texts, policy, 'PostToolUse', placeholders.session(input.session_id), true);
+				const key = placeholders.session(input.session_id);
+				if (texts.reduce((n, t) => n + t.length, 0) > PARTIAL_MIN_CHARS) {
+					const checked = await checkInParts(texts, policy, key);
+					if (checked.checkedUntil) {
+						// Part checked, the rest not: clean what was checked, then the fail mode decides the rest.
+						const until = checked.checkedUntil;
+						const heads = texts.map((t, i) => t.slice(0, until[i]));
+						const cleaned =
+							(await rewrite(heads, checked.decision, input.session_id, policy, checked.deadline)) ?? heads;
+						const out = texts.map((t, i) => {
+							const tail = t.slice(until[i]);
+							if (!tail) return cleaned[i]!;
+							if (policy.failMode === 'allow') return cleaned[i]! + tail;
+							return cleaned[i]! + messages.toolOutputPartlyUnchecked(tail.split('\n').length);
+						});
+						return {
+							...checked,
+							decision: failDecision(policy, 'timeout', checked.decision.hits),
+							toolName: input.tool_name,
+							output: {
+								hookSpecificOutput: {
+									hookEventName: 'PostToolUse',
+									updatedToolOutput: mapToolOutputText(input.tool_name, input.tool_response, (_t, i) => out[i]!)
+								}
+							}
+						};
+					}
+					const rewritten = await rewrite(texts, checked.decision, input.session_id, policy, checked.deadline);
+					return {
+						...checked,
+						toolName: input.tool_name,
+						output: toolOutputResponse(checked.decision, input.tool_name, input.tool_response, rewritten)
+					};
+				}
+				const checked = await check(texts, policy, 'PostToolUse', key, true);
 				const rewritten = await rewrite(texts, checked.decision, input.session_id, policy, checked.deadline);
 				return {
 					...checked,
@@ -315,6 +409,36 @@ export function createApp(deps: AppDeps): Hono {
 	);
 
 	return app;
+}
+
+/**
+ * Tool output longer than this (characters, all text fields together) is checked in parts, so a
+ * check that runs out of time still returns the part it checked (#110).
+ */
+export const PARTIAL_MIN_CHARS = 16_000;
+/** Most characters per part; parts end at a line break where one is near. */
+const PART_CHARS = 8_000;
+/**
+ * Text before each part checked along with it, so something spread over several lines across a
+ * boundary is seen whole. A 4096-bit private key block is about 3,300 characters.
+ */
+const OVERLAP_CHARS = 4_000;
+/** Time kept back from the parts for rewriting (tier 2's vague hints for figures). */
+const REWRITE_RESERVE_MS = 1_000;
+
+/** `[start, end)` parts of `text`, at most `max` characters, ending after a line break where possible. */
+export function lineParts(text: string, max: number): Array<[number, number]> {
+	const out: Array<[number, number]> = [];
+	for (let a = 0; a < text.length;) {
+		let b = Math.min(text.length, a + max);
+		if (b < text.length) {
+			const nl = text.lastIndexOf('\n', b - 1);
+			if (nl >= a) b = nl + 1;
+		}
+		out.push([a, b]);
+		a = b;
+	}
+	return out;
 }
 
 function outcomeOf(decision: Decision): Outcome {
