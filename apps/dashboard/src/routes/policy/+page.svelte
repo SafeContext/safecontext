@@ -9,7 +9,7 @@
 	import DataTypeDialog, { type Target } from '#lib/components/policy/DataTypeDialog.svelte';
 	import FailModeSection from '#lib/components/policy/FailModeSection.svelte';
 	import SwapBackEditor from '#lib/components/policy/SwapBackEditor.svelte';
-	import AlwaysShareEditor from '#lib/components/policy/AlwaysShareEditor.svelte';
+	import NameListEditor from '#lib/components/policy/NameListEditor.svelte';
 	import { send } from '#lib/components/policy/send.ts';
 	import type { PageProps } from './$types';
 
@@ -151,7 +151,39 @@
 	title="Always share"
 	description="Names Safe Context should never hide, such as your own products and the vendors you use."
 >
-	<AlwaysShareEditor terms={data.draft.allowTerms} canEdit={data.canEdit} onmessage={say} />
+	<NameListEditor
+		names={data.draft.allowTerms}
+		action="allow"
+		label="Name to always share"
+		placeholder="Your product, a vendor…"
+		testid="always-share"
+		canEdit={data.canEdit}
+		onmessage={say}
+	/>
+	<p class="text-xs text-muted">
+		Whole names, any capitalisation. Keys, passwords and personal details are still hidden, and so
+		is anything on a word list above.
+	</p>
+</Card>
+
+<Card
+	title="Skills that may run commands"
+	description="A skill can run commands before Claude reads it, and their output reaches Claude unchecked. Skills like that are blocked unless you list them here."
+>
+	<NameListEditor
+		names={data.draft.shellSkills}
+		action="shellSkills"
+		label="Skill name"
+		placeholder="deploy-brief, my-plugin:review…"
+		testid="shell-skills"
+		chipClass="border-hidden-soft-edge bg-hidden-soft font-mono"
+		canEdit={data.canEdit}
+		onmessage={say}
+	/>
+	<p class="text-xs text-muted">
+		The name as typed after the slash. The skill's own text is still checked; only the commands it
+		runs aren't.
+	</p>
 </Card>
 
 <div class="grid gap-4 lg:grid-cols-2">

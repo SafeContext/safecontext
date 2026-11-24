@@ -109,6 +109,14 @@ export type SwapBack = z.infer<typeof SwapBack>;
 export const AllowTerms = z.array(z.string().trim().min(1).max(200)).max(5_000);
 export type AllowTerms = z.infer<typeof AllowTerms>;
 
+/**
+ * Skills allowed to inject shell output (#42). A skill's `` !`cmd` `` lines run before Claude
+ * sees the skill, and their output reaches Claude unchecked, so such skills are blocked unless
+ * IT lists them here. Matched by command name (`deploy-brief`, `my-plugin:review`), ignoring case.
+ */
+export const ShellSkills = z.array(z.string().trim().min(1).max(200)).max(500);
+export type ShellSkills = z.infer<typeof ShellSkills>;
+
 /** What the agent does when it can't finish checking (error or time budget). See SPEC.md §2a. */
 export const FailMode = z.enum(['block', 'allow']);
 export type FailMode = z.infer<typeof FailMode>;
@@ -125,7 +133,8 @@ export const Policy = z
 		lists: z.array(TermList).default([]),
 		failMode: FailMode.default('block'),
 		swapBack: SwapBack.default(() => ({ tools: [...LOCAL_SWAP_BACK_TOOLS] })),
-		allow: AllowTerms.default([])
+		allow: AllowTerms.default([]),
+		shellSkills: ShellSkills.default([])
 	})
 	.superRefine((policy, ctx) => {
 		const ids = new Set<string>();

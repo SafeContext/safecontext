@@ -32,7 +32,7 @@ export function pluginOnPort(dest: string, port: number): string {
 	const from = `http://${AGENT_HOST}:${AGENT_DEFAULT_PORT}/`;
 	const text = readFileSync(file, 'utf8');
 	const count = text.split(from).length - 1;
-	if (count !== 3) throw new Error(`expected 3 hook URLs starting ${from} in hooks.json, found ${count}`);
+	if (count !== 4) throw new Error(`expected 4 hook URLs starting ${from} in hooks.json, found ${count}`);
 	writeFileSync(file, text.replaceAll(from, `http://${AGENT_HOST}:${port}/`));
 	return dest;
 }

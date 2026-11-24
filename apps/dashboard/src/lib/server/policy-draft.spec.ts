@@ -15,6 +15,7 @@ import {
 	publish,
 	saveDataType,
 	setAllowTerms,
+	setShellSkills,
 	setFailMode,
 	setSwapBackTools
 } from '#lib/server/policy-draft.ts';
@@ -236,6 +237,13 @@ describe('policy draft', () => {
 		expect((await loadDraft(orgId)).allowTerms).toEqual(['Flow', 'Stripe']);
 		await expect(setAllowTerms(orgId, ['x'.repeat(201)])).rejects.toThrow('200 characters');
 		expect((await loadDraft(orgId)).allowTerms).toEqual(['Flow', 'Stripe']);
+	});
+
+	it('keeps the skills allowed to run commands, by name (#42)', async () => {
+		await setShellSkills(orgId, ['/deploy-brief', 'Deploy-Brief', ' acme:review ', '']);
+		expect((await loadDraft(orgId)).shellSkills).toEqual(['deploy-brief', 'acme:review']);
+		await expect(setShellSkills(orgId, ['rm -rf /'])).rejects.toThrow('skill name');
+		await setShellSkills(orgId, []);
 	});
 
 	it('publishes the draft as the next version, which the agent API serves', async () => {

@@ -17,7 +17,8 @@ import {
 	saveDataType,
 	setFailMode,
 	setSwapBackTools,
-	setAllowTerms
+	setAllowTerms,
+	setShellSkills
 } from '#lib/server/policy-draft.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -122,8 +123,15 @@ export const actions: Actions = {
 	allow: async ({ request }) => {
 		const { organizationId } = editor();
 		const form = await request.formData();
-		const terms = form.getAll('term').filter((t): t is string => typeof t === 'string');
+		const terms = form.getAll('name').filter((t): t is string => typeof t === 'string');
 		return edit(() => setAllowTerms(organizationId, terms));
+	},
+
+	shellSkills: async ({ request }) => {
+		const { organizationId } = editor();
+		const form = await request.formData();
+		const names = form.getAll('name').filter((t): t is string => typeof t === 'string');
+		return edit(() => setShellSkills(organizationId, names));
 	},
 
 	failMode: async ({ request }) => {
