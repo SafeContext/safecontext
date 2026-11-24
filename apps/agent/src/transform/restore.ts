@@ -191,8 +191,7 @@ export function inSlug(text: string, start: number, end: number): boolean {
 	const word = text
 		.slice(a, b)
 		.replace(/^[("'`<[]+/, '')
-		.replace(/[)"'`>\],;:!?]+$/, '')
-		.replace(/\.$/, '');
+		.replace(/[)"'`>\],;:!?.]+$/, '');
 	return /\.[A-Za-z][A-Za-z0-9]{0,5}$/.test(word) || /^(?:\/|\.{1,2}\/|~\/)/.test(word);
 }
 
