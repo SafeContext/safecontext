@@ -287,16 +287,35 @@ describe('spellings (#108)', () => {
 		expect(preferredSpellings(['northwind'], true, () => 'Northwind')).toEqual(['northwind']);
 	});
 
-	it('spots placeholders inside file names and slugs', () => {
+	it('spots placeholders inside file names and paths, not in prose (#108)', () => {
 		const at = (t: string) => {
 			const i = t.indexOf('⟪');
 			return inSlug(t, i, t.indexOf('⟫') + 1);
 		};
 		expect(at('inbox/⟪x_1⟫-email.md')).toBe(true);
 		expect(at('⟪x_1⟫.md')).toBe(true);
-		expect(at('renewal-⟪x_1⟫')).toBe(true);
+		expect(at('see /deals/⟪x_1⟫ for more')).toBe(true);
+		expect(at('open "notes/⟪x_1⟫-call.md".')).toBe(true);
 		expect(at('Call ⟪x_1⟫ today.')).toBe(false);
 		expect(at('<h2>⟪x_1⟫: renewal')).toBe(false);
+		expect(at('⟪x_1⟫-based pricing')).toBe(false);
+		expect(at('the ⟪x_1⟫/⟪y_1⟫ merger')).toBe(false);
+		expect(at('the ⟪x_1⟫-Contoso deal')).toBe(false);
+		expect(at('That was the end.⟪x_1⟫ said yes')).toBe(false);
+	});
+
+	it('keeps the capitalised spelling in prose next to a hyphen or slash', () => {
+		const key = createPlaceholderStore().session('s');
+		key.idFor('customer-names', 'northwind');
+		key.idFor('customer-names', 'Northwind');
+		const r = restoreToolInput(
+			'Write',
+			{ file_path: `${project}/a.md`, content: '⟪customer_name_1⟫-based pricing for ⟪customer_name_1⟫/partners' },
+			key,
+			project,
+			LOCAL
+		);
+		expect(r).toMatchObject({ kind: 'restored', input: { content: 'Northwind-based pricing for Northwind/partners' } });
 	});
 });
 

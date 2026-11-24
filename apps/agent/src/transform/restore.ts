@@ -177,14 +177,23 @@ export function restoreToolInput(
 }
 
 /**
- * Is the placeholder at `[start, end)` part of a file name, path or slug ("⟪x⟫-email.md",
- * "deals/⟪x⟫")? Then a lowercase spelling fits better than a capitalised one.
+ * Is the placeholder at `[start, end)` part of a file name or path, such as
+ * "inbox/⟪x⟫-email.md" or "/deals/⟪x⟫"? Then a lowercase spelling fits better than a capitalised
+ * one. The word around it (up to the nearest spaces, quotes and brackets trimmed) must end in a
+ * file extension or start like a path, so prose such as "⟪x⟫-based pricing" or "the ⟪x⟫/⟪y⟫
+ * merger" isn't mistaken for one.
  */
 export function inSlug(text: string, start: number, end: number): boolean {
-	return (
-		/[-_/.]$/.test(text.slice(Math.max(0, start - 1), start)) ||
-		/^(?:[-_/]|\.[A-Za-z0-9])/.test(text.slice(end, end + 2))
-	);
+	let a = start;
+	while (a > 0 && !/\s/.test(text[a - 1]!)) a--;
+	let b = end;
+	while (b < text.length && !/\s/.test(text[b]!)) b++;
+	const word = text
+		.slice(a, b)
+		.replace(/^[("'`<[]+/, '')
+		.replace(/[)"'`>\],;:!?]+$/, '')
+		.replace(/\.$/, '');
+	return /\.[A-Za-z][A-Za-z0-9]{0,5}$/.test(word) || /^(?:\/|\.{1,2}\/|~\/)/.test(word);
 }
 
 /**
