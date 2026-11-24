@@ -5,6 +5,7 @@
 // reconnects and reloads the page data, so nothing sent while the connection was down is missed.
 import { DATABASE_URL } from '$app/env/private';
 import pg from 'pg';
+import { PG_SESSION_OPTIONS } from './pg-session.ts';
 import { EVENTS_CHANNEL, EventNotification } from '#lib/server/live-events.ts';
 
 export type Subscriber = {
@@ -17,7 +18,7 @@ const subscribers = new Set<Subscriber>();
 let connection: Promise<pg.Client> | null = null;
 
 function connect(): Promise<pg.Client> {
-	const client = new pg.Client({ connectionString: DATABASE_URL });
+	const client = new pg.Client({ connectionString: DATABASE_URL, options: PG_SESSION_OPTIONS });
 	let lost = false;
 	const drop = () => {
 		if (lost) return;
