@@ -6,6 +6,8 @@
  *   off     no Safe Context
  *   before  the agent and plugin from just before #83 (plain stand-ins, no swap-back)
  *   now     the agent and plugin from this checkout
+ *   now-t0  the same, tier 0 only (rules and word lists): what tiers 1 and 2 add
+ *   now-t01 the same, tiers 0 and 1: what tier 2 adds
  *
  * Both agents run tiers 0, 1 and 2 (the product as shipped), on their own ports, with the
  * default policy and no dashboard. Each run is graded automatically:
@@ -63,7 +65,8 @@ const outFile = flag('--out', join(repoDir, 'ml/results/usefulness.md'))!;
 const regradeDir = flag('--regrade');
 const keepDir = regradeDir ?? mkdtempSync(join(tmpdir(), 'sc-usefulness-'));
 
-type Setup = 'off' | 'before' | 'now';
+type Setup = 'off' | 'before' | 'now' | 'now-t0' | 'now-t01';
+const NOW_SETUPS = ['now', 'now-t0', 'now-t01'] as const;
 type Persona = 'sales' | 'dev' | 'pm';
 const FOLDERS: Record<Persona, string> = {
 	sales: 'Jeremy-Clarkson-Sales',
@@ -227,11 +230,13 @@ interface Agent {
 	stop(): Promise<void>;
 }
 
-function startAgent(name: string, dir: string, pluginSrc: string): Promise<Agent> {
+function startAgent(name: string, dir: string, pluginSrc: string, tiers: '0' | '01' | '012' = '012'): Promise<Agent> {
 	const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('SC_')));
-	for (const [k, v] of Object.entries(process.env)) if (/^SC_TIER[12]_/.test(k)) env[k] = v;
+	const keep = tiers === '012' ? /^SC_TIER[12]_/ : tiers === '01' ? /^SC_TIER1_/ : /^$/;
+	for (const [k, v] of Object.entries(process.env)) if (keep.test(k)) env[k] = v;
 	env.SC_AGENT_PORT = '0';
 	env.SC_STATE_DIR = mkdtempSync(join(tmpdir(), `sc-usefulness-state-${name}-`));
+	env.SC_SAVE_KEYS = 'off';
 	const child = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
 		cwd: join(dir, 'apps/agent'),
 		env,
@@ -582,7 +587,7 @@ function report(results: RunResult[]): string {
 if (regradeDir) {
 	const results: RunResult[] = [];
 	for (const name of readdirSync(regradeDir)) {
-		const m = /^([A-Z]\d)-(off|before|now)-(\d+)$/.exec(name);
+		const m = /^([A-Z]\d)-(off|before|now|now-t0|now-t01)-(\d+)$/.exec(name);
 		const task = m && TASKS.find((t) => t.id === m[1]);
 		if (!m || !task || !existsSync(join(regradeDir, name, 'stream.jsonl'))) continue;
 		const events = readFileSync(join(regradeDir, name, 'stream.jsonl'), 'utf8')
@@ -608,7 +613,12 @@ if (regradeDir) {
 
 const agents: Partial<Record<Setup, Agent>> = {};
 try {
-	if (setups.includes('now')) agents.now = await startAgent('now', repoDir, join(repoDir, 'plugin'));
+	for (const s of NOW_SETUPS) {
+		if (setups.includes(s)) {
+			const tiers = s === 'now-t0' ? '0' : s === 'now-t01' ? '01' : '012';
+			agents[s] = await startAgent(s, repoDir, join(repoDir, 'plugin'), tiers);
+		}
+	}
 	if (setups.includes('before')) {
 		if (!beforeRepo) throw new Error('--before <checkout from before #83> is needed for the before setup');
 		agents.before = await startAgent('before', beforeRepo, join(beforeRepo, 'plugin'));
