@@ -242,8 +242,11 @@ model PolicyVersion {
 model Device {
   id                String    @id @default(uuid(7)) @db.Uuid
   organizationId    String    @db.Uuid
-  /// The agent's anonymised device id (`AgentEvent.deviceId`).
+  /// The device's anonymised id (`AgentEvent.deviceId`). The dashboard picks it when the device
+  /// registers (#51), so an enrollment key can't claim an existing device.
   deviceId          String    @db.VarChar(64)
+  /// Optional name IT gave the device (`SC_DEVICE_LABEL`, e.g. an asset tag). Null = none.
+  label             String?   @db.VarChar(64)
   firstSeenAt       DateTime  @default(now()) @db.Timestamptz(3)
   lastSeenAt        DateTime  @default(now()) @db.Timestamptz(3)
   /// Policy version from the device's latest event; shows whether it has picked up a publish.
@@ -252,6 +255,8 @@ model Device {
   /// (e.g. seeded demo devices) or revoked. Registering again replaces it.
   tokenHash         String?   @unique @db.Char(64)
   tokenIssuedAt     DateTime? @db.Timestamptz(3)
+  /// When an admin revoked the device (#51). Its token is cleared at the same time.
+  revokedAt         DateTime? @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events       Event[]

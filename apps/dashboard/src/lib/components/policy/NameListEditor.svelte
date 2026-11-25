@@ -3,7 +3,7 @@
 	// may run commands" (#42). Each change is saved to the draft straight away.
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
-	import { send } from './send.ts';
+	import { send } from '#lib/send.ts';
 
 	let {
 		names,

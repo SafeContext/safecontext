@@ -14,7 +14,7 @@
 	import ResultKey from '#lib/components/ui/ResultKey.svelte';
 	import { TIER_TONE, TONE_CLASSES } from '#lib/tones.ts';
 	import type { DataTypeView, Target } from './DataTypeDialog.svelte';
-	import { send } from './send.ts';
+	import { send } from '#lib/send.ts';
 
 	let {
 		dataTypes,

@@ -26,23 +26,25 @@ beforeEach(async () => {
 afterEach(() => dash.close());
 
 describe('registerDevice', () => {
-	it('returns a token with the enrollment key', async () => {
-		const result = await client.registerDevice(ENROLLMENT_KEY, DEVICE);
-		expect(result).toEqual({ ok: true, token: expect.stringMatching(/^scd_/) });
+	it('returns the id the dashboard picked and a token, sending only the label (#51)', async () => {
+		const result = await client.registerDevice(ENROLLMENT_KEY, 'Asset 1042');
+		expect(result).toEqual({ ok: true, deviceId: 'dev-fake1', token: expect.stringMatching(/^scd_/) });
 		expect(dash.requests[0]).toMatchObject({ method: 'POST', path: '/api/devices', auth: ENROLLMENT_KEY });
+		await client.registerDevice(ENROLLMENT_KEY);
+		expect(dash.labels).toEqual(['Asset 1042', undefined]);
 	});
 
 	it('reports a wrong enrollment key', async () => {
-		expect(await client.registerDevice('sce_wrong', DEVICE)).toEqual({
+		expect(await client.registerDevice('sce_wrong')).toEqual({
 			ok: false,
 			reason: 'unauthorized',
 			status: 401
 		});
 	});
 
-	it('rejects a response for a different device', async () => {
-		dash.override.set('/api/devices', [{ status: 201, body: { deviceId: 'dev-other', token: 'scd_x' } }]);
-		expect(await client.registerDevice(ENROLLMENT_KEY, DEVICE)).toMatchObject({ ok: false, reason: 'bad_response' });
+	it('rejects a response without a usable device id', async () => {
+		dash.override.set('/api/devices', [{ status: 201, body: { deviceId: 'Not An Id', token: 'scd_x' } }]);
+		expect(await client.registerDevice(ENROLLMENT_KEY)).toMatchObject({ ok: false, reason: 'bad_response' });
 	});
 });
 

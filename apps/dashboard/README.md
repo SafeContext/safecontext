@@ -21,7 +21,9 @@ and `policy/` (design rules: `AGENTS.md` in this folder, "Design").
   `PolicyVersion` (`src/lib/server/policy-draft.ts`). Board rules shared with the page are in
   `src/lib/policy-board.ts`. Only members with `role = admin` can change anything; `viewer`s
   see the page read-only.
-- **Deploy** and **Settings**: placeholders (#25).
+- **Deploy** (#25): the managed settings that turn Safe Context on in Claude Code.
+- **Settings** (#51): the organisation's devices (last seen, policy version, Revoke) and its
+  enrollment key (make a new one; shown once). `src/lib/server/devices.ts`. Admins only for changes.
 - **Agent API** (`src/routes/api/`, #21): `POST /api/devices`, `GET /api/policy`,
   `POST /api/events`. Authenticated by device tokens, not admin sign-in. Contracts in `packages/policy/src/dashboard-api.ts`; see SPEC.md §3.
 - **Live feed stream** (`/live-feed`): server-sent events fed by Postgres `NOTIFY` on
