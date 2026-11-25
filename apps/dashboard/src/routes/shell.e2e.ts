@@ -16,15 +16,27 @@ for (const [name, viewport] of Object.entries(widths)) {
 			await expect(page.getByTestId('org-name')).toContainText('Macrohard');
 			await expect(page.getByRole('heading', { level: 1 })).toHaveText('Policy');
 
-			const overflow = await page.evaluate(
-				() => document.documentElement.scrollWidth - document.documentElement.clientWidth
-			);
-			expect(overflow).toBeLessThanOrEqual(0);
+			const overflow = () =>
+				page.evaluate(
+					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+				);
+			expect(await overflow()).toBeLessThanOrEqual(0);
 
 			await testInfo.attach(`${name}.png`, {
 				body: await page.screenshot(),
 				contentType: 'image/png'
 			});
+
+			// Every other page too: wide content (tables, code) must scroll inside its card.
+			for (const [path, title] of [
+				['/', 'Overview'],
+				['/deploy', 'Deploy to Claude Code'],
+				['/settings', 'Settings']
+			] as const) {
+				await page.goto(path);
+				await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+				expect(await overflow(), `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+			}
 		});
 
 		if (viewport.width < 768) {

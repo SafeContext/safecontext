@@ -3,7 +3,7 @@
 	// the agent runs out of its time budget, a tier errors, or a request or reply is invalid. An
 	// agent that isn't running is a different case: the plugin always blocks then.
 	import { DEFAULT_CHECK_BUDGET_MS, type FailMode } from '@safecontext/policy';
-	import { send } from './send.ts';
+	import { send } from '#lib/send.ts';
 
 	let {
 		value,

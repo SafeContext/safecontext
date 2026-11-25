@@ -20,8 +20,7 @@ export type SyncLogMessage =
 	| 'policy_sync_failed'
 	| 'events_uploaded'
 	| 'events_upload_failed'
-	| 'events_dropped'
-	| 'state_dir_failed';
+	| 'events_dropped';
 
 /** Why a sync step failed or events were dropped. A fixed set of codes, not free text. */
 export type SyncReason =
@@ -42,7 +41,6 @@ export type SyncReason =
 	| 'invalid_event'
 	| 'queue_full'
 	| 'shutdown'
-	| 'state_dir'
 	| 'keychain'
 	| 'missing'
 	| 'unreadable'

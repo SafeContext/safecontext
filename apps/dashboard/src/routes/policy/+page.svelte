@@ -10,7 +10,7 @@
 	import FailModeSection from '#lib/components/policy/FailModeSection.svelte';
 	import SwapBackEditor from '#lib/components/policy/SwapBackEditor.svelte';
 	import NameListEditor from '#lib/components/policy/NameListEditor.svelte';
-	import { send } from '#lib/components/policy/send.ts';
+	import { send } from '#lib/send.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

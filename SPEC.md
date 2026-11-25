@@ -160,10 +160,13 @@ Every request and response on both APIs is checked against these schemas.
 - **Dashboard API for the agent** (`dashboard-api.ts`, built in #21, used by the agent's sync in #22).
   JSON bodies; errors are `ApiError` with a code (`unauthorized`, `device_mismatch`, `no_policy`,
   `bad_request`, `invalid_body`, `rate_limited`) and never echo request values back.
-  - `POST /api/devices`: auth = the organisation's **enrollment key** (a placeholder, #51). Body
-    `{ deviceId }`; returns a device token. Registering the same id again issues a new token. The
-    dashboard stores only a SHA-256 hash of keys and tokens; the agent keeps its token in the
-    macOS Keychain.
+  - `POST /api/devices`: auth = the organisation's **enrollment key**, deployed to each device by
+    the company's device management tool (#51). Body `{ label? }` (an optional name IT gives the
+    device, such as an asset tag); returns `{ deviceId, token }`. The dashboard picks the device
+    id, so every registration is a new device and a key holder can never take over one that has
+    already joined. The dashboard stores only a SHA-256 hash of keys and tokens; the agent keeps
+    its id and token together in one macOS Keychain item. Admins rotate the key and revoke devices
+    on the Settings page; a revoked device's token stops working at once.
   - `GET /api/policy`: auth = device token. The latest published policy with an `ETag`;
     `If-None-Match` gives `304`. No policy published yet: `404 no_policy` (the agent keeps its
     cached or default policy).
@@ -434,7 +437,10 @@ Each item says where it was decided, or which issue holds the open question.
     data type (`stopsPrompts`), allow by default. See §4.
     ~~Mapping stand-ins back in tool input~~: **decided** in #83, labelled placeholders with swap-back
     into local file tools only. See §4.
-11. **How devices join an organisation** (enrollment key is a placeholder). **Open:** #51.
+11. ~~How devices join an organisation~~: **decided** on #51 (Joe, 23 Nov 2026): an organisation
+    enrollment key deployed by device management, hardened (the dashboard picks device ids;
+    admins rotate the key and revoke devices). Signing devices in through the company's identity
+    provider is the cleaner end state, tracked in #109.
 12. **Hook coverage gaps.** **Open:** `@file` mentions #38, CLAUDE.md and memory files #39, images
     and PDFs #40, slash commands and skills #42, failed tool calls #44, background subagent
     reports #61.

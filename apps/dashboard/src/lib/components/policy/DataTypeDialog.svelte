@@ -16,7 +16,7 @@
 		parseTerms,
 		shownAction
 	} from '#lib/policy-board.ts';
-	import { send } from './send.ts';
+	import { send } from '#lib/send.ts';
 
 	export type DataTypeView = {
 		key: string;
