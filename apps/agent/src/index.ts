@@ -5,6 +5,7 @@ import { tier1FromConfig } from './classifier/tier1/tier1.ts';
 import { tier2FromConfig } from './classifier/tier2/tier2.ts';
 import { existsSync } from 'node:fs';
 import { readConfig } from './config.ts';
+import { loadSettings } from './install/settings.ts';
 import { createExtractor } from './extract.ts';
 import { jsonLogger } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
@@ -14,8 +15,11 @@ import { openVault } from './swaps/index.ts';
 import { createSwapLog } from './swaps/swap-log.ts';
 import { createPlaceholderStore } from './transform/placeholders.ts';
 
-const config = readConfig();
+// Installed agents (#26) read IT's MDM profile first; developers use SC_* variables.
+const settings = loadSettings();
+const config = readConfig(settings.env);
 const logger = jsonLogger();
+logger.log('info', 'settings_loaded', { settingsSource: settings.source });
 const localPolicy = filePolicySource(config.policyFile, logger);
 // With SC_DASHBOARD_URL set: pull the policy (cached on disk, so it works offline) and upload events.
 const sync = config.sync && startSync(config.sync, { logger, fallback: localPolicy });

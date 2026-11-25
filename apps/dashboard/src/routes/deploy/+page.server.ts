@@ -4,7 +4,7 @@ import { currentOrganization } from '#lib/server/current-org.ts';
 import type { PageServerLoad } from './$types';
 
 /** The managed settings for the published policy's fail mode (#25). */
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url }) => {
 	const org = currentOrganization();
 	const policy = await latestPolicy(org.id);
 	if (!policy) return { published: null };
@@ -13,6 +13,9 @@ export const load: PageServerLoad = async () => {
 	return {
 		published: { version: policy.version, failMode: policy.failMode },
 		settings: json(false),
-		settingsWithRefresh: json(true)
+		settingsWithRefresh: json(true),
+		// For the agent's MDM profile (#26): this dashboard's address, as the browser reached it.
+		organizationName: org.name,
+		dashboardUrl: url.origin
 	};
 };

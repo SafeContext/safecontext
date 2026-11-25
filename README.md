@@ -116,7 +116,23 @@ Also working:
 
 ---
 
-## Setup (macOS, Apple Silicon)
+## Install on a Mac (for IT and users)
+
+The agent ships as a `.pkg` for device management tools and as a Homebrew formula
+(`installer/`, [#26](https://github.com/SafeContext/safecontext/issues/26)). Both include Node.js,
+the tier 1 model and the image/PDF helper; Ollama and its model are optional (tier 2 on the Mac).
+
+1. Push `SafeContext-<version>.pkg` to every Mac (or `brew install safecontext` and
+   `brew services start safecontext`). It starts the agent for each person at login.
+2. On the dashboard's Deploy page: copy the managed settings for Claude Code, and download the
+   configuration profile (dashboard address, enrollment key, optional model server). Push both.
+3. On any Mac, `safecontext doctor` checks that everything is in place and says how to fix what isn't.
+
+Remove it with `sudo "/Library/Application Support/SafeContext/uninstall.sh"` (add `--purge` to
+also delete each person's saved keys, swap record and logs), or `brew uninstall safecontext`.
+Build the installers with `pnpm --filter @safecontext/installer build` (see `installer/README.md`).
+
+## Setup for development (macOS, Apple Silicon)
 
 Requires Node 24 (nvm), pnpm 12, uv, PostgreSQL 18, and Claude Code **2.1.299 or later** (the
 plugin's `onFailure: "block"` needs 2.1.295; turning off `@file` mentions needs 2.1.299).

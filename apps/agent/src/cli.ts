@@ -1,13 +1,20 @@
 /**
- * The `safecontext` command on this device. For now one subcommand:
+ * The `safecontext` command on this device (installed by #26; in the repo:
+ * `pnpm --filter @safecontext/agent exec tsx src/cli.ts <command>`).
  *
- *   safecontext swaps [--session <id>] [--since 2h] [--limit 50] [--json]
+ *   safecontext doctor     Is everything in place? Says how to fix what isn't.
+ *   safecontext swaps ...  The local swap record (#85): when Safe Context hid something from Claude
+ *                          or put a real value back for a tool, with the placeholder, session, tool
+ *                          and file. Never real values: the record doesn't hold them.
+ *   safecontext version
  *
- * shows the local swap record (#85): when Safe Context hid something from Claude or put a real
- * value back for a tool, with the placeholder, session, tool and file. It never shows real values:
- * the record doesn't hold them. Until the installer (#26) puts `safecontext` on the PATH, run
- * `pnpm --filter @safecontext/agent swaps -- <options>`.
+ * `safecontext run` (the agent itself) is handled by the installed wrapper script.
  */
+import { execFile } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { formatDoctor, runDoctor } from './install/doctor.ts';
+import { loadSettings } from './install/settings.ts';
 import { defaultStateDir } from './sync/config.ts';
 import { readSwapLog, type SwapRecord } from './swaps/swap-log.ts';
 
@@ -19,10 +26,13 @@ export interface SwapsOptions {
 	json: boolean;
 }
 
-const USAGE = `Usage: safecontext swaps [--session <id>] [--since <30m|2h|7d>] [--limit <n>] [--json]
+const USAGE = `Usage: safecontext <command>
 
-Shows what Safe Context hid from Claude, and where it put real values back, on this device.
-It lists placeholders, never the real values.`;
+  doctor     Check that Safe Context is set up and working on this Mac
+  swaps      Show what Safe Context hid from Claude, and where it put real values back
+             [--session <id>] [--since <30m|2h|7d>] [--limit <n>] [--json]
+             Lists placeholders, never the real values.
+  version    Show the installed version`;
 
 /** `30m`, `2h`, `7d` → ms. */
 export function parseDuration(text: string): number | undefined {
@@ -100,8 +110,41 @@ export function runCli(args: string[], stateDir: string, out: (text: string) => 
 	return 0;
 }
 
+/** `safecontext doctor`: exit 1 when something must be fixed. */
+export async function doctorCommand(out: (text: string) => void): Promise<number> {
+	const settings = loadSettings();
+	const checks = await runDoctor({
+		env: settings.env,
+		source: settings.source,
+		fetch,
+		run: (file, args) =>
+			new Promise((resolve) =>
+				execFile(file, args, { timeout: 5_000 }, (err, stdout) => resolve(err ? undefined : String(stdout)))
+			),
+		exists: existsSync,
+		readText: (path) => {
+			try {
+				return readFileSync(path, 'utf8');
+			} catch {
+				return undefined;
+			}
+		},
+		uid: process.getuid?.() ?? 0,
+		home: homedir()
+	});
+	out(formatDoctor(checks));
+	return checks.some((c) => c.status === 'fail') ? 1 : 0;
+}
+
 if (import.meta.main) {
-	process.exitCode = runCli(process.argv.slice(2), process.env['SC_STATE_DIR']?.trim() || defaultStateDir(), (text) =>
-		console.log(text)
-	);
+	const [command] = process.argv.slice(2);
+	const out = (text: string) => console.log(text);
+	if (command === 'doctor') {
+		process.exitCode = await doctorCommand(out);
+	} else if (command === 'version') {
+		out(process.env['SC_VERSION'] ?? 'development');
+	} else {
+		const stateDir = loadSettings().env['SC_STATE_DIR']?.trim() || defaultStateDir();
+		process.exitCode = runCli(process.argv.slice(2), stateDir, out);
+	}
 }

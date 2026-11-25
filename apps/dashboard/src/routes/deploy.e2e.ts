@@ -20,3 +20,31 @@ test('shows managed settings with the agent hooks, from the published policy (#2
 		"Don't also turn on the Safe Context plugin"
 	);
 });
+
+test('downloads the MDM profile for the agent, built in the browser (#26)', async ({ page }) => {
+	await page.goto('/deploy');
+	const button = page.getByTestId('download-profile');
+	await expect(button).toBeDisabled();
+	const key = `sce_${'a'.repeat(43)}`;
+	await page.getByTestId('profile-key').fill(key);
+	await page.getByLabel('Device name (optional)').fill('$SERIALNUMBER');
+	await page.getByLabel('Model server address (optional)').fill('https://models.example.com/v1');
+	await expect(button).toBeDisabled(); // a model server needs its key
+	await page.getByLabel('Model server key').fill('model-key');
+	const posts: string[] = [];
+	page.on('request', (r) => r.method() === 'POST' && posts.push(r.url()));
+	const [download] = await Promise.all([page.waitForEvent('download'), button.click()]);
+	expect(download.suggestedFilename()).toBe('SafeContext.mobileconfig');
+	const xml = await (
+		await download.createReadStream()
+	)
+		.toArray()
+		.then((c) => Buffer.concat(c).toString('utf8'));
+	expect(xml).toContain(
+		`<key>DashboardURL</key>\n\t\t\t<string>${new URL(page.url()).origin}</string>`
+	);
+	expect(xml).toContain(`<string>${key}</string>`);
+	expect(xml).toContain('<string>$SERIALNUMBER</string>');
+	expect(xml).toContain('<key>ModelServerKey</key>');
+	expect(posts).toEqual([]); // the keys never went to the dashboard
+});

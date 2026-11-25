@@ -11,6 +11,8 @@ export type LogLevel = 'info' | 'warn' | 'error';
 
 export type LogMessage =
 	| 'listening'
+	/** Where the settings came from at start (#26): IT's MDM profile, the local file, or neither. */
+	| 'settings_loaded'
 	| 'check'
 	| 'invalid_input'
 	| 'invalid_output'
@@ -91,6 +93,7 @@ export interface LogFields {
 	classifyMs?: number;
 	totalMs?: number;
 	port?: number;
+	settingsSource?: 'profile' | 'local' | 'none';
 	/** Old saved keys deleted at start. */
 	deleted?: number;
 }

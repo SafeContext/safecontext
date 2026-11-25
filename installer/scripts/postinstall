@@ -1,0 +1,18 @@
+#!/bin/sh
+# After installing (#26): put `safecontext` on the PATH and start the agent for whoever is logged
+# in. Everyone else gets it at their next login (the LaunchAgent runs for every user). Runs as root.
+set -e
+app="/Library/Application Support/SafeContext"
+plist=/Library/LaunchAgents/com.safecontext.agent.plist
+
+chown -R root:wheel "$app" "$plist"
+chmod 644 "$plist"
+mkdir -p /usr/local/bin
+ln -sf "$app/bin/safecontext" /usr/local/bin/safecontext
+
+user=$(stat -f %Su /dev/console)
+if [ -n "$user" ] && [ "$user" != root ]; then
+	uid=$(id -u "$user")
+	launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null || launchctl kickstart -k "gui/$uid/com.safecontext.agent" || true
+fi
+exit 0
