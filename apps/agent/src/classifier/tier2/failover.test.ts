@@ -79,6 +79,23 @@ describe('failoverClient', () => {
 		expect(local.calls).toHaveLength(1);
 	});
 
+	it('keeps time for this Mac when it tries a server that was down (PR #136 review)', async () => {
+		let t = 0;
+		const server = fakeClient('server', () => 'timeout');
+		const local = fakeClient('local', () => 'answer-local');
+		const client = failoverClient({ server: server.client, local: local.client, now: () => t });
+		await client.chat(options());
+		t += 30_000;
+		server.client.chat = async (o) => {
+			server.calls.push(o);
+			t += o.timeoutMs; // still hanging: uses all it was given
+			throw new Tier2CallError('timeout');
+		};
+		expect(await client.chat(options())).toBe('answer-local');
+		expect(server.calls.at(-1)!.timeoutMs).toBe(4_500);
+		expect(local.calls.at(-1)!.timeoutMs).toBe(1_500);
+	});
+
 	it("doesn't fall back for a bad answer, or when the check itself ran out of time", async () => {
 		const bad = setup(() => 'cut_off');
 		await expect(bad.client.chat(options())).rejects.toMatchObject({ reason: 'cut_off' });

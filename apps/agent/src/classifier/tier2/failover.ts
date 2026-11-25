@@ -4,7 +4,8 @@
  * A call goes to the server. If the server can't be reached, times out or answers with an HTTP
  * error, the same call is tried on the local model (if there is time left), and later calls go
  * straight to the local model for `coolOffMs` before the server is tried again. That way a server
- * outage costs one slow call, not one per check. An answer that arrives but is wrong (cut off,
+ * outage costs one slow call, not one per check. Each later try of the server, while it may still
+ * be down, leaves `minLocalMs` of the call for the local model (PR #136 review). An answer that arrives but is wrong (cut off,
  * not the schema) is not an outage: it fails like any bad answer, and the server stays in use.
  *
  * When neither can answer, the call fails and tier 2 fails safe as before: its spans stay flagged.
@@ -45,8 +46,12 @@ export function failoverClient({
 		async chat(options: ChatOptions) {
 			const start = now();
 			if (now() >= downUntil) {
+				// Trying a server that was down: keep time for this Mac in case it still is.
+				const probing = downUntil !== 0 && options.timeoutMs - minLocalMs >= minLocalMs;
 				try {
-					const answer = await server.chat(options);
+					const answer = await server.chat(
+						probing ? { ...options, timeoutMs: options.timeoutMs - minLocalMs } : options
+					);
 					if (downUntil !== 0) {
 						downUntil = 0;
 						logger.log('info', 'tier2_server_back');
