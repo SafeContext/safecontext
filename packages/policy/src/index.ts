@@ -12,3 +12,4 @@ export * from './events.ts';
 export * from './hooks.ts';
 export * from './api.ts';
 export * from './dashboard-api.ts';
+export * from './managed-settings.ts';
