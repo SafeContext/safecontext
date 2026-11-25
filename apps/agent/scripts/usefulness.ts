@@ -399,10 +399,15 @@ function claude(prompt: string, cwd: string, plugin: string | undefined): Promis
 		child.once('error', reject);
 		child.once('exit', (code) => {
 			clearTimeout(kill);
-			const events = out
-				.split('\n')
-				.filter((l) => l.trim().startsWith('{'))
-				.map((l) => JSON.parse(l) as StreamEvent);
+			// A run stopped by the timeout can end with half a line: skip what doesn't parse.
+			const events = out.split('\n').flatMap((l) => {
+				if (!l.trim().startsWith('{')) return [];
+				try {
+					return [JSON.parse(l) as StreamEvent];
+				} catch {
+					return [];
+				}
+			});
 			if (!events.length) reject(new Error(`claude exited ${code}: ${err.slice(0, 300)}`));
 			else resolve(events);
 		});
@@ -511,6 +516,15 @@ function grade(
 // ---------------------------------------------------------------------------------------------
 // Report
 
+/** The hand-written part of an existing report (from `## What it shows`), kept when it's regenerated. */
+const HAND_WRITTEN = '## What it shows';
+function handWritten(): string {
+	if (!existsSync(outFile)) return '';
+	const text = readFileSync(outFile, 'utf8');
+	const at = text.indexOf(HAND_WRITTEN);
+	return at === -1 ? '' : '\n' + text.slice(at);
+}
+
 function report(results: RunResult[]): string {
 	const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '–');
 	const rows = (list: RunResult[]) => {
@@ -560,7 +574,7 @@ function report(results: RunResult[]): string {
 		lines.push('', '## Runs that failed to run', '');
 		for (const r of errors) lines.push(`- ${r.task} ${r.setup} #${r.repeat}: ${r.error!.slice(0, 200)}`);
 	}
-	return lines.join('\n') + '\n';
+	return lines.join('\n') + '\n' + handWritten();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -609,6 +623,8 @@ try {
 			while (next < jobs.length) {
 				const r = await jobs[next++]!();
 				results.push(r);
+				// Saved after every run, so an interrupted batch keeps what it has (`--regrade` can report it).
+				writeFileSync(join(keepDir, 'results.json'), JSON.stringify(results, null, 2));
 				console.log(
 					`${r.task} ${r.setup.padEnd(6)} #${r.repeat}: done=${r.done} readable=${r.readable} leaked=${r.leaked.length}` +
 						`${r.promptBlocked ? ' PROMPT BLOCKED' : ''}${r.denied ? ` denied=${r.denied}` : ''} ${r.seconds.toFixed(0)}s${r.error ? ` ERROR ${r.error.slice(0, 120)}` : ''}`
