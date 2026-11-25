@@ -353,6 +353,12 @@ The rule is one function, `stopsPromptsAndToolCalls` in `apps/agent/src/decide.t
 cleaned version the user can send instead. Its placeholders are in the session's key, so they work
 like any other.
 
+Not checked in a tool input (#148): the path fields of Claude Code's local file tools (`Read`,
+`Glob`, `Grep`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`; `LOCAL_PATH_FIELDS` in
+`apps/agent/src/tool-text.ts`). They only name a file on this Mac, and Claude already has the
+name, so blocking them protected nothing and stopped Claude opening `lumen-launch-plan.md`. Their
+other fields (file content, search patterns) are still checked, and what they return is cleaned.
+
 **Evaluation (`ml/`, harness built in #12, dataset in #11):**
 - Per-label precision/recall; **red recall ≥ 95%** (the pitch's riskiest-claim target)
 - False-positive rate on safe text (over-redacting kills usefulness)
