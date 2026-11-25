@@ -48,6 +48,15 @@ async function getJson(deps: DoctorDeps, url: string, headers: Record<string, st
 	}
 }
 
+/** A URL, or undefined if it isn't one: a typo in the profile is something doctor reports, not a crash. */
+function parseUrl(text: string): URL | undefined {
+	try {
+		return new URL(text);
+	} catch {
+		return undefined;
+	}
+}
+
 /** `2.1.299 (Claude Code)` → [2, 1, 299]. */
 export function parseVersion(text: string | undefined): number[] | undefined {
 	const m = /(\d+)\.(\d+)\.(\d+)/.exec(text ?? '');
@@ -95,7 +104,16 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
 				: deps.source === 'local'
 					? 'the local preferences file'
 					: 'environment variables';
-		checks.push(ok('Dashboard', `${new URL(env.SC_DASHBOARD_URL).origin}, set by ${from}`));
+		const url = parseUrl(env.SC_DASHBOARD_URL);
+		checks.push(
+			url
+				? ok('Dashboard', `${url.origin}, set by ${from}`)
+				: fail(
+						'Dashboard',
+						`"${env.SC_DASHBOARD_URL}" (set by ${from}) isn't a web address, so the agent can't start`,
+						'It must start with https://. Ask IT to correct the profile'
+					)
+		);
 	} else {
 		checks.push(
 			warn(
@@ -119,7 +137,12 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
 	);
 
 	const base = env.SC_TIER2_BASE_URL;
-	if (base && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(base)) {
+	const baseUrl = base ? parseUrl(base) : undefined;
+	if (base && !baseUrl) {
+		checks.push(
+			fail('Model server', `"${base}" isn't a web address, so the agent can't start`, 'Ask IT to correct the profile')
+		);
+	} else if (base && baseUrl && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(base)) {
 		const key = env.SC_TIER2_API_KEY;
 		const models = await getJson(
 			deps,
@@ -129,12 +152,10 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
 		const status = (models as { httpStatus?: number } | undefined)?.httpStatus;
 		checks.push(
 			models !== undefined && status === undefined
-				? ok('Model server', `${new URL(base).host} answers`)
+				? ok('Model server', `${baseUrl.host} answers`)
 				: fail(
 						'Model server',
-						status === 401 || status === 403
-							? `${new URL(base).host} refused the key`
-							: `${new URL(base).host} didn't answer`,
+						status === 401 || status === 403 ? `${baseUrl.host} refused the key` : `${baseUrl.host} didn't answer`,
 						'Check the model server address and key in the profile, or ask IT'
 					)
 		);

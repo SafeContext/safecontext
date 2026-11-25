@@ -28,10 +28,10 @@ export SC_BUNDLE_DIR SC_VERSION
 if [ "$1" = run ]; then
 	logs="$HOME/Library/Logs/SafeContext"
 	mkdir -p "$logs"
-	# Keep the log small: start a new one past 10 MB, keeping one older file.
-	if [ -f "$logs/agent.log" ] && [ "$(stat -f %z "$logs/agent.log")" -gt 10485760 ]; then
-		mv -f "$logs/agent.log" "$logs/agent.1.log"
-	fi
-	exec "$dir/bin/node" "$dir/lib/agent.mjs" >>"$logs/agent.log" 2>&1
+	# The agent writes agent.log itself and starts it again past 10 MB while it runs (SC_LOG_FILE).
+	# Anything else it prints (a crash) goes to agent.err.log, started again at each launch.
+	SC_LOG_FILE="$logs/agent.log"
+	export SC_LOG_FILE
+	exec "$dir/bin/node" "$dir/lib/agent.mjs" >"$logs/agent.err.log" 2>&1
 fi
 exec "$dir/bin/node" "$dir/lib/cli.mjs" "$@"

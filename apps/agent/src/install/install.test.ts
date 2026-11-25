@@ -199,10 +199,34 @@ describe('safecontext doctor', () => {
 		expect(installed.find((c) => c.name === 'Claude Code hooks')?.status).toBe('warn');
 	});
 
+	it('reports a malformed address in the profile instead of crashing (PR #137 review)', async () => {
+		const checks = await runDoctor(
+			healthy({ env: { ...healthy().env, SC_DASHBOARD_URL: 'dashboard.example.com', SC_TIER2_BASE_URL: 'models/v1' } })
+		);
+		expect(checks.find((c) => c.name === 'Dashboard')).toMatchObject({
+			status: 'fail',
+			detail: expect.stringContaining('dashboard.example.com')
+		});
+		expect(checks.find((c) => c.name === 'Model server')?.status).toBe('fail');
+	});
+
 	it('compares versions', () => {
 		expect(parseVersion('2.1.299 (Claude Code)')).toEqual([2, 1, 299]);
 		expect(atLeast([2, 1, 299], '2.1.299')).toBe(true);
 		expect(atLeast([2, 2, 0], '2.1.299')).toBe(true);
 		expect(atLeast([2, 1, 298], '2.1.299')).toBe(false);
+	});
+});
+
+describe('the installed agent log (PR #137 review)', () => {
+	it('starts a new file past the size limit while the agent runs, keeping one older file', async () => {
+		const { rotatingFileWriter } = await import('../log.ts');
+		const { readFileSync, existsSync } = await import('node:fs');
+		const path = join(mkdtempSync(join(tmpdir(), 'sc-log-')), 'agent.log');
+		const write = rotatingFileWriter(path, 50);
+		for (let i = 0; i < 6; i++) write(`{"line":${i},"pad":"xxxxxxxxxx"}\n`);
+		expect(existsSync(`${path}.1`)).toBe(true);
+		expect(readFileSync(path, 'utf8').length).toBeLessThanOrEqual(60);
+		expect(readFileSync(path, 'utf8')).toContain('"line":5');
 	});
 });

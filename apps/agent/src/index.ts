@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { readConfig } from './config.ts';
 import { loadSettings } from './install/settings.ts';
 import { createExtractor } from './extract.ts';
-import { jsonLogger } from './log.ts';
+import { jsonLogger, rotatingFileWriter } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
 import { startServer } from './server.ts';
 import { startSync } from './sync/index.ts';
@@ -18,7 +18,9 @@ import { createPlaceholderStore } from './transform/placeholders.ts';
 // Installed agents (#26) read IT's MDM profile first; developers use SC_* variables.
 const settings = loadSettings();
 const config = readConfig(settings.env);
-const logger = jsonLogger();
+// The installed agent logs to a file that starts again past 10 MB (#26); developers see stderr.
+const logFile = settings.env.SC_LOG_FILE?.trim();
+const logger = jsonLogger(logFile ? rotatingFileWriter(logFile) : undefined);
 logger.log('info', 'settings_loaded', { settingsSource: settings.source });
 const localPolicy = filePolicySource(config.policyFile, logger);
 // With SC_DASHBOARD_URL set: pull the policy (cached on disk, so it works offline) and upload events.
