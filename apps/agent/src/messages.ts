@@ -85,6 +85,11 @@ export const messages = {
 		}
 		return `${head} You can send this safe version instead:\n\n${safeVersion}`;
 	},
+	/** A background subagent's report held back (#61). Data type names only. */
+	subagentReportBlocked: (hits: readonly Hit[]) =>
+		`${PRODUCT} held back a subagent's report because it contains: ${listNames(hits)}. Claude hasn't seen it. To get it with those parts hidden, ask Claude to run that task again and wait for it to finish.`,
+	subagentReportUnchecked: () =>
+		`${PRODUCT} couldn't check a subagent's report, so your company's policy held it back. Claude hasn't seen it.`,
 	promptUnchecked: () =>
 		`${PRODUCT} couldn't check this prompt, so your company's policy blocked it. Try again in a moment. If it keeps happening, check that the Safe Context agent is running.`,
 	toolInputBlocked: (hits: readonly Hit[]) =>

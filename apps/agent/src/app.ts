@@ -140,6 +140,36 @@ export function createApp(deps: AppDeps): Hono {
 	}
 
 	/**
+	 * A subagent's report handed back through the `SubagentHandback` tool (auto mode, #61). Its
+	 * `message` is cleaned like tool output and passed on through `updatedInput`, so the main
+	 * Claude gets the report with placeholders rather than losing it. Undefined for other calls, or
+	 * when there's nothing to hide.
+	 */
+	async function cleanHandback(input: PreToolUseInput, policy: Policy) {
+		const message = input.tool_name === 'SubagentHandback' ? input.tool_input['message'] : undefined;
+		if (typeof message !== 'string') return undefined;
+		const checked = await check([message], policy, 'PostToolUse', placeholders.session(input.session_id), true);
+		const { decision } = checked;
+		if (decision.verdict === 'allow') return undefined;
+		if (decision.cause === 'fail') {
+			return { ...checked, toolName: input.tool_name, output: toolInputResponse(decision) };
+		}
+		const cleaned = await rewrite([message], decision, input.session_id, policy, checked.deadline);
+		return {
+			...checked,
+			// Cleaned and passed on, not stopped: counted like cleaned tool output.
+			decision: { ...decision, verdict: 'rewrite' as const },
+			toolName: input.tool_name,
+			output: {
+				hookSpecificOutput: {
+					hookEventName: 'PreToolUse' as const,
+					updatedInput: { ...input.tool_input, message: cleaned?.[0] ?? message }
+				}
+			}
+		};
+	}
+
+	/**
 	 * A Read of an image or PDF (#40): its text is pulled out on this device and checked as if it
 	 * were the tool's output. Anything sensitive stops the Read, since an image can't be cleaned;
 	 * if the text can't be pulled out or checked, the fail mode decides. Undefined for any other
@@ -398,6 +428,11 @@ export function createApp(deps: AppDeps): Hono {
 			'UserPromptSubmit',
 			async (input, policy) => {
 				const checked = await check([input.prompt], policy, 'UserPromptSubmit', placeholders.session(input.session_id));
+				// A background subagent's report arrives as a prompt (#61). It can only be held back, and
+				// there's nothing for the user to resend, so it gets its own message and no safe version.
+				if (isTaskNotification(input.prompt)) {
+					return { ...checked, output: promptResponse(checked.decision, undefined, { subagentReport: true }) };
+				}
 				// Only a blocked prompt needs a safe version (and only then are placeholders handed out).
 				const safe =
 					checked.decision.verdict === 'block'
@@ -415,6 +450,8 @@ export function createApp(deps: AppDeps): Hono {
 			AGENT_API.toolInput,
 			'PreToolUse',
 			async (input, policy) => {
+				const handback = await cleanHandback(input, policy);
+				if (handback) return handback;
 				const media = await checkMedia(input, policy);
 				if (media) return media;
 				const skill = input.tool_name === 'Skill' ? input.tool_input['skill'] : undefined;
@@ -582,6 +619,11 @@ export function lineParts(text: string, max: number): Array<[number, number]> {
 		a = b;
 	}
 	return out;
+}
+
+/** A background subagent's completion notice, which Claude Code delivers as a prompt (#61). */
+export function isTaskNotification(prompt: string): boolean {
+	return prompt.trimStart().startsWith('<task-notification>');
 }
 
 function outcomeOf(decision: Decision): Outcome {
