@@ -116,7 +116,7 @@ export const messages = {
 		`\n[${PRODUCT}: the remaining ${lines} ${lines === 1 ? 'line was' : 'lines were'} withheld because ${lines === 1 ? 'it' : 'they'} couldn't be checked in time. Read a smaller part to see ${lines === 1 ? 'it' : 'them'}.]`,
 	/** Shown to Claude when a placeholder in a file tool's input can't be swapped back (transform/restore.ts). */
 	restoreUnknown: (ids: readonly string[]) =>
-		`${PRODUCT} can't put back the hidden value for ${ids.map((id) => `⟪${id}⟫`).join(', ')}: it no longer holds it (the Safe Context agent restarted, or the session is too old). Nothing was run. Read the file or output it came from again to get a current placeholder.`,
+		`${PRODUCT} can't put back the hidden value for ${ids.map((id) => `⟪${id}⟫`).join(', ')}: it no longer holds it (the session is more than 12 hours old, or the agent couldn't save its key). Nothing was run. Read the file or output it came from again to get a current placeholder.`,
 	restoreSandboxEscape: () =>
 		`${PRODUCT} doesn't put hidden values back into a command that runs outside the sandbox: auto mode would send it off this Mac for a safety check. Nothing was run. Run it in the sandbox, or leave the placeholder out.`,
 	/** Shown to the user in the permission prompt for a tool IT added to swap-back (transform/restore.ts). */

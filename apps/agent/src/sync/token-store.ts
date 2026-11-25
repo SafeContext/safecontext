@@ -64,6 +64,8 @@ export interface KeychainOptions {
 	service: string;
 	/** Keychain item account. We use the dashboard's origin, so each dashboard has its own token. */
 	account: string;
+	/** What Keychain Access shows for the item. */
+	label?: string;
 	run?: SecurityRunner;
 }
 
@@ -74,8 +76,13 @@ export const KEYCHAIN_SERVICE = 'com.safecontext.agent';
  * Writing goes through `security -i` with the command on stdin, so the token never appears in
  * the process list the way `security add-generic-password -w <token>` would.
  */
-export function keychainTokenStore({ service, account, run = runSecurity }: KeychainOptions): TokenStore {
-	if (!SAFE_LABEL.test(service) || !SAFE_LABEL.test(account)) {
+export function keychainTokenStore({
+	service,
+	account,
+	label = 'Safe Context device token',
+	run = runSecurity
+}: KeychainOptions): TokenStore {
+	if (!SAFE_LABEL.test(service) || !SAFE_LABEL.test(account) || !/^[A-Za-z0-9 ]{1,64}$/.test(label)) {
 		throw new Error('Keychain service and account may only contain URL-safe characters');
 	}
 	const item = ['-s', service, '-a', account];
@@ -90,7 +97,7 @@ export function keychainTokenStore({ service, account, run = runSecurity }: Keyc
 		},
 		async set(token) {
 			if (!SAFE_TOKEN.test(token)) throw new Error('Device token has unexpected characters');
-			const line = `add-generic-password -U -s "${service}" -a "${account}" -l "Safe Context device token" -w "${token}"\n`;
+			const line = `add-generic-password -U -s "${service}" -a "${account}" -l "${label}" -w "${token}"\n`;
 			const { code } = await run(['-i'], line);
 			if (code !== 0) throw new Error(`security add-generic-password failed (${code})`);
 		},

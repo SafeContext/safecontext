@@ -42,6 +42,11 @@ hasn't settled the result.
 the value. Names and dates need tier 2. Without it (or if its answer could give the value away) the
 placeholder has no hint.
 
+Each session's placeholders survive an agent restart: the key is saved encrypted on the Mac, with
+its encryption key in the Keychain, and deleted after 12 hours idle. To see what was hidden or put
+back, and in which file (placeholders only, never the real values):
+`pnpm --filter @safecontext/agent swaps -- --since 2h` (`safecontext swaps` once installed).
+
 **Default data types** (`packages/policy/src/defaults.ts`; IT can move any of them, delete
 most, or add its own). Only what Safe Context protects is listed: anything else goes through.
 
@@ -284,7 +289,7 @@ Playwright needs its test browser once per machine:
 | `SC_DASHBOARD_URL` | unset | Dashboard address. Unset: no sync. Must be https, except localhost |
 | `SC_ENROLLMENT_KEY` | unset | Organisation key, needed until the device has its id and token in the Keychain |
 | `SC_DEVICE_LABEL` | unset | Name for this device on the dashboard, such as an asset tag (up to 64 characters). Sent when it joins |
-| `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Policy copy |
+| `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Saved placeholder keys (encrypted), the swap record and the policy copy |
 | `SC_POLICY_SYNC_INTERVAL_MS` | `30000` (min 5000) | How often to pull the policy |
 | `SC_EVENT_FLUSH_MS` | `5000` | How often to upload counts |
 | `SC_EVENT_BATCH_SIZE` | `100` (max 500) | Events per upload |

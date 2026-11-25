@@ -10,6 +10,8 @@ import type { ClassifierTier } from './classifier/types.ts';
 import type { CheckReport } from './events.ts';
 import { memoryLogger } from './log.ts';
 import { staticPolicySource } from './policy-source.ts';
+import type { SwapLog } from './swaps/swap-log.ts';
+import type { PlaceholderStore } from './transform/placeholders.ts';
 
 /** A fake GitHub token, built at run time so no real-looking key sits in the source. */
 export const SECRET = 'ghp_' + 'aB3dE5gH7jK9mN1pQ2rS4tU6vW8xY0zC'.repeat(2).slice(0, 36);
@@ -29,6 +31,9 @@ export interface TestAppOptions {
 	extractor?: Extractor;
 	/** The agent's budget per check (`SC_CHECK_BUDGET_MS`). Default: the agent's default. */
 	checkBudgetMs?: number;
+	/** Placeholder keys (#85). Default: a new in-memory store. */
+	placeholders?: PlaceholderStore;
+	swapLog?: SwapLog;
 }
 
 export function testApp({
@@ -36,7 +41,9 @@ export function testApp({
 	tiers = [createTier0()],
 	budgetMs = 1_000,
 	extractor,
-	checkBudgetMs
+	checkBudgetMs,
+	placeholders,
+	swapLog
 }: TestAppOptions = {}) {
 	const logger = memoryLogger();
 	const reports: CheckReport[] = [];
@@ -45,6 +52,8 @@ export function testApp({
 		classifier: createClassifier({ tiers, budgetMs }),
 		...(extractor && { extractor }),
 		...(checkBudgetMs !== undefined && { checkBudgetMs }),
+		...(placeholders && { placeholders }),
+		...(swapLog && { swapLog }),
 		logger,
 		events: { record: (r) => reports.push(r) }
 	});
