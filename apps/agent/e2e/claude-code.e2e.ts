@@ -3,9 +3,10 @@
  * plugin, against the real agent (SPEC.md §5, issue #17).
  *
  * Costs model usage, so it is NOT part of `pnpm test`. Run it with `pnpm test:e2e`. Needs
- * `claude` on PATH, signed in, v2.1.295+ (for `onFailure`).
+ * `claude` on PATH, signed in, v2.1.299+ (`onFailure`, and turning off `@file` mentions for 9).
  *
- * Eight `claude -p` runs on haiku (seven of eight with `E2E_TIERS=1`); only five reach the model (the blocked ones cost nothing):
+ * Nine cases, eight `claude -p` runs on haiku each time (7 runs only with `E2E_TIERS=1`, which then
+ * skips 5); six reach the model (the blocked ones, 2 and 6, cost nothing):
  *   1. no plugin:   a prompt with a fake secret and email asks Claude to read a file holding
  *                   them → the prompt reaches Claude and Read/Bash return the raw values.
  *   2. plugin:      the same prompt → blocked by the agent before Claude sees it.
@@ -20,6 +21,8 @@
  *                   `SC_TIER1_MODEL_DIR` and `SC_TIER2_*` settings and a running Ollama.
  *   8. plugin, swap-back (#83): Claude reads the email as a placeholder and writes it into a new
  *                   file → the file on disk holds the real email, and nothing Claude sees does.
+ *   9. plugin, @file mentions off (#38): with `CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, a prompt that
+ *                   @-mentions notes.txt makes Claude read it with Read → the token never reaches it.
  *
  * All data is fake. Isolation: a temp working folder, `--setting-sources local` (no user or
  * project settings, so no other hooks or plugins), `--strict-mcp-config`, no session saved.
