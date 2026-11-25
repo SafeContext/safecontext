@@ -104,8 +104,10 @@ Also working:
 - **Tier 2 speed varies.** A check that needs tier 2 took about 0.5 s (p50) on an M3 Max when the
   graphics chip was free, and 3–5 s when another app was using it. A call that runs out of time
   keeps everything flagged. Not measured on a base 16 GB Mac yet; #14 estimates 1.7–2 s there.
-- **How a Mac joins an organisation** uses a temporary enrollment key
-  ([#51](https://github.com/SafeContext/safecontext/issues/51)).
+- **A Mac joins an organisation with a shared enrollment key** that IT deploys. Revoking a Mac
+  stops its token, but a Mac that still has the key can join again as a new device, so rotate the
+  key when one is lost. Joining through the company's identity provider is planned
+  ([#109](https://github.com/SafeContext/safecontext/issues/109)).
 
 ---
 
@@ -222,8 +224,9 @@ SC_DASHBOARD_URL=http://localhost:5173 SC_ENROLLMENT_KEY=<key> \
   SC_STATE_DIR=/tmp/sc-agent pnpm --filter @safecontext/agent dev
 ```
 
-The agent logs `device_registered` and `policy_synced`. It stores its device token in the macOS
-Keychain, so the key is only needed the first time. Checks you make in Claude Code should then
+The agent logs `device_registered` and `policy_synced`. It stores the device id the dashboard gave
+it, and its token, in the macOS Keychain, so the key is only needed the first time. The device
+then shows on the dashboard's Settings page, where an admin can revoke it or make a new key. Checks you make in Claude Code should then
 appear in the dashboard's live feed within a few seconds.
 
 ---
@@ -279,8 +282,9 @@ Playwright needs its test browser once per machine:
 | `SC_TIER2_PROMPTS_DIR` | the repo's `ml/prompts/tier2` | Tier 2 prompt files |
 | `SC_TIER2_TIMEOUT_MS` | `6000` (from `tier2.json`) | Longest one tier 2 call may take. Calls also stop in time for the check budget |
 | `SC_DASHBOARD_URL` | unset | Dashboard address. Unset: no sync. Must be https, except localhost |
-| `SC_ENROLLMENT_KEY` | unset | Organisation key, needed until the device has a token in the Keychain |
-| `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Device id and policy copy |
+| `SC_ENROLLMENT_KEY` | unset | Organisation key, needed until the device has its id and token in the Keychain |
+| `SC_DEVICE_LABEL` | unset | Name for this device on the dashboard, such as an asset tag (up to 64 characters). Sent when it joins |
+| `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Policy copy |
 | `SC_POLICY_SYNC_INTERVAL_MS` | `30000` (min 5000) | How often to pull the policy |
 | `SC_EVENT_FLUSH_MS` | `5000` | How often to upload counts |
 | `SC_EVENT_BATCH_SIZE` | `100` (max 500) | Events per upload |

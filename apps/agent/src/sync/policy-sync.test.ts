@@ -13,7 +13,6 @@ import { syncingPolicySource } from './policy-sync.ts';
 import { POLICY_CACHE_FILE } from './state-files.ts';
 import { memoryTokenStore } from './token-store.ts';
 
-const DEVICE = 'dev-policy-test';
 let dash: FakeDashboard;
 let dir: string;
 beforeEach(async () => {
@@ -34,7 +33,6 @@ function source({ intervalMs = 60_000, url = dash.url } = {}) {
 	const auth = createDeviceAuth({
 		client,
 		store: memoryTokenStore(),
-		deviceId: DEVICE,
 		enrollmentKey: ENROLLMENT_KEY,
 		logger: syncLogger(logger)
 	});

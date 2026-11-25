@@ -14,11 +14,3 @@ test('Policy page shows where real values go back (#83)', async ({ page }) => {
 		await expect(local.getByText(tool, { exact: true })).toBeVisible();
 	}
 });
-
-for (const [name, path] of [['Settings', '/settings']]) {
-	test(`${name} placeholder page shows an empty state`, async ({ page }) => {
-		await page.goto(path);
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-		await expect(page.getByRole('heading', { level: 3 })).toBeVisible();
-	});
-}

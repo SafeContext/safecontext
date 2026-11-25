@@ -22,6 +22,11 @@ export function isSecret(kind: SecretKind, value: string): boolean {
 	return value.startsWith(prefix) && SECRET_BODY.test(value.slice(prefix.length));
 }
 
+/** A new anonymised device id (#51): random, so it says nothing about the machine or the person. */
+export function newDeviceId(): string {
+	return `dev-${randomBytes(16).toString('hex')}`;
+}
+
 /** Lowercase hex SHA-256, as stored in `Device.tokenHash` and `Organization.enrollmentKeyHash`. */
 export function hashSecret(value: string): string {
 	return createHash('sha256').update(value, 'utf8').digest('hex');

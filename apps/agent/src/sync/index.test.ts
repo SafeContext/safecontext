@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,6 @@ import { CANARY, policyWith, SECRET } from '../test-helpers.ts';
 import { readSyncConfig } from './config.ts';
 import { ENROLLMENT_KEY, startFakeDashboard, type FakeDashboard } from './fake-dashboard.ts';
 import { startSync, type Sync } from './index.ts';
-import { DEVICE_ID_FILE } from './state-files.ts';
 import { memoryTokenStore } from './token-store.ts';
 
 /**
@@ -65,9 +64,10 @@ describe('startSync with the agent app', () => {
 			expect(health.policyVersion).toBe(9);
 		}, WAIT);
 
-		const deviceId = readFileSync(join(dir, DEVICE_ID_FILE), 'utf8').trim();
-		expect(deviceId).toMatch(/^dev-[0-9a-f]{32}$/);
-		expect(store.value).toMatch(/^scd_/);
+		// The dashboard picked the id; it is kept with the token in the Keychain (#51).
+		const [deviceId, token] = store.value!.split('.');
+		expect(deviceId).toBe('dev-fake1');
+		expect(token).toMatch(/^scd_/);
 
 		const res = await app.request('/v1/prompt', {
 			method: 'POST',
@@ -88,13 +88,13 @@ describe('startSync with the agent app', () => {
 		const everything = dash.rawEventBodies.join('') + JSON.stringify(logger.records);
 		expect(everything).not.toContain(CANARY);
 		expect(everything).not.toContain(SECRET);
-		expect(everything).not.toContain(store.value!);
+		expect(everything).not.toContain(token!);
 		expect(everything).not.toContain(ENROLLMENT_KEY);
 	});
 });
 
 describe('startSync with an unusable state folder', () => {
-	it('keeps running with a device id for this run instead of crashing', () => {
+	it('keeps running instead of crashing', () => {
 		const notADir = join(dir, 'file');
 		writeFileSync(notADir, 'x');
 		const logger = memoryLogger();
@@ -107,6 +107,5 @@ describe('startSync with an unusable state folder', () => {
 			});
 		}).not.toThrow();
 		expect(sync!.policy.current().version).toBe(0);
-		expect(logger.records).toContainEqual({ level: 'error', msg: 'state_dir_failed', reason: 'state_dir' });
 	});
 });

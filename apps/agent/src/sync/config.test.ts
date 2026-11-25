@@ -13,6 +13,7 @@ describe('readSyncConfig', () => {
 		expect(readSyncConfig({ SC_DASHBOARD_URL: 'https://dash.example.com/' })).toEqual({
 			dashboardUrl: 'https://dash.example.com',
 			enrollmentKey: undefined,
+			deviceLabel: undefined,
 			stateDir: defaultStateDir(),
 			policyIntervalMs: 30_000,
 			eventFlushMs: 5_000,
@@ -27,6 +28,7 @@ describe('readSyncConfig', () => {
 			readSyncConfig({
 				SC_DASHBOARD_URL: 'https://example.com/safecontext/',
 				SC_ENROLLMENT_KEY: 'sce_x',
+				SC_DEVICE_LABEL: ' Asset 1042 ',
 				SC_STATE_DIR: '/tmp/sc',
 				SC_POLICY_SYNC_INTERVAL_MS: '10000',
 				SC_EVENT_FLUSH_MS: '2000',
@@ -36,6 +38,7 @@ describe('readSyncConfig', () => {
 		).toEqual({
 			dashboardUrl: 'https://example.com/safecontext',
 			enrollmentKey: 'sce_x',
+			deviceLabel: 'Asset 1042',
 			stateDir: '/tmp/sc',
 			policyIntervalMs: 10_000,
 			eventFlushMs: 2_000,
@@ -57,5 +60,12 @@ describe('readSyncConfig', () => {
 		expect(() => readSyncConfig({ ...url, SC_POLICY_SYNC_INTERVAL_MS: '100' })).toThrow(/SC_POLICY_SYNC_INTERVAL_MS/);
 		expect(() => readSyncConfig({ ...url, SC_EVENT_BATCH_SIZE: '501' })).toThrow(/SC_EVENT_BATCH_SIZE/);
 		expect(() => readSyncConfig({ ...url, SC_EVENT_QUEUE_MAX: 'x' })).toThrow(/SC_EVENT_QUEUE_MAX/);
+	});
+
+	it('rejects a device label that is too long or not printable (#51)', () => {
+		const url = { SC_DASHBOARD_URL: 'https://dash.example.com' };
+		expect(() => readSyncConfig({ ...url, SC_DEVICE_LABEL: 'x'.repeat(65) })).toThrow(/SC_DEVICE_LABEL/);
+		expect(() => readSyncConfig({ ...url, SC_DEVICE_LABEL: 'a\tb' })).toThrow(/SC_DEVICE_LABEL/);
+		expect(readSyncConfig({ ...url, SC_DEVICE_LABEL: '  ' })?.deviceLabel).toBeUndefined();
 	});
 });

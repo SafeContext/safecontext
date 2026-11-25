@@ -14,6 +14,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { resetRateLimits } from '#lib/server/agent-api/rate-limit.ts';
 import { hashSecret, newSecret } from '#lib/server/agent-api/secrets.ts';
+import { listDevices, revokeDevice, rotateEnrollmentKey } from '#lib/server/devices.ts';
 import { EVENTS_CHANNEL, EventNotification } from '#lib/server/live-events.ts';
 import { prisma } from '#lib/server/prisma.ts';
 import { POST as registerDevice } from './devices/+server.ts';
@@ -78,8 +79,8 @@ function agentEvent(deviceId: string, extra: Partial<AgentEvent> = {}): AgentEve
 	};
 }
 
-async function register(deviceId: string) {
-	const res = await call(registerDevice, { headers: auth(enrollmentKey), body: { deviceId } });
+async function register(body: Record<string, unknown> = {}) {
+	const res = await call(registerDevice, { headers: auth(enrollmentKey), body });
 	return { res, body: DeviceRegistrationResponse.parse(await res.json()) };
 }
 
@@ -99,34 +100,45 @@ beforeEach(() => resetRateLimits());
 describe('POST /api/devices', () => {
 	it('rejects a missing or wrong enrollment key', async () => {
 		for (const headers of [{}, auth('sce_nope'), auth(newSecret('enrollmentKey'))]) {
-			const res = await call(registerDevice, { headers, body: { deviceId: 'dev-x' } });
+			const res = await call(registerDevice, { headers, body: {} });
 			expect(res.status).toBe(401);
 			expect(ApiError.parse(await res.json()).error.code).toBe('unauthorized');
 		}
 	});
 
-	it('rejects a device id that is not id-shaped', async () => {
+	it('picks the device id itself, so a key holder cannot claim an existing device (#51)', async () => {
 		const res = await call(registerDevice, {
 			headers: auth(enrollmentKey),
-			body: { deviceId: 'Jane’s MacBook' }
+			body: { deviceId: 'dev-someone-else' }
 		});
 		expect(res.status).toBe(422);
 	});
 
-	it('registers a device, and registering again replaces its token', async () => {
-		const first = await register('dev-register');
+	it('rejects a label that is too long or not printable', async () => {
+		for (const label of ['x'.repeat(65), 'line\nbreak', ' ']) {
+			const res = await call(registerDevice, { headers: auth(enrollmentKey), body: { label } });
+			expect(res.status).toBe(422);
+		}
+	});
+
+	it('registers a new device each time, storing only the token hash', async () => {
+		const first = await register({ label: '  Asset 1042 ' });
 		expect(first.res.status).toBe(201);
 		expect(first.res.headers.get('cache-control')).toBe('no-store');
+		expect(first.body.deviceId).toMatch(/^dev-[0-9a-f]{32}$/);
 
 		const device = await prisma.device.findUniqueOrThrow({
-			where: { organizationId_deviceId: { organizationId, deviceId: 'dev-register' } }
+			where: { organizationId_deviceId: { organizationId, deviceId: first.body.deviceId } }
 		});
 		expect(device.tokenHash).toBe(hashSecret(first.body.token)); // only the hash is stored
+		expect(device.label).toBe('Asset 1042');
 
-		const second = await register('dev-register');
-		expect(second.res.status).toBe(200);
+		const second = await register();
+		expect(second.res.status).toBe(201);
+		expect(second.body.deviceId).not.toBe(first.body.deviceId);
 		expect(second.body.token).not.toBe(first.body.token);
-		expect((await call(getPolicy, { headers: auth(first.body.token) })).status).toBe(401);
+		// Registering again never touches an existing device's token.
+		expect((await call(getPolicy, { headers: auth(first.body.token) })).status).not.toBe(401);
 	});
 });
 
@@ -137,7 +149,7 @@ describe('GET /api/policy', () => {
 	});
 
 	it('serves the latest version with an ETag, and 304 when unchanged', async () => {
-		const { body } = await register('dev-policy');
+		const { body } = await register();
 
 		const none = await call(getPolicy, { headers: auth(body.token) });
 		expect(none.status).toBe(404);
@@ -168,8 +180,9 @@ describe('GET /api/policy', () => {
 
 describe('POST /api/events', () => {
 	let token = '';
+	let dev = '';
 	beforeAll(async () => {
-		token = (await register('dev-events')).body.token;
+		({ token, deviceId: dev } = (await register()).body);
 	});
 
 	const post = (body: unknown, headers: Record<string, string> = {}) =>
@@ -188,8 +201,8 @@ describe('POST /api/events', () => {
 
 		try {
 			const events = [
-				agentEvent('dev-events'),
-				agentEvent('dev-events', {
+				agentEvent(dev),
+				agentEvent(dev, {
 					hookEvent: 'UserPromptSubmit',
 					toolName: undefined,
 					counts: {},
@@ -203,7 +216,7 @@ describe('POST /api/events', () => {
 			expect(EventBatchResponse.parse(await res.json())).toEqual({ accepted: 2 });
 
 			const stored = await prisma.event.findMany({
-				where: { organizationId, device: { deviceId: 'dev-events' } },
+				where: { organizationId, device: { deviceId: dev } },
 				include: { counts: true },
 				orderBy: { policyVersion: 'asc' }
 			});
@@ -216,14 +229,14 @@ describe('POST /api/events', () => {
 			expect(stored[1]!.toolName).toBeNull();
 
 			const device = await prisma.device.findFirstOrThrow({
-				where: { organizationId, deviceId: 'dev-events' }
+				where: { organizationId, deviceId: dev }
 			});
 			expect(device.lastPolicyVersion).toBe(3);
 
 			await expect.poll(() => received.length, { timeout: 2000 }).toBe(2);
 			expect(received.map((n) => n.id).sort()).toEqual(stored.map((e) => e.id).sort());
 			expect(received.find((n) => n.blocked)).toMatchObject({
-				deviceId: 'dev-events',
+				deviceId: dev,
 				hookEvent: 'UserPromptSubmit',
 				toolName: null,
 				actions: { allow: 0, generalize: 0, pseudonymize: 0, mask: 0, block: 1 }
@@ -237,10 +250,10 @@ describe('POST /api/events', () => {
 		const before = await prisma.event.count({ where: { organizationId } });
 		const secret = 'Q3 revenue was $4.2M at Northwind';
 		for (const bad of [
-			{ events: [agentEvent('dev-events'), { ...agentEvent('dev-events'), prompt: secret }] },
-			{ events: [agentEvent('dev-events', { counts: { [secret]: 1 } })] },
-			{ events: [agentEvent('dev-events', { toolName: secret })] },
-			{ events: [agentEvent('dev-events')], text: secret }
+			{ events: [agentEvent(dev), { ...agentEvent(dev), prompt: secret }] },
+			{ events: [agentEvent(dev, { counts: { [secret]: 1 } })] },
+			{ events: [agentEvent(dev, { toolName: secret })] },
+			{ events: [agentEvent(dev)], text: secret }
 		]) {
 			const res = await post(bad);
 			expect(res.status).toBe(422);
@@ -253,8 +266,8 @@ describe('POST /api/events', () => {
 
 	it('rejects numbers the database cannot hold with a 422, not a 500', async () => {
 		for (const bad of [
-			agentEvent('dev-events', { counts: { secrets: 3_000_000_000 } }),
-			agentEvent('dev-events', { policyVersion: 3_000_000_000 })
+			agentEvent(dev, { counts: { secrets: 3_000_000_000 } }),
+			agentEvent(dev, { policyVersion: 3_000_000_000 })
 		]) {
 			const res = await post({ events: [bad] });
 			expect(res.status).toBe(422);
@@ -263,7 +276,7 @@ describe('POST /api/events', () => {
 	});
 
 	it('rejects events for another device', async () => {
-		const res = await post({ events: [agentEvent('dev-events'), agentEvent('dev-someone-else')] });
+		const res = await post({ events: [agentEvent(dev), agentEvent('dev-someone-else')] });
 		expect(res.status).toBe(403);
 		expect(ApiError.parse(await res.json()).error.code).toBe('device_mismatch');
 	});
@@ -273,19 +286,19 @@ describe('POST /api/events', () => {
 		expect((await post({ events: [] })).status).toBe(422);
 		expect(
 			(
-				await post(JSON.stringify({ events: [agentEvent('dev-events')] }), {
+				await post(JSON.stringify({ events: [agentEvent(dev)] }), {
 					'content-type': 'text/plain'
 				})
 			).status
 		).toBe(415);
-		const res = await call(postEvents, { body: { events: [agentEvent('dev-events')] } });
+		const res = await call(postEvents, { body: { events: [agentEvent(dev)] } });
 		expect(res.status).toBe(401);
 	});
 });
 
 describe('rate limiting', () => {
 	it('limits a device that uploads too often', async () => {
-		const { body } = await register('dev-rate');
+		const { body } = await register();
 		const statuses: number[] = [];
 		for (let i = 0; i < 30; i++) {
 			// An empty batch fails validation, which is cheap, but still counts against the limit.
@@ -308,5 +321,57 @@ describe('rate limiting', () => {
 		const res = await call(getPolicy, { headers: auth(newSecret('deviceToken')), ip });
 		expect(res.status).toBe(429);
 		expect(ApiError.parse(await res.json()).error.code).toBe('rate_limited');
+	});
+});
+
+describe('revoking devices and rotating the enrollment key (#51)', () => {
+	it('stops a revoked device at once, and only in its own organisation', async () => {
+		const { body } = await register({ label: 'Lost laptop' });
+		const row = await prisma.device.findFirstOrThrow({ where: { deviceId: body.deviceId } });
+		const other = await prisma.organization.create({
+			data: { slug: `${slug}-other`, name: 'Someone else' }
+		});
+		try {
+			expect(await revokeDevice(other.id, row.id)).toBe(false); // not theirs
+			expect((await call(getPolicy, { headers: auth(body.token) })).status).not.toBe(401);
+
+			expect(await revokeDevice(organizationId, row.id)).toBe(true);
+			expect(await revokeDevice(organizationId, row.id)).toBe(false); // already revoked
+			expect((await call(getPolicy, { headers: auth(body.token) })).status).toBe(401);
+
+			const listed = (await listDevices(organizationId)).devices.find((d) => d.id === row.id);
+			expect(listed).toMatchObject({ label: 'Lost laptop', status: 'revoked' });
+		} finally {
+			await prisma.organization.delete({ where: { id: other.id } });
+		}
+	});
+
+	it('lists devices most recently seen first, with no secrets', async () => {
+		const list = await listDevices(organizationId);
+		expect(list.total).toBeGreaterThanOrEqual(list.devices.length);
+		expect(list.active).toBeLessThanOrEqual(list.total);
+		const seen = list.devices.map((d) => d.lastSeenAt.getTime());
+		expect(seen).toEqual([...seen].sort((a, b) => b - a));
+		expect(JSON.stringify(list)).not.toMatch(/tokenHash|scd_/);
+	});
+
+	it('a new key replaces the old one; devices that already joined keep working', async () => {
+		const { body } = await register();
+		const fresh = await rotateEnrollmentKey(organizationId);
+		try {
+			expect(fresh).toMatch(/^sce_/);
+			const old = await call(registerDevice, { headers: auth(enrollmentKey), body: {} });
+			expect(old.status).toBe(401);
+			const joined = await call(registerDevice, { headers: auth(fresh), body: {} });
+			expect(joined.status).toBe(201);
+			expect((await call(getPolicy, { headers: auth(body.token) })).status).not.toBe(401);
+			const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+			expect(org.enrollmentKeyHash).toBe(hashSecret(fresh)); // only the hash is stored
+		} finally {
+			await prisma.organization.update({
+				where: { id: organizationId },
+				data: { enrollmentKeyHash: hashSecret(enrollmentKey) }
+			});
+		}
 	});
 });

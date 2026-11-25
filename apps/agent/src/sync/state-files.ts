@@ -1,13 +1,14 @@
 /**
- * Files the agent keeps in its state folder (`SC_STATE_DIR`): the anonymised device id and the
- * last policy pulled from the dashboard. Neither is a secret, but the policy holds the admin's
- * term lists, so files are private to the user (0600, folder 0700).
+ * Files the agent keeps in its state folder (`SC_STATE_DIR`): the last policy pulled from the
+ * dashboard, and from before #51 the device id. Neither is a secret, but the policy holds the
+ * admin's term lists, so files are private to the user (0600, folder 0700).
  */
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Id, Policy } from '@safecontext/policy';
 
+/** Before #51 agents chose their own device id and kept it here. Read, never written. */
 export const DEVICE_ID_FILE = 'device-id';
 export const POLICY_CACHE_FILE = 'policy-cache.json';
 
@@ -19,23 +20,17 @@ export function writePrivateFile(path: string, content: string): void {
 	renameSync(tmp, path);
 }
 
-/** A new anonymised device id: random, so it says nothing about the machine or the user. */
-export function newDeviceId(): string {
-	return `dev-${randomBytes(16).toString('hex')}`;
-}
-
-/** The device id stored in `stateDir`, creating it on first run. */
-export function loadOrCreateDeviceId(stateDir: string): string {
-	const path = join(stateDir, DEVICE_ID_FILE);
+/**
+ * The device id a pre-#51 agent saved in `stateDir`, which its Keychain token belongs to.
+ * Undefined if there is none or it can't be read. Never throws.
+ */
+export function readLegacyDeviceId(stateDir: string): string | undefined {
 	try {
-		const existing = readFileSync(path, 'utf8').trim();
-		if (Id.safeParse(existing).success) return existing;
-	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+		const id = readFileSync(join(stateDir, DEVICE_ID_FILE), 'utf8').trim();
+		return Id.safeParse(id).success ? id : undefined;
+	} catch {
+		return undefined;
 	}
-	const id = newDeviceId();
-	writePrivateFile(path, id + '\n');
-	return id;
 }
 
 export interface PolicyCache {

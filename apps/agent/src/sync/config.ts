@@ -4,16 +4,22 @@
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { DeviceLabel } from '@safecontext/policy';
 
 export interface SyncConfig {
 	/** `SC_DASHBOARD_URL`: dashboard base URL. https, or http on loopback for local testing. */
 	dashboardUrl: string;
 	/**
-	 * `SC_ENROLLMENT_KEY`: the organisation's key for registering this device. Only needed until a
-	 * device token is in the Keychain. Placeholder for how devices join an org (#51).
+	 * `SC_ENROLLMENT_KEY`: the organisation's key for registering this device, deployed by device
+	 * management (#51). Only needed until the device's id and token are in the Keychain.
 	 */
 	enrollmentKey: string | undefined;
-	/** `SC_STATE_DIR`: device id and policy cache. */
+	/**
+	 * `SC_DEVICE_LABEL`: a name for this device on the dashboard, such as an asset tag (#51).
+	 * Optional; sent only when the device registers.
+	 */
+	deviceLabel: string | undefined;
+	/** `SC_STATE_DIR`: policy cache. */
 	stateDir: string;
 	/** `SC_POLICY_SYNC_INTERVAL_MS`: how often to pull the policy. */
 	policyIntervalMs: number;
@@ -44,12 +50,20 @@ export function readSyncConfig(env: NodeJS.ProcessEnv): SyncConfig | undefined {
 	return {
 		dashboardUrl: dashboardUrl(raw),
 		enrollmentKey: env.SC_ENROLLMENT_KEY?.trim() || undefined,
+		deviceLabel: deviceLabel(env.SC_DEVICE_LABEL),
 		stateDir: env.SC_STATE_DIR?.trim() || defaultStateDir(),
 		policyIntervalMs: int(env, 'SC_POLICY_SYNC_INTERVAL_MS', DEFAULT_POLICY_INTERVAL_MS, 5_000, 24 * 3_600_000),
 		eventFlushMs: int(env, 'SC_EVENT_FLUSH_MS', DEFAULT_EVENT_FLUSH_MS, 1_000, 3_600_000),
 		eventBatchSize: int(env, 'SC_EVENT_BATCH_SIZE', DEFAULT_EVENT_BATCH_SIZE, 1, 500),
 		eventQueueMax: int(env, 'SC_EVENT_QUEUE_MAX', DEFAULT_EVENT_QUEUE_MAX, 1, 1_000_000)
 	};
+}
+
+function deviceLabel(raw: string | undefined): string | undefined {
+	if (raw === undefined || raw.trim() === '') return undefined;
+	const parsed = DeviceLabel.safeParse(raw);
+	if (!parsed.success) throw new Error('SC_DEVICE_LABEL must be printable text of at most 64 characters');
+	return parsed.data;
 }
 
 function dashboardUrl(raw: string): string {

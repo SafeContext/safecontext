@@ -4,7 +4,7 @@
 	// IT adds asks the person before each call.
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
-	import { send } from './send.ts';
+	import { send } from '#lib/send.ts';
 
 	let {
 		tools,
