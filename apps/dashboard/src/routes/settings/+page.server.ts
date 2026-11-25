@@ -45,7 +45,9 @@ export const actions: Actions = {
 			return fail(400, { message: 'Unknown device.' });
 		}
 		if (!(await revokeDevice(organizationId, id))) {
-			return fail(404, { message: 'That device was already revoked, or is not in this organisation.' });
+			return fail(404, {
+				message: 'That device was already revoked, or is not in this organisation.'
+			});
 		}
 		return { revoked: id };
 	},

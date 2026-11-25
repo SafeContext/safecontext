@@ -40,7 +40,9 @@ test('lists devices and revokes one, which stops its token (#51)', async ({ page
 	const row = page.getByTestId('device-row').filter({ hasText: label });
 	await expect(row).toContainText(deviceId);
 	await expect(row).toContainText('Active');
-	expect((await request.get('/api/policy', { headers: { authorization: `Bearer ${token}` } })).status()).not.toBe(401);
+	expect(
+		(await request.get('/api/policy', { headers: { authorization: `Bearer ${token}` } })).status()
+	).not.toBe(401);
 
 	page.once('dialog', (dialog) => dialog.accept());
 	await row.getByRole('button', { name: `Revoke ${label}` }).click();
@@ -48,7 +50,12 @@ test('lists devices and revokes one, which stops its token (#51)', async ({ page
 	await expect(row).toContainText('Revoked');
 	await expect(row.getByRole('button', { name: /Revoke/ })).toHaveCount(0);
 
-	const { rows } = await db.query(`SELECT "tokenHash", "revokedAt" FROM "Device" WHERE "deviceId" = $1`, [deviceId]);
+	const { rows } = await db.query(
+		`SELECT "tokenHash", "revokedAt" FROM "Device" WHERE "deviceId" = $1`,
+		[deviceId]
+	);
 	expect(rows[0]).toMatchObject({ tokenHash: null, revokedAt: expect.any(Date) });
-	expect((await request.get('/api/policy', { headers: { authorization: `Bearer ${token}` } })).status()).toBe(401);
+	expect(
+		(await request.get('/api/policy', { headers: { authorization: `Bearer ${token}` } })).status()
+	).toBe(401);
 });

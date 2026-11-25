@@ -87,8 +87,8 @@
 		{/if}
 	</p>
 	<p class="text-xs text-muted">
-		Give the key to the agent on each device as <code>SC_ENROLLMENT_KEY</code>, and optionally a name
-		for the device as <code>SC_DEVICE_LABEL</code>, such as its asset tag. Each device gets its own
-		token when it joins, so a new key doesn’t affect devices that have already joined.
+		Give the key to the agent on each device as <code>SC_ENROLLMENT_KEY</code>, and optionally a
+		name for the device as <code>SC_DEVICE_LABEL</code>, such as its asset tag. Each device gets its
+		own token when it joins, so a new key doesn’t affect devices that have already joined.
 	</p>
 </Card>

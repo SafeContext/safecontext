@@ -15,14 +15,14 @@
  * The API has no idempotency key, so a batch whose response was lost may be stored twice.
  */
 import { AgentEvent } from '@safecontext/policy';
-
-/** An event before the device id is added. Same rules as `AgentEvent`. */
-const QueuedEvent = AgentEvent.omit({ deviceId: true });
-type QueuedEvent = Omit<AgentEvent, 'deviceId'>;
 import type { CheckReport, EventSink } from '../events.ts';
 import type { DeviceAuth } from './device-auth.ts';
 import type { DashboardClient } from './dashboard-client.ts';
 import type { SyncLogger, SyncReason } from './log.ts';
+
+/** An event before the device id is added. Same rules as `AgentEvent`. */
+const QueuedEvent = AgentEvent.omit({ deviceId: true });
+type QueuedEvent = Omit<AgentEvent, 'deviceId'>;
 
 /** Contract limits for one `POST /api/events` (AgentEventBatch: 1–500 events, 512 KiB). */
 export const MAX_BATCH_EVENTS = 500;

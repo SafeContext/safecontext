@@ -16,11 +16,9 @@ afterEach(() => dash.close());
 
 function setup(
 	store = memoryTokenStore(),
-	{
-		enrollmentKey,
-		label,
-		legacyId
-	}: { enrollmentKey?: string; label?: string; legacyId?: string } = { enrollmentKey: ENROLLMENT_KEY }
+	{ enrollmentKey, label, legacyId }: { enrollmentKey?: string; label?: string; legacyId?: string } = {
+		enrollmentKey: ENROLLMENT_KEY
+	}
 ) {
 	const logger = memoryLogger();
 	const auth = createDeviceAuth({
@@ -42,7 +40,7 @@ describe('createDeviceAuth', () => {
 		expect(dash.registrations).toBe(0);
 	});
 
-	it("keeps a pre-#51 token working with the id from the state folder", async () => {
+	it('keeps a pre-#51 token working with the id from the state folder', async () => {
 		const token = dash.issueToken('dev-chosen-by-agent');
 		const { auth } = setup(memoryTokenStore(token), { enrollmentKey: ENROLLMENT_KEY, legacyId: 'dev-chosen-by-agent' });
 		expect(await auth.credentials()).toEqual({ deviceId: 'dev-chosen-by-agent', token });

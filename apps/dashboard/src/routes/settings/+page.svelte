@@ -37,7 +37,9 @@
 </svelte:head>
 
 <PageHeader eyebrow="Organisation" title="Settings" />
-<p class="-mt-2 max-w-2xl text-muted">The devices in your organisation, and the key they join with.</p>
+<p class="-mt-2 max-w-2xl text-muted">
+	The devices in your organisation, and the key they join with.
+</p>
 
 <div aria-live="polite" class="empty:hidden">
 	{#if notice}
