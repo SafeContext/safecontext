@@ -1,0 +1,10 @@
+#!/bin/sh
+# Before installing or upgrading (#26): stop the agent of whoever is logged in, so its files can be
+# replaced. Runs as root.
+label=com.safecontext.agent
+user=$(stat -f %Su /dev/console)
+if [ -n "$user" ] && [ "$user" != root ]; then
+	uid=$(id -u "$user")
+	launchctl bootout "gui/$uid/$label" 2>/dev/null || true
+fi
+exit 0

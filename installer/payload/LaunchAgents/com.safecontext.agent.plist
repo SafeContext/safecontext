@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Runs the Safe Context agent for each person who logs in, and restarts it if it stops (#26). -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.safecontext.agent</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Library/Application Support/SafeContext/bin/safecontext</string>
+		<string>run</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<!-- A setting that stops it starting (e.g. a bad profile) is retried every 10 s, not in a tight loop. -->
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<!-- Every prompt waits for it: don't let macOS slow it down as a background job. -->
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+</dict>
+</plist>

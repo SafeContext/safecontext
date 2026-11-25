@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - installer
 allowBuilds:
   esbuild: true
 permissions:

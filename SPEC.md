@@ -28,7 +28,7 @@ Scope for now: **Claude Code only, macOS (Apple Silicon) only.**
 | Tier 0 detectors | `packages/detectors/` | TypeScript |
 | Admin dashboard | `apps/dashboard/` | TypeScript (SvelteKit 3, Tailwind 4, Prisma 7.10, Postgres 18) |
 | Models: data, training, evals, export | `ml/` | Python 3.14 (uv) |
-| Packaging (not built yet, #26) | `installer/` | Homebrew formula + launchd |
+| Packaging (#26) | `installer/` | `.pkg` + Homebrew formula, launchd, MDM profile settings |
 
 ---
 
@@ -429,8 +429,12 @@ Each item says where it was decided, or which issue holds the open question.
    server hosted by the company (or by us) over TLS with a key, falling back to the Mac's own model
    when it can't be reached, else the fail mode. Built in #75; see §4. The local model becomes
    optional in the installer (#26).
-5. **Agent distribution**: Homebrew formula + launchd; how to package Node + models (and Ollama, if
-   used). **Open:** #26. Model hosting is decided (item 8).
+5. ~~Agent distribution~~: **decided** on #26 (Joe, 23 and 25 Nov 2026) and built there: a signed,
+   notarized `.pkg` for MDM plus a Homebrew formula, with Node.js 24, the tier 1 model and
+   sc-extract bundled and Ollama optional. A LaunchAgent runs it for each user at login. Settings
+   come from an MDM configuration profile (domain `com.safecontext.agent`; the Deploy page builds
+   it), else `/Library/Preferences/com.safecontext.agent.plist`. `safecontext doctor` checks a
+   Mac. Signing waits for Joe's Apple Developer ID; the Homebrew tap isn't published yet.
 6. ~~Minimum Claude Code version~~: **decided** (Joe, 23 Nov 2026), **2.1.299** or later, for
    `onFailure` (2.1.295) and `CLAUDE_CODE_DISABLE_FILE_MENTIONS` (2.1.299, #38).
 7. ~~Tier 2 model and runtime~~: **decided** in

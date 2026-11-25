@@ -1,0 +1,37 @@
+#!/bin/sh
+# The installed `safecontext` command (issue #26).
+#
+#   safecontext run       The agent itself. launchd (or `brew services`) starts it at login and
+#                         restarts it if it stops. Logs: ~/Library/Logs/SafeContext/agent.log
+#                         (metadata only, never prompt or tool text).
+#   safecontext <other>   doctor, swaps, version: see `safecontext --help`.
+#
+# It runs the Node.js and the agent shipped next to it, and tells the agent where its files are
+# (SC_BUNDLE_DIR). Settings come from IT's MDM profile (preference domain com.safecontext.agent).
+set -e
+
+# This script's real folder, following symlinks (/usr/local/bin/safecontext, Homebrew's bin).
+self=$0
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+		/*) self=$link ;;
+		*) self=$(dirname "$self")/$link ;;
+	esac
+done
+dir=$(cd "$(dirname "$self")/.." && pwd -P)
+
+SC_BUNDLE_DIR=$dir
+SC_VERSION=$(cat "$dir/VERSION" 2>/dev/null || echo unknown)
+export SC_BUNDLE_DIR SC_VERSION
+
+if [ "$1" = run ]; then
+	logs="$HOME/Library/Logs/SafeContext"
+	mkdir -p "$logs"
+	# The agent writes agent.log itself and starts it again past 10 MB while it runs (SC_LOG_FILE).
+	# Anything else it prints (a crash) goes to agent.err.log, started again at each launch.
+	SC_LOG_FILE="$logs/agent.log"
+	export SC_LOG_FILE
+	exec "$dir/bin/node" "$dir/lib/agent.mjs" >"$logs/agent.err.log" 2>&1
+fi
+exec "$dir/bin/node" "$dir/lib/cli.mjs" "$@"

@@ -37,7 +37,7 @@ esac
 
 # Not "run /safe-context:status": while the agent is down, Claude Code blocks that too (it is a
 # prompt). Prompts work again as soon as the agent answers, with no restart.
-fix="Start the Safe Context agent (developers: run \`pnpm --filter @safecontext/agent dev\` in the safecontext repo), then send your prompt again. If that doesn't help, contact your IT team."
+fix="Start the Safe Context agent: run \`safecontext doctor\` in a terminal to see what's wrong (Homebrew installs: \`brew services restart safecontext\`; developers: \`pnpm --filter @safecontext/agent dev\` in the safecontext repo), then send your prompt again. If that doesn't help, contact your IT team."
 
 case "$state" in
 	ok) problem= ;;

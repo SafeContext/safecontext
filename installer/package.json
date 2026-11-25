@@ -1,0 +1,17 @@
+{
+  "name": "@safecontext/installer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "esbuild": "0.28.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

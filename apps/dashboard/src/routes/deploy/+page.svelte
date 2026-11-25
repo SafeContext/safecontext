@@ -1,6 +1,7 @@
 <script lang="ts">
 	// "Deploy to Claude Code" (#25): the managed settings that turn Safe Context on for everyone.
 	import { resolve } from '$app/paths';
+	import AgentProfileCard from '#lib/components/deploy/AgentProfileCard.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Card from '#lib/components/ui/Card.svelte';
 	import EmptyState from '#lib/components/ui/EmptyState.svelte';
@@ -47,8 +48,11 @@
 		description="The agent does the checking, on each person's device. Nothing they type or read is sent to us."
 	>
 		<p class="text-sm">
-			Install it with your device management tool, or with Homebrew for developers. Each device then
-			joins your organisation with its enrollment key and picks up your policy within 30 seconds.
+			Push <code>SafeContext.pkg</code> to every Mac with your device management tool, or install it
+			with Homebrew for developers (<code>brew install safecontext</code>, then
+			<code>brew services start safecontext</code>). It starts for each person at login. With the
+			profile below, each device joins your organisation and picks up your policy within 30 seconds.
+			<code>safecontext doctor</code> on a Mac checks that everything is in place.
 		</p>
 	</Card>
 
@@ -105,6 +109,8 @@
 			</ol>
 		</Card>
 	</div>
+
+	<AgentProfileCard organizationName={data.organizationName} dashboardUrl={data.dashboardUrl} />
 
 	<Card>
 		<p class="text-sm" data-testid="plugin-warning">

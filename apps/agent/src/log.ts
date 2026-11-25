@@ -5,12 +5,15 @@
  * (paths, session ids, commands, URLs). `LogFields` is a closed list of metadata fields on
  * purpose: adding a free-text field should need a deliberate change here.
  */
+import { appendFileSync, renameSync, statSync } from 'node:fs';
 import type { HookEventName } from '@safecontext/policy';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 
 export type LogMessage =
 	| 'listening'
+	/** Where the settings came from at start (#26): IT's MDM profile, the local file, or neither. */
+	| 'settings_loaded'
 	| 'check'
 	| 'invalid_input'
 	| 'invalid_output'
@@ -99,6 +102,7 @@ export interface LogFields {
 	classifyMs?: number;
 	totalMs?: number;
 	port?: number;
+	settingsSource?: 'profile' | 'local' | 'none';
 	/** Old saved keys deleted at start. */
 	deleted?: number;
 }
@@ -112,6 +116,31 @@ export function jsonLogger(write: (line: string) => void = (line) => process.std
 	return {
 		log(level, msg, fields = {}) {
 			write(JSON.stringify({ ts: new Date().toISOString(), level, msg, ...fields }) + '\n');
+		}
+	};
+}
+
+/**
+ * Appends log lines to `path`, starting a new file past `maxBytes` and keeping one older file
+ * (`<path>.1`). For the installed agent (#26), which runs for weeks: `SC_LOG_FILE`.
+ */
+export function rotatingFileWriter(path: string, maxBytes = 10 * 1024 * 1024): (line: string) => void {
+	let size = 0;
+	try {
+		size = statSync(path).size;
+	} catch {
+		// No file yet.
+	}
+	return (line) => {
+		try {
+			if (size >= maxBytes) {
+				renameSync(path, `${path}.1`);
+				size = 0;
+			}
+			appendFileSync(path, line, { mode: 0o600 });
+			size += Buffer.byteLength(line);
+		} catch {
+			// Logging must never stop the agent.
 		}
 	};
 }
