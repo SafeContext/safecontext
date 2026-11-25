@@ -10,7 +10,7 @@
  * guide shows it and a fix shows up here as a changed result.
  */
 
-export type Persona = 'dev' | 'pm' | 'sales';
+export type Persona = 'dev' | 'pm' | 'sales' | 'exec';
 
 type Base = {
 	persona: Persona;
@@ -280,5 +280,61 @@ export const SCENARIOS: Scenario[] = [
 		file: 'playbook/discount-guidelines.md',
 		expect: 'unchanged',
 		why: 'Internal guidance with no sensitive data goes through untouched.'
+	},
+	// ---------------------------------------------------------------- exec (the demo video)
+	{
+		persona: 'exec',
+		kind: 'prompt',
+		text: "Make me a 3-slide deck for Thursday's leadership review: our 2027 priorities, the Q4 deals that depend on them, and the Q3 scorecard. Use the files in this folder and save it as leadership-review.html.",
+		expect: 'allow',
+		why: 'The ask itself has nothing sensitive in it, so it goes straight through. The files Claude reads next are where Safe Context works.'
+	},
+	{
+		persona: 'exec',
+		kind: 'read',
+		file: 'strategy/2027-priorities.md',
+		expect: 'clean',
+		hides: ['Project Atlas', 'Project Helios'],
+		why: 'The unreleased codenames on IT\'s word list are swapped for placeholders before Claude reads the plan.'
+	},
+	{
+		persona: 'exec',
+		kind: 'read',
+		file: 'pipeline/top-deals-q4.csv',
+		expect: 'clean',
+		hides: ['Northwind', 'Acme Corp', 'Contoso', 'hannah.lewis@northwind.com', 'Project Atlas'],
+		why: 'Customer names and contact details are replaced; stages and dates stay so Claude can still build the slide.'
+	},
+	{
+		persona: 'exec',
+		kind: 'read',
+		file: 'metrics/q3-scorecard.md',
+		expect: 'clean',
+		hides: ['$4.2M'],
+		why: 'Revenue is "make it vague": Claude sees a range rather than the exact figure.'
+	},
+	{
+		persona: 'exec',
+		kind: 'read',
+		file: 'inbox/northwind-email.md',
+		expect: 'clean',
+		hides: ['hannah.lewis@northwind.com', '+44 20 7946 0123'],
+		why: "A customer's email thread: the address, phone number and company are hidden."
+	},
+	{
+		persona: 'exec',
+		kind: 'write',
+		file: 'pipeline/top-deals-q4.csv',
+		to: 'leadership-review.html',
+		restores: ['Northwind'],
+		expect: 'restored',
+		why: 'Claude writes the deck with placeholders; the saved file gets the real customer names back, which Claude never saw.'
+	},
+	{
+		persona: 'exec',
+		kind: 'prompt',
+		text: 'Add a callout from hannah.lewis@northwind.com: their renewal depends on Atlas shipping by March.',
+		expect: 'block',
+		why: "A customer's email address in a prompt is blocked before it is sent."
 	}
 ];
