@@ -26,7 +26,7 @@ export interface FakeDashboard {
 	url: string;
 	/** Published policy, or undefined for 404 `no_policy`. */
 	policy: Policy | undefined;
-	/** Valid device tokens, by token. */
+	/** Valid device tokens: token → device id. */
 	tokens: Map<string, string>;
 	/** Every event batch accepted, in order. */
 	batches: AgentEvent[][];
@@ -34,6 +34,8 @@ export interface FakeDashboard {
 	rawEventBodies: string[];
 	requests: Array<{ method: string; path: string; ifNoneMatch?: string; auth?: string }>;
 	registrations: number;
+	/** The label sent with each registration, in order (undefined: none). */
+	labels: Array<string | undefined>;
 	/** Replies to use instead of the normal behaviour, per path, consumed first in first out. */
 	override: Map<string, FakeReply[]>;
 	/** Issue a token for `deviceId` without the agent registering. */
@@ -50,6 +52,7 @@ export async function startFakeDashboard(): Promise<FakeDashboard> {
 		rawEventBodies: [],
 		requests: [],
 		registrations: 0,
+		labels: [],
 		override: new Map(),
 		issueToken(deviceId) {
 			// Re-registering rotates: the old token for this device stops working.
@@ -79,7 +82,10 @@ export async function startFakeDashboard(): Promise<FakeDashboard> {
 			const body = DeviceRegistrationRequest.safeParse(JSON.parse(raw));
 			if (!body.success) return error('invalid_body', 422);
 			fake.registrations++;
-			return { status: 201, body: { deviceId: body.data.deviceId, token: fake.issueToken(body.data.deviceId) } };
+			fake.labels.push(body.data.label);
+			// Like the real dashboard (#51): every registration is a new device with an id it picks.
+			const id = `dev-fake${fake.registrations}`;
+			return { status: 201, body: { deviceId: id, token: fake.issueToken(id) } };
 		}
 		const deviceId = auth === undefined ? undefined : fake.tokens.get(auth);
 		if (deviceId === undefined) return error('unauthorized', 401);

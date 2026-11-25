@@ -45,11 +45,12 @@ export type PolicyResult =
 	| { ok: false; reason: 'no_policy'; status: 404 }
 	| Failure;
 
-export type RegisterResult = { ok: true; token: string } | Failure;
+export type RegisterResult = { ok: true; deviceId: string; token: string } | Failure;
 export type EventsResult = { ok: true; accepted: number } | Failure;
 
 export interface DashboardClient {
-	registerDevice(enrollmentKey: string, deviceId: string): Promise<RegisterResult>;
+	/** Join the organisation as a new device; the dashboard picks the id (#51). */
+	registerDevice(enrollmentKey: string, label?: string): Promise<RegisterResult>;
 	getPolicy(token: string, etag?: string): Promise<PolicyResult>;
 	postEvents(token: string, events: AgentEvent[]): Promise<EventsResult>;
 }
@@ -100,18 +101,16 @@ export function createDashboardClient(opts: DashboardClientOptions): DashboardCl
 	}
 
 	return {
-		async registerDevice(enrollmentKey, deviceId) {
+		async registerDevice(enrollmentKey, label) {
 			const api = DASHBOARD_API.registerDevice;
-			const body = api.request.parse({ deviceId } satisfies DeviceRegistrationRequest);
+			const body = api.request.parse({ ...(label !== undefined && { label }) } satisfies DeviceRegistrationRequest);
 			const sent = await request(api.method, api.path, enrollmentKey, { body });
 			if (!sent.ok) return sent;
 			const { res } = sent;
 			if (res.status !== 200 && res.status !== 201) return failure(res);
 			const parsed = DeviceRegistrationResponse.safeParse(await json(res));
-			if (!parsed.success || parsed.data.deviceId !== deviceId) {
-				return { ok: false, reason: 'bad_response', status: res.status };
-			}
-			return { ok: true, token: parsed.data.token };
+			if (!parsed.success) return { ok: false, reason: 'bad_response', status: res.status };
+			return { ok: true, deviceId: parsed.data.deviceId, token: parsed.data.token };
 		},
 
 		async getPolicy(token, etag) {

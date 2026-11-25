@@ -1,8 +1,10 @@
 /**
  * An `EventSink` that uploads check reports to the dashboard (`POST /api/events`) in batches.
  *
- * - Adds the device id and checks every event against the strict `AgentEvent` schema, which has
- *   no text fields and rejects unknown ones. An event that fails is dropped, never sent.
+ * - Checks every event against the strict `AgentEvent` schema, which has no text fields and
+ *   rejects unknown ones. An event that fails is dropped, never sent. The device id is added
+ *   when a batch is sent: the dashboard gives it when the device registers (#51), and
+ *   registering again gives a new one.
  * - Queues in memory (bounded: the oldest events are dropped first when it's full) and sends one
  *   batch at a time, every `flushIntervalMs` or as soon as a full batch is waiting.
  * - Retries network errors, 5xx, 401 and 403 `device_mismatch` (after registering again), any
@@ -13,6 +15,10 @@
  * The API has no idempotency key, so a batch whose response was lost may be stored twice.
  */
 import { AgentEvent } from '@safecontext/policy';
+
+/** An event before the device id is added. Same rules as `AgentEvent`. */
+const QueuedEvent = AgentEvent.omit({ deviceId: true });
+type QueuedEvent = Omit<AgentEvent, 'deviceId'>;
 import type { CheckReport, EventSink } from '../events.ts';
 import type { DeviceAuth } from './device-auth.ts';
 import type { DashboardClient } from './dashboard-client.ts';
@@ -67,7 +73,7 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 	/** After a 413: the size for the next batch only (the split batch's retry), then back to `batchSize`. */
 	let splitSize: number | undefined;
 
-	const queue: AgentEvent[] = [];
+	const queue: QueuedEvent[] = [];
 	let dropped: Partial<Record<SyncReason, number>> = {};
 	let attempt = 0;
 	/** Epoch ms before which no upload is attempted. */
@@ -97,10 +103,13 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 		}
 	}
 
-	function takeBatch(): AgentEvent[] {
+	const stamp = (events: QueuedEvent[], deviceId: string): AgentEvent[] => events.map((e) => ({ ...e, deviceId }));
+
+	function takeBatch(deviceId: string): QueuedEvent[] {
 		let n = Math.min(splitSize ?? batchSize, queue.length);
 		splitSize = undefined;
-		while (n > 1 && Buffer.byteLength(JSON.stringify({ events: queue.slice(0, n) })) > MAX_BATCH_BYTES) {
+		const bytes = (k: number) => Buffer.byteLength(JSON.stringify({ events: stamp(queue.slice(0, k), deviceId) }));
+		while (n > 1 && bytes(n) > MAX_BATCH_BYTES) {
 			n = Math.ceil(n / 2);
 		}
 		return queue.splice(0, n);
@@ -132,10 +141,11 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 
 	async function drain(): Promise<void> {
 		while (queue.length > 0) {
-			const token = await auth.token();
-			if (token === undefined) return backOff('no_token', undefined);
-			const batch = takeBatch();
-			const result = await client.postEvents(token, batch);
+			const creds = await auth.credentials();
+			if (creds === undefined) return backOff('no_token', undefined);
+			const { token, deviceId } = creds;
+			const batch = takeBatch(deviceId);
+			const result = await client.postEvents(token, stamp(batch, deviceId));
 			if (result.ok) {
 				attempt = 0;
 				logger.log('info', 'events_uploaded', { events: result.accepted });
@@ -179,7 +189,7 @@ export function createEventUploader(opts: EventUploaderOptions): EventUploader {
 			return queue.length;
 		},
 		record(report: CheckReport) {
-			const parsed = AgentEvent.safeParse({ ...report, deviceId: auth.deviceId });
+			const parsed = QueuedEvent.safeParse(report);
 			if (!parsed.success) {
 				drop('invalid_event', 1);
 				return;

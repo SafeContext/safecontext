@@ -11,15 +11,31 @@ import * as z from 'zod';
 import { AgentEventBatch } from './events.ts';
 import { Id, Policy } from './policy.ts';
 
-/** `POST /api/devices` body. `deviceId` is the agent's anonymised id (`AgentEvent.deviceId`). */
+/**
+ * A name IT gives a device so they can tell it apart on the dashboard, e.g. an asset tag set by
+ * their device management tool (`SC_DEVICE_LABEL`). Optional: without one the device shows only
+ * its anonymised id. Printable text, no line breaks.
+ */
+export const DeviceLabel = z
+	.string()
+	.trim()
+	.min(1)
+	.max(64)
+	.regex(/^[^\p{Cc}\p{Cf}]+$/u, 'must be printable text');
+export type DeviceLabel = z.infer<typeof DeviceLabel>;
+
+/**
+ * `POST /api/devices` body (#51). The dashboard picks the device id, so holding the enrollment
+ * key never lets anyone take over a device that has already joined.
+ */
 export const DeviceRegistrationRequest = z.strictObject({
-	deviceId: Id
+	label: DeviceLabel.optional()
 });
 export type DeviceRegistrationRequest = z.infer<typeof DeviceRegistrationRequest>;
 
 /**
- * `POST /api/devices` response (201 new device, 200 known device). The token is only ever shown
- * here. Registering an existing `deviceId` again issues a new token and the old one stops working.
+ * `POST /api/devices` response (201). Every registration is a new device with a new id
+ * (`AgentEvent.deviceId`). The token is only ever shown here.
  */
 export const DeviceRegistrationResponse = z.strictObject({
 	deviceId: Id,

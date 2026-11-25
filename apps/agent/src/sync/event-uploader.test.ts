@@ -9,7 +9,6 @@ import { ENROLLMENT_KEY, startFakeDashboard, type FakeDashboard } from './fake-d
 import { syncLogger } from './log.ts';
 import { memoryTokenStore } from './token-store.ts';
 
-const DEVICE = 'dev-events-test';
 let dash: FakeDashboard;
 beforeEach(async () => {
 	dash = await startFakeDashboard();
@@ -40,7 +39,6 @@ function setup(opts: { batchSize?: number; maxQueue?: number; backoffBaseMs?: nu
 	const auth = createDeviceAuth({
 		client: createDashboardClient({ baseUrl: dash.url, timeoutMs: 2_000 }),
 		store: memoryTokenStore(),
-		deviceId: DEVICE,
 		enrollmentKey: ENROLLMENT_KEY,
 		logger: syncLogger(logger)
 	});
@@ -74,7 +72,8 @@ describe('createEventUploader', () => {
 		await uploader.flush();
 		expect(sent()).toHaveLength(5);
 		expect(dash.batches.map((b) => b.length)).toEqual([2, 2, 1]);
-		expect(sent().every((e) => e.deviceId === DEVICE)).toBe(true);
+		// The id the dashboard gave when the device registered (#51).
+		expect(sent().every((e) => e.deviceId === 'dev-fake1')).toBe(true);
 		expect(sent().map((e) => e.latencyMs)).toEqual([0, 1, 2, 3, 4]);
 		expect(uploader.pending).toBe(0);
 	});

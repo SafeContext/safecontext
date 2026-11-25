@@ -1,5 +1,5 @@
-// Sends one policy edit to the Policy page's form actions (`routes/policy/+page.server.ts`) and
-// reloads the page data, so every part of the page shows the saved draft.
+// Sends one change to the current page's form actions (e.g. `routes/policy/+page.server.ts`) and
+// reloads the page data, so every part of the page shows what was saved.
 import { deserialize } from '$app/forms';
 import { refreshAll } from '$app/navigation';
 
@@ -39,7 +39,7 @@ export async function send(
 				ok: false,
 				message:
 					result.status === 403
-						? 'Only admins can change the policy.'
+						? 'Only admins can make this change.'
 						: "That change wasn't saved. Reload the page and try again."
 			};
 		default:
