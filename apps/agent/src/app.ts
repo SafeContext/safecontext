@@ -38,7 +38,7 @@ import { mapToolOutputText, toolInputTexts, toolOutputTexts } from './tool-text.
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
 import { allowedBy, dropAllowedModelSpans } from './transform/allow.ts';
-import { knownValueFinder, MIN_KNOWN_LENGTH } from './transform/known.ts';
+import { knownValueFinder, MIN_KNOWN_LENGTH, sameValueFinder } from './transform/known.ts';
 import {
 	createPlaceholderStore,
 	dropPlaceholderSpans,
@@ -156,8 +156,9 @@ export function createApp(deps: AppDeps): Hono {
 
 	/**
 	 * Classify `texts` and decide. Never throws (the classifier doesn't). Placeholders the
-	 * session's key issued aren't flagged again (dropPlaceholderSpans). With `findKnown` (tool
-	 * output), every value the key holds is flagged too, wherever it appears (transform/known.ts).
+	 * session's key issued aren't flagged again (dropPlaceholderSpans). Every copy of a value
+	 * flagged here is flagged too (#144). With `findKnown` (tool output), so is every value the
+	 * key holds, wherever it appears (transform/known.ts).
 	 */
 	async function check(texts: string[], policy: Policy, hook: HookEventName, key: SessionKey, findKnown = false) {
 		const deadline = now() + checkBudgetMs;
@@ -167,10 +168,11 @@ export function createApp(deps: AppDeps): Hono {
 			const known = findKnown ? knownValueFinder(key) : undefined;
 			const rank = strictness(policy);
 			const allowed = allowedBy(policy);
+			const found = texts.map((text, i) => dropAllowedModelSpans(text, classified.spans[i] ?? [], allowed));
+			const copies = sameValueFinder(texts, found);
 			const spans = texts.map((text, i) => {
-				const found = dropAllowedModelSpans(text, classified.spans[i] ?? [], allowed);
-				const again = (known?.(text) ?? []).filter((s) => !allowed(text.slice(s.start, s.end)));
-				return mergeSpans(dropPlaceholderSpans(text, [...found, ...again], key), rank);
+				const again = [...(known?.(text) ?? []), ...copies(text)].filter((s) => !allowed(text.slice(s.start, s.end)));
+				return mergeSpans(dropPlaceholderSpans(text, [...found[i]!, ...again], key), rank);
 			});
 			result = { ...classified, spans };
 		}
@@ -302,10 +304,13 @@ export function createApp(deps: AppDeps): Hono {
 		const known = knownValueFinder(key);
 		const rank = strictness(policy);
 		const allowed = allowedBy(policy);
+		const found = texts.map((text, i) => dropAllowedModelSpans(text, spans[i]!, allowed));
+		const copies = sameValueFinder(texts, found);
 		const merged = texts.map((text, i) => {
-			const found = dropAllowedModelSpans(text, spans[i]!, allowed);
-			const again = known(text).filter((s) => s.end <= checkedUntil[i]! && !allowed(text.slice(s.start, s.end)));
-			return mergeSpans(dropPlaceholderSpans(text, [...found, ...again], key), rank);
+			const again = [...known(text), ...copies(text)].filter(
+				(s) => s.end <= checkedUntil[i]! && !allowed(text.slice(s.start, s.end))
+			);
+			return mergeSpans(dropPlaceholderSpans(text, [...found[i]!, ...again], key), rank);
 		});
 		const result: ClassifyResult = { ok: true, spans: merged, tiers: timings, ms, ...(cleared && { cleared }) };
 		const complete = checkedUntil.every((c, i) => c === texts[i]!.length);

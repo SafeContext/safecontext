@@ -27,15 +27,40 @@ export function isGenericValue(value: string): boolean {
 
 /** Finds the key's values in a text. Build once per request: the key can change between requests. */
 export function knownValueFinder(key: SessionKey): (text: string) => Span[] {
-	const byType = new Map<string, string[]>();
-	for (const { dataTypeId, spellings } of key.entries()) {
-		for (const spelling of spellings) {
-			const term = spelling.trim();
-			if ([...term].length < MIN_KNOWN_LENGTH || isGenericValue(term)) continue;
-			byType.set(dataTypeId, [...(byType.get(dataTypeId) ?? []), term]);
-		}
+	return finder(
+		key.entries().flatMap(({ dataTypeId, spellings }) => spellings.map((value) => ({ dataTypeId, value })))
+	);
+}
+
+/**
+ * Every copy of the values flagged in this call (#144). A tier may flag a value in one place and
+ * miss it in another ("Lumen" in a plan's title but not in a later line, a customer's name in a
+ * paragraph but not in the heading), so the same output would hide it once and show it once.
+ * Each flagged value is found again everywhere in `texts`, as the same data type, so it gets the
+ * same placeholder. Same rules as re-hiding: whole words, any case, no short or generic values.
+ */
+export function sameValueFinder(
+	texts: readonly string[],
+	spans: readonly (readonly Span[])[]
+): (text: string) => Span[] {
+	return finder(
+		texts.flatMap((text, i) =>
+			(spans[i] ?? []).map((s) => ({ dataTypeId: s.dataTypeId, value: text.slice(s.start, s.end) }))
+		)
+	);
+}
+
+function finder(values: Array<{ dataTypeId: string; value: string }>): (text: string) => Span[] {
+	const byType = new Map<string, Set<string>>();
+	for (const { dataTypeId, value } of values) {
+		const term = value.trim();
+		// One line only: a span across lines (a key block) has nothing to find again.
+		if ([...term].length < MIN_KNOWN_LENGTH || isGenericValue(term) || term.includes('\n')) continue;
+		byType.set(dataTypeId, (byType.get(dataTypeId) ?? new Set()).add(term));
 	}
 	if (byType.size === 0) return () => [];
-	const detector = createTermListDetector([...byType].map(([dataTypeId, terms]) => ({ dataTypeId, terms })));
+	const detector = createTermListDetector(
+		[...byType].map(([dataTypeId, terms]) => ({ dataTypeId, terms: [...terms] }))
+	);
 	return (text) => detector.detect(text);
 }
