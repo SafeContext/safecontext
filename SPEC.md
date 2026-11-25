@@ -232,8 +232,15 @@ data type (tier 0). When spans of two data types overlap, the stricter type in t
 - **API:** OpenAI-compatible `POST <base>/chat/completions` (`SC_TIER2_BASE_URL`, default
   `http://127.0.0.1:11434/v1`). Non-streaming, `temperature: 0`, `seed: 0`, `reasoning_effort:
   "none"`, the task's JSON Schema as `response_format`. The answer is still checked on the way
-  back. An optional `SC_TIER2_API_KEY` is sent as a Bearer header, so a company-hosted server (#75)
-  is a setting. The base URL must be https unless it is loopback.
+  back. The base URL must be https unless it is loopback.
+- **Company server with a local fallback** (#75, `classifier/tier2/failover.ts`). Point
+  `SC_TIER2_BASE_URL` at the company's model server; it then needs `SC_TIER2_API_KEY` (sent as a
+  Bearer header). When that server can't be reached, times out or answers with an HTTP error, the
+  call is retried on this Mac's model (Ollama, `SC_TIER2_FALLBACK_MODEL`, default the pinned Gemma)
+  with the time left, and calls skip the server for 30 s before trying it again. With no local
+  model either, the call fails and its spans stay flagged (the usual fail-safe).
+  `SC_TIER2_FALLBACK=off` turns the fallback off. A bad answer from a reachable server is not an
+  outage, so it doesn't fall back. At start the agent checks both and logs each with `endpoint`.
 - **Prompts:** the agent loads `ml/prompts/tier2/` (`SC_TIER2_PROMPTS_DIR`), the files the
   evaluation scored. `apps/agent/src/classifier/tier2/prompts.ts` ports the Python rendering
   exactly; a fixture written by the Python reference checks it.
@@ -418,9 +425,10 @@ Each item says where it was decided, or which issue holds the open question.
    postal addresses, card and account numbers, government IDs); *Customer names* (client
    companies) is unchanged. IT protects specific names with a term list. Built in #78. Still
    open: special-category data and public reference customers (PR #54).
-4. **Laptop vs central server** for the model (start on the laptop; keep the agent API identical).
-   **Open:** #75 (later; Gemma on every Mac for now). Everything built so far runs on the laptop;
-   tier 2's endpoint is already a setting (`SC_TIER2_BASE_URL`, `SC_TIER2_API_KEY`).
+4. ~~Laptop vs central server~~ for the model: **decided** on #75 (Joe, 23 Nov 2026), a model
+   server hosted by the company (or by us) over TLS with a key, falling back to the Mac's own model
+   when it can't be reached, else the fail mode. Built in #75; see §4. The local model becomes
+   optional in the installer (#26).
 5. ~~Agent distribution~~: **decided** on #26 (Joe, 23 and 25 Nov 2026) and built there: a signed,
    notarized `.pkg` for MDM plus a Homebrew formula, with Node.js 24, the tier 1 model and
    sc-extract bundled and Ollama optional. A LaunchAgent runs it for each user at login. Settings
@@ -433,8 +441,8 @@ Each item says where it was decided, or which issue holds the open question.
    [#14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437) (runtime:
    OpenAI-compatible API, default Ollama) and PR #74 (model: Gemma 4 E4B). Built in #16. See §4.
    Still **open** in #14: what to do on 16 GB Macs (the model holds ~7 GB while loaded). Also open:
-   whether to keep it loaded all the time (`OLLAMA_KEEP_ALIVE`). Where tier 2 runs, each Mac or a
-   company server, is **open** in #75 (item 4).
+   whether to keep it loaded all the time (`OLLAMA_KEEP_ALIVE`). Where tier 2 runs is decided in #75
+   (item 4).
 8. ~~Model and dataset hosting~~: **decided** in #70, a private Hugging Face org. See §4a.
 9. ~~Tier 1 model~~: **decided** in
    [#13](https://github.com/SafeContext/safecontext/issues/13#issuecomment-6461207888), GLiNER
