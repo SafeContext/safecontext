@@ -368,6 +368,24 @@ Each run writes `ml/results/leak-<name>.md`. Add a company's own term list with
 Re-run both sets for any change to the detectors, the models or how the agent cleans text, and
 put the before and after numbers in the PR.
 
+### Usefulness through Claude Code
+
+The leak score says what's hidden; `apps/agent/scripts/usefulness.ts` (#84) says whether Claude
+still gets the work done. It runs 8 MacroHard tasks (sales, dev, PM) in real Claude Code on haiku,
+three times each, with Safe Context off, as it was before #83, and as it is now, and grades each
+run: done, readable (real values in front of the person), and hidden values that reached Claude.
+Latest: `ml/results/usefulness.md`. It costs about 72 haiku runs, so run it for changes to how
+values are hidden or put back, not every PR.
+
+```bash
+git worktree add /tmp/sc-before-83 47540c5~1 && (cd /tmp/sc-before-83 && pnpm install)
+export SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" SC_TIER2_MODEL=gemma4:e4b-it-q4_K_M
+pnpm --filter @safecontext/agent exec tsx scripts/usefulness.ts --before /tmp/sc-before-83
+```
+
+Needs MacroHard (`~/github/MacroHard`, after its `setup.sh`). `--regrade <folder>` grades the runs
+a previous run kept again, without new runs.
+
 ## Tier 1 tagger (GLiNER)
 
 Issue #13. Scores, the chosen model and why: [`results/tier1-gliner.md`](results/tier1-gliner.md).
