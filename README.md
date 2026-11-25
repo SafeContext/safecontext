@@ -103,7 +103,9 @@ Also working:
   Details: [docs/hook-coverage.md](docs/hook-coverage.md).
 - **Tier 2 speed varies.** A check that needs tier 2 took about 0.5 s (p50) on an M3 Max when the
   graphics chip was free, and 3–5 s when another app was using it. A call that runs out of time
-  keeps everything flagged. Not measured on a base 16 GB Mac yet; #14 estimates 1.7–2 s there.
+  keeps everything flagged. Not measured on a base 16 GB Mac yet; #14 estimates 1.7–2 s there. A
+  company-hosted model server avoids this (`SC_TIER2_BASE_URL`, with this Mac's model as the
+  fallback, [#75](https://github.com/SafeContext/safecontext/issues/75)).
 - **How a Mac joins an organisation** uses a temporary enrollment key
   ([#51](https://github.com/SafeContext/safecontext/issues/51)).
 
@@ -275,7 +277,9 @@ Playwright needs its test browser once per machine:
 | `SC_TIER1_LABEL` | `{name}` | Label the model sees for a data type, when `labels.json` has none |
 | `SC_TIER2_MODEL` | `gemma4:e4b-it-q4_K_M` once tier 2 is on | Tier 2 model name. Setting this or `SC_TIER2_BASE_URL` turns tier 2 on; unset both: off |
 | `SC_TIER2_BASE_URL` | `http://127.0.0.1:11434/v1` (Ollama) | Any OpenAI-compatible server. Must be https, except on this Mac (localhost) |
-| `SC_TIER2_API_KEY` | unset | Sent as `Authorization: Bearer`, for a company-hosted model server ([#75](https://github.com/SafeContext/safecontext/issues/75)). Never logged |
+| `SC_TIER2_API_KEY` | unset | Sent as `Authorization: Bearer`. Required when `SC_TIER2_BASE_URL` is another machine, i.e. a company-hosted model server ([#75](https://github.com/SafeContext/safecontext/issues/75)). Never logged |
+| `SC_TIER2_FALLBACK` | `local` with a company server | `local`: when the company server can't be reached, use this Mac's model (Ollama) if it's there. `off`: don't |
+| `SC_TIER2_FALLBACK_MODEL` | `gemma4:e4b-it-q4_K_M` | The model on this Mac to fall back to |
 | `SC_TIER2_PROMPTS_DIR` | the repo's `ml/prompts/tier2` | Tier 2 prompt files |
 | `SC_TIER2_TIMEOUT_MS` | `6000` (from `tier2.json`) | Longest one tier 2 call may take. Calls also stop in time for the check budget |
 | `SC_DASHBOARD_URL` | unset | Dashboard address. Unset: no sync. Must be https, except localhost |

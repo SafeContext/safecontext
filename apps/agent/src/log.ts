@@ -34,7 +34,13 @@ export type LogMessage =
 	| 'tier2_unavailable'
 	| 'tier2_off'
 	/** One tier 2 call failed (`task`, `reason`); its spans stay flagged or get the fallback rewrite. */
-	| 'tier2_call_failed';
+	| 'tier2_call_failed'
+	/**
+	 * The company's model server failed (`reason`), so tier 2 uses this Mac's model for a while
+	 * (#75); and the server answered again.
+	 */
+	| 'tier2_failover'
+	| 'tier2_server_back';
 
 /** Why tier 2 couldn't be used, or a call failed. Codes only, never text. */
 export type Tier2LogReason =
@@ -74,6 +80,8 @@ export interface LogFields {
 	cleared?: number;
 	/** Tier 2 task: context judgement or generalize. */
 	task?: 'context' | 'generalize';
+	/** Which tier 2 model server a startup check is about (#75): the company's, or this Mac's. */
+	endpoint?: 'server' | 'local';
 	reason?: Tier2LogReason;
 	/** Zod issue count when a policy file or request fails validation. */
 	issues?: number;
