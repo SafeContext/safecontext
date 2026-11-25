@@ -21,12 +21,24 @@ import { mapToolOutputText } from './tool-text.ts';
 import type { Restored } from './transform/restore.ts';
 
 /** `safeVersion`: the prompt with every flagged span transformed (for a `block` decision). */
-export function promptResponse(decision: Decision, safeVersion?: string): UserPromptSubmitOutput {
+export function promptResponse(
+	decision: Decision,
+	safeVersion?: string,
+	{ subagentReport = false }: { subagentReport?: boolean } = {}
+): UserPromptSubmitOutput {
 	// `rewrite` passes: a prompt can't be edited and yellow data doesn't stop it (issue #50).
 	if (decision.verdict !== 'block') return {};
+	const reason =
+		decision.cause === 'fail'
+			? subagentReport
+				? messages.subagentReportUnchecked()
+				: messages.promptUnchecked()
+			: subagentReport
+				? messages.subagentReportBlocked(decision.hits)
+				: messages.promptBlocked(decision.hits, safeVersion);
 	return {
 		decision: 'block',
-		reason: decision.cause === 'fail' ? messages.promptUnchecked() : messages.promptBlocked(decision.hits, safeVersion),
+		reason,
 		hookSpecificOutput: { hookEventName: 'UserPromptSubmit', suppressOriginalPrompt: true }
 	};
 }
