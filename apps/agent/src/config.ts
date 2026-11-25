@@ -45,6 +45,12 @@ export interface Tier2Config {
 	promptsDir: string;
 	/** Cap on one call (`SC_TIER2_TIMEOUT_MS`). Unset: `tier2.json` `timeouts.per_call_ms` (6 s). */
 	timeoutMs: number | undefined;
+	/**
+	 * This Mac's model, used when the company's server can't be (#75). Set by default when
+	 * `baseUrl` is another machine; `SC_TIER2_FALLBACK=off` turns it off. Undefined when `baseUrl`
+	 * is already this Mac.
+	 */
+	fallback: { baseUrl: string; model: string } | undefined;
 }
 
 /** Ollama's OpenAI-compatible API on this Mac. */
@@ -110,12 +116,23 @@ function readTier2Config(env: NodeJS.ProcessEnv): Tier2Config | undefined {
 	const model = env.SC_TIER2_MODEL?.trim();
 	if (!rawUrl && !model) return undefined;
 	const timeout = env.SC_TIER2_TIMEOUT_MS?.trim();
+	const baseUrl = tier2BaseUrl(rawUrl || DEFAULT_TIER2_BASE_URL);
+	const apiKey = env.SC_TIER2_API_KEY?.trim() || undefined;
+	const remote = !LOOPBACK.has(new URL(baseUrl).hostname);
+	// Prompt and tool text goes to that server: it must know who is asking (#75).
+	if (remote && !apiKey) throw new Error('SC_TIER2_API_KEY is required when SC_TIER2_BASE_URL is another machine');
+	const fallback = env.SC_TIER2_FALLBACK?.trim() || 'local';
+	if (fallback !== 'local' && fallback !== 'off') throw new Error('SC_TIER2_FALLBACK must be "local" or "off"');
 	return {
-		baseUrl: tier2BaseUrl(rawUrl || DEFAULT_TIER2_BASE_URL),
+		baseUrl,
 		model: model || PINNED_TIER2_MODEL,
-		apiKey: env.SC_TIER2_API_KEY?.trim() || undefined,
+		apiKey,
 		promptsDir: env.SC_TIER2_PROMPTS_DIR?.trim() || DEFAULT_TIER2_PROMPTS_DIR,
-		timeoutMs: timeout ? int(timeout, 0, 100, MAX_CHECK_BUDGET_MS, 'SC_TIER2_TIMEOUT_MS') : undefined
+		timeoutMs: timeout ? int(timeout, 0, 100, MAX_CHECK_BUDGET_MS, 'SC_TIER2_TIMEOUT_MS') : undefined,
+		fallback:
+			remote && fallback === 'local'
+				? { baseUrl: DEFAULT_TIER2_BASE_URL, model: env.SC_TIER2_FALLBACK_MODEL?.trim() || PINNED_TIER2_MODEL }
+				: undefined
 	};
 }
 

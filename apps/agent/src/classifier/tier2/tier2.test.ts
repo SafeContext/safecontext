@@ -376,7 +376,8 @@ describe('configuration', () => {
 			model: 'gemma4:e4b-it-q4_K_M',
 			apiKey: undefined,
 			promptsDir: DEFAULT_TIER2_PROMPTS_DIR,
-			timeoutMs: undefined
+			timeoutMs: undefined,
+			fallback: undefined
 		});
 		expect(
 			readConfig({
@@ -388,8 +389,23 @@ describe('configuration', () => {
 			baseUrl: 'https://models.corp.example/v1',
 			model: 'gemma4:e4b-it-q4_K_M',
 			apiKey: API_KEY,
-			timeoutMs: 4000
+			timeoutMs: 4000,
+			fallback: { baseUrl: 'http://127.0.0.1:11434/v1', model: 'gemma4:e4b-it-q4_K_M' }
 		});
+	});
+
+	it('needs a key for a server on another machine, and falls back to this Mac unless told not to (#75)', () => {
+		const remote = { SC_TIER2_BASE_URL: 'https://models.corp.example/v1' };
+		expect(() => readConfig(remote)).toThrow(/SC_TIER2_API_KEY/);
+		const keyed = { ...remote, SC_TIER2_API_KEY: API_KEY };
+		expect(readConfig({ ...keyed, SC_TIER2_FALLBACK: 'off' }).tier2?.fallback).toBeUndefined();
+		expect(readConfig({ ...keyed, SC_TIER2_FALLBACK_MODEL: 'gemma4:small' }).tier2?.fallback).toEqual({
+			baseUrl: 'http://127.0.0.1:11434/v1',
+			model: 'gemma4:small'
+		});
+		expect(() => readConfig({ ...keyed, SC_TIER2_FALLBACK: 'cloud' })).toThrow(/SC_TIER2_FALLBACK/);
+		// Already this Mac: nothing to fall back to, and no key needed.
+		expect(readConfig({ SC_TIER2_BASE_URL: 'http://127.0.0.1:11434/v1' }).tier2?.fallback).toBeUndefined();
 	});
 
 	it.each(['http://10.0.0.5:11434/v1', 'http://models.corp.example/v1', 'ftp://127.0.0.1/v1', 'not a url'])(
@@ -423,7 +439,8 @@ describe('startup check', () => {
 			model,
 			apiKey: undefined,
 			promptsDir: DEFAULT_TIER2_PROMPTS_DIR,
-			timeoutMs: undefined
+			timeoutMs: undefined,
+			fallback: undefined
 		};
 		await tier2FromConfig(config, logger)!.ready;
 		return { logger, server };
@@ -469,7 +486,8 @@ describe('startup check', () => {
 			model: 'm',
 			apiKey: undefined,
 			promptsDir: DEFAULT_TIER2_PROMPTS_DIR,
-			timeoutMs: undefined
+			timeoutMs: undefined,
+			fallback: undefined
 		};
 		await tier2FromConfig(config, logger)!.ready;
 		expect(msgs(logger)).toEqual([['tier2_unavailable', 'unreachable']]);
@@ -484,9 +502,48 @@ describe('startup check', () => {
 			model: 'm',
 			apiKey: undefined,
 			promptsDir: '/nonexistent',
-			timeoutMs: undefined
+			timeoutMs: undefined,
+			fallback: undefined
 		};
 		expect(() => tier2FromConfig(config, logger)).toThrow();
+	});
+});
+
+describe('company server with a local fallback (#75)', () => {
+	it('checks both at start, then answers from this Mac while the server is down', async () => {
+		const company = await startFakeModelServer(() => ({ status: 503, body: 'down' }), null);
+		const mac = await startFakeModelServer(contextAnswer(() => false));
+		servers.push(company, mac);
+		const logger = memoryLogger();
+		const configured = tier2FromConfig(
+			{
+				baseUrl: company.baseUrl,
+				model: 'company-model',
+				apiKey: API_KEY,
+				promptsDir: DEFAULT_TIER2_PROMPTS_DIR,
+				timeoutMs: undefined,
+				fallback: { baseUrl: mac.baseUrl, model: 'gemma4:e4b-it-q4_K_M' }
+			},
+			logger
+		)!;
+		await configured.ready;
+		expect(logger.records.map((r) => [r.msg, r.endpoint, r.reason]).sort()).toEqual(
+			[
+				['tier2_unavailable', 'server', 'http_error'],
+				['tier2_ready', 'local', undefined]
+			].sort()
+		);
+
+		const classifier = createClassifier({
+			tiers: [taggerTier({ Heron: 'unreleased-roadmap' }), configured.tier],
+			budgetMs: 8000
+		});
+		const result = await classifier.classify([PRESS], policy, { hook: 'UserPromptSubmit' });
+		expect(result.ok && result.cleared).toBe(1); // this Mac's model judged it
+		expect(company.chats().at(-1)!.headers.authorization).toBe(`Bearer ${API_KEY}`);
+		expect(mac.chats().every((c) => c.headers.authorization === undefined)).toBe(true);
+		expect(logger.records.some((r) => r.msg === 'tier2_failover')).toBe(true);
+		expect(JSON.stringify(logger.records)).not.toContain(API_KEY);
 	});
 });
 

@@ -24,6 +24,7 @@ import { silentLogger, type Logger } from '../../log.ts';
 import type { GeneralizeModel } from '../../transform/generalize.ts';
 import type { ClassifierTier, ClassifyState } from '../types.ts';
 import { createTier2Client, Tier2CallError, type Tier2Client } from './client.ts';
+import { failoverClient } from './failover.ts';
 import {
 	buildRequest,
 	excerpts,
@@ -183,9 +184,10 @@ export interface ConfiguredTier2 extends Tier2 {
 
 /**
  * Tier 2 as configured (`SC_TIER2_*`), or undefined when it's off. Loads the prompt files now
- * (a missing or broken file stops the agent). Then, in the background: on Ollama, checks
- * `GET /api/tags` for the model (and the pinned digest), and warms the model up with one small
- * call. Never pulls a model.
+ * (a missing or broken file stops the agent). With a company server and a local fallback (#75),
+ * calls go to the server and fall back to this Mac's model when it can't be used (failover.ts).
+ * Then, in the background, for each model server: on Ollama, checks `GET /api/tags` for the
+ * model (and the pinned digest), and warms the model up with one small call. Never pulls a model.
  */
 export function tier2FromConfig(
 	config: Tier2Config | undefined,
@@ -197,33 +199,53 @@ export function tier2FromConfig(
 		return undefined;
 	}
 	const prompts = loadPrompts(config.promptsDir);
-	const client = createTier2Client({
+	const server = createTier2Client({
 		baseUrl: config.baseUrl,
 		model: config.model,
 		apiKey: config.apiKey,
 		fetch: fetchFn
 	});
+	if (!config.fallback) {
+		const tier2 = createTier2({ client: server, prompts, perCallMs: config.timeoutMs, logger });
+		return { ...tier2, ready: checkReady(server, prompts, logger) };
+	}
+	const local = createTier2Client({ ...config.fallback, fetch: fetchFn });
+	const client = failoverClient({ server, local, logger });
 	const tier2 = createTier2({ client, prompts, perCallMs: config.timeoutMs, logger });
-	return { ...tier2, ready: checkReady(client, prompts, logger) };
+	const ready = Promise.all([
+		checkReady(server, prompts, logger, 'server'),
+		// A Mac without the local model still works: the fallback is just not there.
+		checkReady(local, prompts, logger, 'local')
+	]).then(() => {});
+	return { ...tier2, ready };
 }
 
-async function checkReady(client: Tier2Client, prompts: Prompts, logger: Logger): Promise<void> {
+async function checkReady(
+	client: Tier2Client,
+	prompts: Prompts,
+	logger: Logger,
+	endpoint?: 'server' | 'local'
+): Promise<void> {
+	const at = endpoint ? { endpoint } : {};
 	const start = performance.now();
 	try {
 		const models = await client.listModels(TAGS_TIMEOUT_MS);
 		const found = models.find((m) => m.name === client.model || m.name === `${client.model}:latest`);
 		if (!found) {
-			logger.log('error', 'tier2_unavailable', { reason: 'model_missing' });
+			logger.log(endpoint === 'local' ? 'warn' : 'error', 'tier2_unavailable', { ...at, reason: 'model_missing' });
 			return;
 		}
 		if (client.model === PINNED_TIER2_MODEL && found.digest.replace(/^sha256:/, '') !== PINNED_TIER2_DIGEST.slice(7)) {
 			// Not the weights #14 scored. Keep going, but say so.
-			logger.log('warn', 'tier2_unavailable', { reason: 'digest_mismatch' });
+			logger.log('warn', 'tier2_unavailable', { ...at, reason: 'digest_mismatch' });
 		}
 	} catch (err) {
 		// No /api/tags (HTTP error): not Ollama, e.g. a company model server (#75). Go on to the warm-up.
 		if (!(err instanceof Tier2CallError) || err.reason !== 'http_error') {
-			logger.log('error', 'tier2_unavailable', { reason: err instanceof Tier2CallError ? err.reason : 'bad_response' });
+			logger.log(endpoint === 'local' ? 'warn' : 'error', 'tier2_unavailable', {
+				...at,
+				reason: err instanceof Tier2CallError ? err.reason : 'bad_response'
+			});
 			return;
 		}
 	}
@@ -241,10 +263,10 @@ async function checkReady(client: Tier2Client, prompts: Prompts, logger: Logger)
 			}),
 			req.ids
 		);
-		logger.log('info', 'tier2_ready', { totalMs: Math.round(performance.now() - start) });
+		logger.log('info', 'tier2_ready', { ...at, totalMs: Math.round(performance.now() - start) });
 	} catch (err) {
 		const reason =
 			err instanceof Tier2CallError ? err.reason : err instanceof ResponseError ? 'bad_answer' : 'bad_response';
-		logger.log('error', 'tier2_unavailable', { reason });
+		logger.log(endpoint === 'local' ? 'warn' : 'error', 'tier2_unavailable', { ...at, reason });
 	}
 }
