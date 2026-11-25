@@ -255,6 +255,7 @@ Playwright needs its test browser once per machine:
 | `SC_AGENT_PORT` | `4747` | Port on 127.0.0.1. The plugin's hooks always use 4747 |
 | `SC_POLICY_FILE` | unset | Local policy file. Unset: the built-in default policy |
 | `SC_CHECK_BUDGET_MS` | `8000` (max 25000) | Time allowed for one check. When it runs out, the policy's fail mode applies |
+| `SC_EXTRACT_BIN` | `apps/agent/native/bin/sc-extract` | Helper that pulls text out of images and PDFs before Claude reads one (#40). Build it with `pnpm --filter @safecontext/agent build:extract` (needs the Xcode command-line tools). Without it, image and PDF reads follow the fail mode |
 | `SC_TIER1_MODEL_DIR` | unset | Tier 1 model folder. Unset: tier 1 is off. Use an absolute path |
 | `SC_TIER1_MODEL_FILE` | `model.onnx` | ONNX file in that folder |
 | `SC_TIER1_THRESHOLD` | the model's `tier1.json`, else 0.5 | Lowest score that counts as a match |

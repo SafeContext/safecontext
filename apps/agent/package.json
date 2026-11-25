@@ -12,7 +12,8 @@
     "format": "prettier --write src e2e",
     "test": "vitest run",
     "test:e2e": "vitest run --config e2e/vitest.config.ts",
-    "leak-eval": "tsx scripts/leak-eval.ts"
+    "leak-eval": "tsx scripts/leak-eval.ts",
+    "build:extract": "mkdir -p native/bin && swiftc -O -o native/bin/sc-extract native/extract.swift"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",

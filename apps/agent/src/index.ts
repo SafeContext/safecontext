@@ -3,7 +3,9 @@ import { createClassifier } from './classifier/classifier.ts';
 import { createTier0, termListDetectors } from './classifier/tier0.ts';
 import { tier1FromConfig } from './classifier/tier1/tier1.ts';
 import { tier2FromConfig } from './classifier/tier2/tier2.ts';
+import { existsSync } from 'node:fs';
 import { readConfig } from './config.ts';
+import { createExtractor } from './extract.ts';
 import { jsonLogger } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
 import { startServer } from './server.ts';
@@ -28,9 +30,14 @@ const classifier = createClassifier({
 	budgetMs: config.checkBudgetMs
 });
 
+// Images and PDFs (#40): the helper pulls their text out on this device.
+const extractor = existsSync(config.extractBin) ? createExtractor(config.extractBin) : undefined;
+logger.log(extractor ? 'info' : 'warn', extractor ? 'extract_ready' : 'extract_missing');
+
 const app = createApp({
 	policy,
 	classifier,
+	extractor,
 	logger,
 	events: sync?.events,
 	generalizer: tier2?.generalizer,

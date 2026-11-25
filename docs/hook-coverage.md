@@ -17,7 +17,7 @@ Context hooks (SPEC.md §2 and §6.2)?
 | --- | --- | --- | --- |
 | `@file` mentions | **Not covered** (by default). Possible fix tested | Unchanged | #38 |
 | CLAUDE.md, rules and imported memory files | **Not covered** (observe-only hook exists) | Unchanged | #39 |
-| Images and PDFs read by Claude | **Hooks fire, but nothing to check.** Partly covered | Unchanged. The result isn't Read's text shape, so the agent checks every string in it, base64 included | #40 |
+| Images and PDFs read by Claude | **Hooks fire, but nothing to check.** Partly covered | **Covered** (#40): before a Read of an image or PDF, the agent pulls its text out on the device (Vision text recognition, the PDF text layer) and checks it; anything sensitive stops the Read. Images pasted into a prompt are still untested | #40 |
 | Subagent tool calls | **Covered.** The result passed back to Claude is not | **Covered**, and the foreground report (the `Agent` tool result) is cleaned (PR #62). A background report arrives through `UserPromptSubmit`, so it can be blocked but not cleaned | #61 |
 | Pasted content | **Covered** (tested in `-p` mode only; interactive paste not tested) | Unchanged | none |
 | Slash commands and skills | **Not covered** | **Covered** (#42): a `UserPromptExpansion` hook (typed `/skill`) and `PreToolUse` on `Skill` (Claude's own calls) make the agent read the skill's file and check it; red data blocks it, and a skill that injects shell output is blocked unless IT lists it. Bundled skills and MCP prompts aren't checked (no file) | #42 |

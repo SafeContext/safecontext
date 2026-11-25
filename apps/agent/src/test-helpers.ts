@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { defaultPolicy, type Policy, type PolicyInput, Policy as PolicySchema } from '@safecontext/policy';
 import { createApp } from './app.ts';
 import { createClassifier } from './classifier/classifier.ts';
+import type { Extractor } from './extract.ts';
 import { createTier0 } from './classifier/tier0.ts';
 import type { ClassifierTier } from './classifier/types.ts';
 import type { CheckReport } from './events.ts';
@@ -24,6 +25,8 @@ export interface TestAppOptions {
 	policy?: Policy;
 	tiers?: ClassifierTier[];
 	budgetMs?: number;
+	/** Text extraction for images and PDFs (#40). Default: none, so such reads fail closed. */
+	extractor?: Extractor;
 	/** The agent's budget per check (`SC_CHECK_BUDGET_MS`). Default: the agent's default. */
 	checkBudgetMs?: number;
 }
@@ -32,6 +35,7 @@ export function testApp({
 	policy = policyWith(),
 	tiers = [createTier0()],
 	budgetMs = 1_000,
+	extractor,
 	checkBudgetMs
 }: TestAppOptions = {}) {
 	const logger = memoryLogger();
@@ -39,6 +43,7 @@ export function testApp({
 	const app = createApp({
 		policy: staticPolicySource(policy),
 		classifier: createClassifier({ tiers, budgetMs }),
+		...(extractor && { extractor }),
 		...(checkBudgetMs !== undefined && { checkBudgetMs }),
 		logger,
 		events: { record: (r) => reports.push(r) }

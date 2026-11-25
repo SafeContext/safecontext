@@ -21,6 +21,8 @@ export type LogMessage =
 	| 'tier1_ready'
 	| 'tier1_failed'
 	| 'tier1_off'
+	| 'extract_ready'
+	| 'extract_missing'
 	/** A skill whose files the agent couldn't find, so it wasn't checked (#42). */
 	| 'skill_unknown'
 	/**

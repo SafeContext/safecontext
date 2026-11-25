@@ -18,6 +18,12 @@ export interface AgentConfig {
 	tier1: Tier1Config | undefined;
 	/** Tier 2 small LLM (issue #16). Undefined unless `SC_TIER2_BASE_URL` or `SC_TIER2_MODEL` is set. */
 	tier2: Tier2Config | undefined;
+	/**
+	 * The `sc-extract` helper for images and PDFs (`SC_EXTRACT_BIN`, #40). Default: the one built
+	 * by `pnpm --filter @safecontext/agent build:extract`. If it's missing, images and PDFs can't be
+	 * checked and the fail mode applies.
+	 */
+	extractBin: string;
 }
 
 export interface Tier2Config {
@@ -77,10 +83,13 @@ export interface Tier1Config {
 }
 
 export { DEFAULT_CHECK_BUDGET_MS };
+/** Where `build:extract` puts the helper. */
+export const DEFAULT_EXTRACT_BIN = join(import.meta.dirname, '../native/bin/sc-extract');
 const MAX_CHECK_BUDGET_MS = 25_000;
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
 	return {
+		extractBin: env.SC_EXTRACT_BIN?.trim() || DEFAULT_EXTRACT_BIN,
 		port: int(env.SC_AGENT_PORT, AGENT_DEFAULT_PORT, 0, 65_535, 'SC_AGENT_PORT'),
 		policyFile: env.SC_POLICY_FILE?.trim() || undefined,
 		checkBudgetMs: int(env.SC_CHECK_BUDGET_MS, DEFAULT_CHECK_BUDGET_MS, 1, MAX_CHECK_BUDGET_MS, 'SC_CHECK_BUDGET_MS'),
