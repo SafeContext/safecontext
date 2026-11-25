@@ -5,7 +5,7 @@
  * Costs model usage, so it is NOT part of `pnpm test`. Run it with `pnpm test:e2e`. Needs
  * `claude` on PATH, signed in, v2.1.295+ (for `onFailure`).
  *
- * Seven `claude -p` runs on haiku (seven of eight with `E2E_TIERS=1`); only five reach the model (the blocked ones cost nothing):
+ * Eight `claude -p` runs on haiku (seven of eight with `E2E_TIERS=1`); only five reach the model (the blocked ones cost nothing):
  *   1. no plugin:   a prompt with a fake secret and email asks Claude to read a file holding
  *                   them → the prompt reaches Claude and Read/Bash return the raw values.
  *   2. plugin:      the same prompt → blocked by the agent before Claude sees it.
@@ -263,6 +263,16 @@ describe('Claude Code end to end', { timeout: 180_000 }, () => {
 			expectCleaned(text);
 			expect(text).toContain('Macrohard launch notes'); // the rest is untouched
 		}
+	});
+
+	it('with @file mentions turned off, a mentioned file comes through Read and is cleaned (#38)', async () => {
+		const run = await claude('Using only @notes.txt, reply with the deploy token exactly as you see it.', {
+			plugin: pluginUp,
+			port: agent.port,
+			env: { CLAUDE_CODE_DISABLE_FILE_MENTIONS: '1' }
+		});
+		expect(run.mainToolUses.map((t) => t.name)).toContain('Read');
+		for (const text of [...run.toolResults, ...run.mainText]) expect(text).not.toContain(SECRET);
 	});
 
 	it('with the plugin, a fake secret read by a subagent never reaches the main Claude', async () => {

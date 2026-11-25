@@ -111,8 +111,19 @@ Also working:
 
 ## Setup (macOS, Apple Silicon)
 
-Requires Node 24 (nvm), pnpm 12, uv, PostgreSQL 18, and Claude Code **2.1.295 or later** (the
-plugin's `onFailure: "block"` needs it).
+Requires Node 24 (nvm), pnpm 12, uv, PostgreSQL 18, and Claude Code **2.1.299 or later** (the
+plugin's `onFailure: "block"` needs 2.1.295; turning off `@file` mentions needs 2.1.299).
+
+With the plugin (no managed settings), also turn off `@file` mentions, which otherwise reach Claude
+without passing the hooks (#38). Add this to `~/.claude/settings.json`; a plugin can't set it, and
+Claude Code ignores it in project settings:
+
+```json
+{ "env": { "CLAUDE_CODE_DISABLE_FILE_MENTIONS": "1" } }
+```
+
+Safe Context reminds you at the start of each session until it's set. The Deploy page's managed
+settings set it for everyone.
 
 ```bash
 nvm use

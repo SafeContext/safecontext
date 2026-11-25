@@ -467,6 +467,16 @@ describe('GET /v1/session-start (issue #83)', () => {
 		);
 	});
 
+	it('warns the user unless the plugin says @file mentions are off (#38)', async () => {
+		const { app } = testApp();
+		const on = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());
+		expect(on.systemMessage).toBe(messages.fileMentionsOn());
+		const off = AGENT_API.sessionStart.response.parse(
+			await (await app.request(`${AGENT_API.sessionStart.path}?mentions=1`)).json()
+		);
+		expect(off).not.toHaveProperty('systemMessage');
+	});
+
 	it('lists the local file tools by default', async () => {
 		const { app } = testApp();
 		const out = AGENT_API.sessionStart.response.parse(await (await app.request(AGENT_API.sessionStart.path)).json());

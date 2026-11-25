@@ -19,6 +19,10 @@ describe('managed settings (#25)', () => {
 		expect(json).toContain('/v1/tool-input');
 	});
 
+	it('turns off @file mentions, so mentioned files go through the hooks (#38)', () => {
+		expect(managedSettings({ failMode: 'block' }).env).toEqual({ CLAUDE_CODE_DISABLE_FILE_MENTIONS: '1' });
+	});
+
 	it('asks for a refresh at start only when told to', () => {
 		expect(managedSettings({ failMode: 'block' })).not.toHaveProperty('forceRemoteSettingsRefresh');
 		expect(managedSettings({ failMode: 'block', forceRefresh: true }).forceRemoteSettingsRefresh).toBe(true);

@@ -410,8 +410,8 @@ Each item says where it was decided, or which issue holds the open question.
    tier 2's endpoint is already a setting (`SC_TIER2_BASE_URL`, `SC_TIER2_API_KEY`).
 5. **Agent distribution**: Homebrew formula + launchd; how to package Node + models (and Ollama, if
    used). **Open:** #26. Model hosting is decided (item 8).
-6. **Minimum Claude Code version** (≥ 2.1.295 if we rely on `onFailure`). **Open.** #38 would raise it
-   to 2.1.299 for `CLAUDE_CODE_DISABLE_FILE_MENTIONS`.
+6. ~~Minimum Claude Code version~~: **decided** (Joe, 23 Nov 2026), **2.1.299** or later, for
+   `onFailure` (2.1.295) and `CLAUDE_CODE_DISABLE_FILE_MENTIONS` (2.1.299, #38).
 7. ~~Tier 2 model and runtime~~: **decided** in
    [#14](https://github.com/SafeContext/safecontext/issues/14#issuecomment-6588926437) (runtime:
    OpenAI-compatible API, default Ollama) and PR #74 (model: Gemma 4 E4B). Built in #16. See §4.

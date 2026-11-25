@@ -78,6 +78,9 @@ function sessionContext(tools: readonly string[]): string {
 
 export const messages = {
 	sessionContext,
+	/** At session start when `@file` mentions aren't turned off (#38). */
+	fileMentionsOn: () =>
+		`${PRODUCT}: files you @-mention go to Claude without being checked. To fix it, add "CLAUDE_CODE_DISABLE_FILE_MENTIONS": "1" under "env" in ~/.claude/settings.json (Claude Code 2.1.299 or later), or ask your IT team to roll out Safe Context's managed settings.`,
 	promptBlocked: (hits: readonly Hit[], safeVersion?: string) => {
 		const head = `${PRODUCT} blocked this prompt because it contains: ${listNames(hits)}. Nothing was sent.`;
 		if (safeVersion === undefined || safeVersion.length > SAFE_VERSION_MAX_CHARS) {
