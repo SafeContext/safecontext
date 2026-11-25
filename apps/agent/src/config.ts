@@ -20,7 +20,7 @@ export interface AgentConfig {
 	/**
 	 * Save placeholder keys (#85) encrypted on disk, with their key in the Keychain
 	 * (`SC_SAVE_KEYS`, default on). `off` keeps them in memory only: for tests and evaluations,
-	 * which mustn't touch the person's Keychain or state folder.
+	 * which mustn't touch the person's Keychain or saved keys (they set `SC_STATE_DIR` for the rest).
 	 */
 	saveKeys: boolean;
 	/** Dashboard sync (`SC_DASHBOARD_URL` and friends, see sync/config.ts). Unset: no sync. */

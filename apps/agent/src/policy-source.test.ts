@@ -81,4 +81,11 @@ describe('readConfig', () => {
 		expect(() => readConfig({ SC_AGENT_PORT: 'abc' })).toThrow(/SC_AGENT_PORT/);
 		expect(() => readConfig({ SC_CHECK_BUDGET_MS: '60000' })).toThrow(/SC_CHECK_BUDGET_MS/);
 	});
+
+	it('reads SC_SAVE_KEYS in any case and rejects anything but on or off (PR #151 review)', () => {
+		expect(readConfig({ SC_SAVE_KEYS: ' OFF ' }).saveKeys).toBe(false);
+		expect(readConfig({ SC_SAVE_KEYS: 'On' }).saveKeys).toBe(true);
+		expect(readConfig({}).saveKeys).toBe(true);
+		expect(() => readConfig({ SC_SAVE_KEYS: 'maybe' })).toThrow(/SC_SAVE_KEYS/);
+	});
 });
