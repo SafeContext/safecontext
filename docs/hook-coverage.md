@@ -15,7 +15,7 @@ Context hooks (SPEC.md §2 and §6.2)?
 
 | Case | Spike result (18 Oct) | Now | Follow-up |
 | --- | --- | --- | --- |
-| `@file` mentions | **Not covered** (by default). Possible fix tested | Unchanged | #38 |
+| `@file` mentions | **Not covered** (by default). Possible fix tested | **Covered when turned off** (#38): the Deploy page's managed settings set `CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, so a mentioned file is read with `Read` and checked; plugin users set it in `~/.claude/settings.json`, and are reminded at session start until they do | #38 |
 | CLAUDE.md, rules and imported memory files | **Not covered** (observe-only hook exists) | Unchanged | #39 |
 | Images and PDFs read by Claude | **Hooks fire, but nothing to check.** Partly covered | **Covered** (#40): before a Read of an image or PDF, the agent pulls its text out on the device (Vision text recognition, the PDF text layer) and checks it; anything sensitive stops the Read. Images pasted into a prompt are still untested | #40 |
 | Subagent tool calls | **Covered.** The result passed back to Claude is not | **Covered**, and the foreground report (the `Agent` tool result) is cleaned (PR #62). A background report arrives through `UserPromptSubmit`, so it can be blocked but not cleaned | #61 |

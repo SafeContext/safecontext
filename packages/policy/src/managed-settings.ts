@@ -22,6 +22,11 @@ type HttpHook = { type: 'http'; url: string; statusMessage?: string; onFailure?:
 type HookGroup = { matcher?: string; hooks: HttpHook[] };
 
 export interface ManagedSettings {
+	/**
+	 * `CLAUDE_CODE_DISABLE_FILE_MENTIONS`: an `@file` mention is then read with the Read tool, so
+	 * the hooks check it (#38). Claude Code 2.1.299 or later; ignored in project settings.
+	 */
+	env: { CLAUDE_CODE_DISABLE_FILE_MENTIONS: '1' };
 	hooks: Record<'UserPromptSubmit' | 'UserPromptExpansion' | 'PreToolUse' | 'PostToolUse', HookGroup[]>;
 	forceRemoteSettingsRefresh?: true;
 }
@@ -31,6 +36,7 @@ export function managedSettings({ failMode, forceRefresh = false, port = AGENT_D
 	const url = (path: string) => `http://${AGENT_HOST}:${port}${path}`;
 	const gate = failMode === 'block' ? ({ onFailure: 'block' } as const) : {};
 	return {
+		env: { CLAUDE_CODE_DISABLE_FILE_MENTIONS: '1' },
 		hooks: {
 			UserPromptSubmit: [
 				{

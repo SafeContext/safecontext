@@ -134,6 +134,8 @@ export type PostToolUseOutput = z.infer<typeof PostToolUseOutput>;
  * returns, so what Claude is told follows the policy (issue #83).
  */
 export const SessionStartOutput = z.strictObject({
+	/** Shown to the user, e.g. that `@file` mentions still bypass the checks (#38). */
+	systemMessage: z.string().max(1_000).optional(),
 	hookSpecificOutput: z.strictObject({
 		hookEventName: z.literal('SessionStart'),
 		additionalContext: z.string().max(10_000)

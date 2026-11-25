@@ -106,8 +106,11 @@ export function createApp(deps: AppDeps): Hono {
 	);
 
 	// For the plugin's SessionStart script: how placeholders work under the current policy (#83).
+	// `?mentions=1`: the plugin's script saw CLAUDE_CODE_DISABLE_FILE_MENTIONS=1 (#38). Without it,
+	// the user is told that files they @-mention still reach Claude unchecked.
 	app.get(AGENT_API.sessionStart.path, (c) =>
 		c.json({
+			...(c.req.query('mentions') !== '1' && { systemMessage: messages.fileMentionsOn() }),
 			hookSpecificOutput: {
 				hookEventName: 'SessionStart',
 				additionalContext: messages.sessionContext(policySource.current().swapBack.tools)

@@ -51,8 +51,11 @@ if [ "$mode" = session-start ]; then
 	if [ -z "$problem" ]; then
 		# The agent says what to tell Claude, from the policy. Passed on only if it looks like the hook
 		# JSON; otherwise Claude just isn't told how placeholders work this time.
-		context=$(curl --silent --fail --max-time 2 "http://127.0.0.1:${port}/v1/session-start" 2>/dev/null)
-		case "$context" in '{"hookSpecificOutput":{"hookEventName":"SessionStart"'*) printf '%s\n' "$context" ;; esac
+		# Tell the agent whether @file mentions are off (#38), so it can warn if they aren't.
+		mentions=0
+		[ "$CLAUDE_CODE_DISABLE_FILE_MENTIONS" = 1 ] && mentions=1
+		context=$(curl --silent --fail --max-time 2 "http://127.0.0.1:${port}/v1/session-start?mentions=${mentions}" 2>/dev/null)
+		case "$context" in '{"systemMessage":"'* | '{"hookSpecificOutput":{"hookEventName":"SessionStart"'*) printf '%s\n' "$context" ;; esac
 		exit 0
 	fi
 	# Every value here is fixed text or digits, so it needs no JSON escaping.
@@ -62,6 +65,9 @@ fi
 
 if [ -z "$problem" ]; then
 	echo "Safe Context: the agent is running on 127.0.0.1:${port}, enforcing policy version ${version}."
+	if [ "$CLAUDE_CODE_DISABLE_FILE_MENTIONS" != 1 ]; then
+		echo "Files you @-mention still reach Claude unchecked: set CLAUDE_CODE_DISABLE_FILE_MENTIONS to 1 (see the Safe Context README)."
+	fi
 else
 	echo "Safe Context: ${problem}"
 	echo "Until it is fixed, Claude Code blocks your prompts and tool calls."

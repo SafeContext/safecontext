@@ -23,7 +23,14 @@ const script = join(pluginDir, 'scripts/agent-status.sh');
 const run = promisify(execFile);
 
 async function status(port: number | string, ...args: string[]) {
-	const { stdout } = await run('sh', [script, ...args], { env: { ...process.env, SC_AGENT_PORT: String(port) } });
+	return statusWith({ CLAUDE_CODE_DISABLE_FILE_MENTIONS: '1' }, port, ...args);
+}
+
+async function statusWith(env: Record<string, string>, port: number | string, ...args: string[]) {
+	const base = Object.fromEntries(
+		Object.entries(process.env).filter(([k]) => k !== 'CLAUDE_CODE_DISABLE_FILE_MENTIONS')
+	);
+	const { stdout } = await run('sh', [script, ...args], { env: { ...base, ...env, SC_AGENT_PORT: String(port) } });
 	return stdout;
 }
 
@@ -97,6 +104,14 @@ describe('agent-status.sh --session-start (SessionStart hook)', () => {
 		expect(AGENT_API.sessionStart.response.parse(out)).toEqual(out);
 		expect(out.hookSpecificOutput.additionalContext).toContain('⟪customer_name_1⟫');
 		expect(Object.keys(out)).toEqual(['hookSpecificOutput']);
+	});
+
+	it('warns the user when @file mentions are still on (#38)', async () => {
+		const out = JSON.parse(await statusWith({}, agent.port, '--session-start'));
+		expect(AGENT_API.sessionStart.response.parse(out)).toEqual(out);
+		expect(out.systemMessage).toContain('CLAUDE_CODE_DISABLE_FILE_MENTIONS');
+		expect(out.hookSpecificOutput.additionalContext).toContain('⟪customer_name_1⟫');
+		expect(await statusWith({}, agent.port)).toContain('@-mention');
 	});
 
 	it('prints nothing if the agent answers its health check but not the note', async () => {
