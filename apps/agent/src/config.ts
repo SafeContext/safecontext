@@ -17,6 +17,12 @@ export interface AgentConfig {
 	 * saved placeholder keys, the swap record and the dashboard policy copy.
 	 */
 	stateDir: string;
+	/**
+	 * Save placeholder keys (#85) encrypted on disk, with their key in the Keychain
+	 * (`SC_SAVE_KEYS`, default on). `off` keeps them in memory only: for tests and evaluations,
+	 * which mustn't touch the person's Keychain or saved keys (they set `SC_STATE_DIR` for the rest).
+	 */
+	saveKeys: boolean;
 	/** Dashboard sync (`SC_DASHBOARD_URL` and friends, see sync/config.ts). Unset: no sync. */
 	sync: SyncConfig | undefined;
 	/** Tier 1 tagger (issue #15). Undefined when `SC_TIER1_MODEL_DIR` is unset: tier 1 is off. */
@@ -105,10 +111,18 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
 		policyFile: env.SC_POLICY_FILE?.trim() || undefined,
 		checkBudgetMs: int(env.SC_CHECK_BUDGET_MS, DEFAULT_CHECK_BUDGET_MS, 1, MAX_CHECK_BUDGET_MS, 'SC_CHECK_BUDGET_MS'),
 		stateDir: env.SC_STATE_DIR?.trim() || defaultStateDir(),
+		saveKeys: saveKeys(env.SC_SAVE_KEYS),
 		sync: readSyncConfig(env),
 		tier1: readTier1Config(env),
 		tier2: readTier2Config(env)
 	};
+}
+
+function saveKeys(raw: string | undefined): boolean {
+	const v = raw?.trim().toLowerCase();
+	if (!v || v === 'on') return true;
+	if (v === 'off') return false;
+	throw new Error('SC_SAVE_KEYS must be "on" or "off"');
 }
 
 function readTier2Config(env: NodeJS.ProcessEnv): Tier2Config | undefined {

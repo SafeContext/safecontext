@@ -310,6 +310,7 @@ Playwright needs its test browser once per machine:
 | `SC_ENROLLMENT_KEY` | unset | Organisation key, needed until the device has its id and token in the Keychain |
 | `SC_DEVICE_LABEL` | unset | Name for this device on the dashboard, such as an asset tag (up to 64 characters). Sent when it joins |
 | `SC_STATE_DIR` | `~/Library/Application Support/SafeContext` | Saved placeholder keys (encrypted), the swap record and the policy copy |
+| `SC_SAVE_KEYS` | `on` | `off` keeps placeholder keys in memory only (no key files, no Keychain item), for tests and evaluations. The swap record is still written to `SC_STATE_DIR` |
 | `SC_POLICY_SYNC_INTERVAL_MS` | `30000` (min 5000) | How often to pull the policy |
 | `SC_EVENT_FLUSH_MS` | `5000` | How often to upload counts |
 | `SC_EVENT_BATCH_SIZE` | `100` (max 500) | Events per upload |

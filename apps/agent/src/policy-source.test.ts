@@ -52,6 +52,7 @@ describe('readConfig', () => {
 			policyFile: undefined,
 			checkBudgetMs: 8_000,
 			stateDir: defaultStateDir(),
+			saveKeys: true,
 			extractBin: DEFAULT_EXTRACT_BIN
 		});
 	});
@@ -63,13 +64,15 @@ describe('readConfig', () => {
 				SC_POLICY_FILE: '/p.json',
 				SC_CHECK_BUDGET_MS: '250',
 				SC_EXTRACT_BIN: '/opt/sc-extract',
-				SC_STATE_DIR: '/tmp/sc-state'
+				SC_STATE_DIR: '/tmp/sc-state',
+				SC_SAVE_KEYS: 'off'
 			})
 		).toEqual({
 			port: 5000,
 			policyFile: '/p.json',
 			checkBudgetMs: 250,
 			stateDir: '/tmp/sc-state',
+			saveKeys: false,
 			extractBin: '/opt/sc-extract'
 		});
 	});
@@ -77,5 +80,12 @@ describe('readConfig', () => {
 	it('rejects bad numbers', () => {
 		expect(() => readConfig({ SC_AGENT_PORT: 'abc' })).toThrow(/SC_AGENT_PORT/);
 		expect(() => readConfig({ SC_CHECK_BUDGET_MS: '60000' })).toThrow(/SC_CHECK_BUDGET_MS/);
+	});
+
+	it('reads SC_SAVE_KEYS in any case and rejects anything but on or off (PR #151 review)', () => {
+		expect(readConfig({ SC_SAVE_KEYS: ' OFF ' }).saveKeys).toBe(false);
+		expect(readConfig({ SC_SAVE_KEYS: 'On' }).saveKeys).toBe(true);
+		expect(readConfig({}).saveKeys).toBe(true);
+		expect(() => readConfig({ SC_SAVE_KEYS: 'maybe' })).toThrow(/SC_SAVE_KEYS/);
 	});
 });

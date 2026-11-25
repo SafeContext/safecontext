@@ -383,6 +383,8 @@ export SC_TIER1_MODEL_DIR="$PWD/ml/models/tier1-onnx" SC_TIER2_MODEL=gemma4:e4b-
 pnpm --filter @safecontext/agent exec tsx scripts/usefulness.ts --before /tmp/sc-before-83
 ```
 
+`--setups now,now-t01,now-t0` runs today's agent with fewer tiers, to see what each tier adds: `ml/results/tier-ablation.md`.
+
 Needs MacroHard (`~/github/MacroHard`, after its `setup.sh`). `--regrade <folder>` grades the runs
 a previous run kept again, without new runs.
 
