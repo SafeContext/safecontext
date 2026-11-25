@@ -259,6 +259,64 @@ describe('the swap record', () => {
 	});
 });
 
+describe('the swap record and file paths (PR #135 review)', () => {
+	const tier = fakeTier({
+		spans: (texts) =>
+			texts.map((t) => {
+				const i = t.indexOf('Northwind');
+				return i === -1 || !t.startsWith('CRM')
+					? []
+					: [{ start: i, end: i + 9, dataTypeId: 'customer-names', source: 'tagger' as const, confidence: 0.9 }];
+			})
+	});
+
+	it('records a path with placeholders, never the value put back into it', async () => {
+		const dir = tmp();
+		const { post } = testApp({ tiers: [createTier0(), tier], swapLog: createSwapLog({ dir }) });
+		await post(postTool.path, toolOutput('Bash', { stdout: 'CRM: Northwind renews', stderr: '' }));
+		const read = await post(preTool.path, toolInput('Read', { file_path: 'deals/⟪customer_name_1⟫-renewal.md' }));
+		expect(preTool.response.parse(read.json).hookSpecificOutput?.updatedInput).toEqual({
+			file_path: 'deals/Northwind-renewal.md'
+		});
+		// What ran comes back with the real path; the record still shows the placeholder.
+		await post(postTool.path, {
+			...toolOutput('Read', {
+				type: 'text',
+				file: {
+					filePath: 'deals/Northwind-renewal.md',
+					content: 'CRM: Northwind',
+					numLines: 1,
+					startLine: 1,
+					totalLines: 1
+				}
+			}),
+			tool_input: { file_path: 'deals/NORTHWIND-renewal.md' }
+		});
+		const records = readSwapLog(dir);
+		expect(records.map((r) => [r.action, r.path])).toEqual([
+			['hidden', undefined],
+			['restored', 'deals/⟪customer_name_1⟫-renewal.md'],
+			['hidden', 'deals/⟪customer_name_1⟫-renewal.md']
+		]);
+		expect(readFileSync(join(dir, SWAP_LOG_FILE), 'utf8').toLowerCase()).not.toContain('northwind');
+	});
+
+	it('writes no key file and no record for a check that hid nothing', async () => {
+		const keys = tmp();
+		const log = tmp();
+		const placeholders = createPlaceholderStore({
+			vault: createFileVault({ dir: keys, key: key32() }),
+			saveDelayMs: 1
+		});
+		const { post } = testApp({ placeholders, swapLog: createSwapLog({ dir: log }) });
+		await post(prompt.path, promptInput('Tidy the imports in app.ts'));
+		await post(postTool.path, toolOutput('Bash', { stdout: 'all good', stderr: '' }));
+		placeholders.flush();
+		expect(readdirSync(keys)).toEqual([]);
+		expect(readdirSync(log)).toEqual([]);
+	});
+});
+
 describe('safecontext swaps', () => {
 	const records: SwapRecord[] = [
 		{

@@ -38,10 +38,12 @@ import { mapToolOutputText, toolInputTexts, toolOutputTexts } from './tool-text.
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
 import { allowedBy, dropAllowedModelSpans } from './transform/allow.ts';
-import { knownValueFinder } from './transform/known.ts';
+import { knownValueFinder, MIN_KNOWN_LENGTH } from './transform/known.ts';
 import {
 	createPlaceholderStore,
 	dropPlaceholderSpans,
+	formatPlaceholder,
+	OPEN,
 	placeholderRanges,
 	type PlaceholderStore,
 	type SessionKey
@@ -106,22 +108,28 @@ export function createApp(deps: AppDeps): Hono {
 
 	/**
 	 * Notes in the swap record (#85) which placeholders this call showed Claude, and which it put
-	 * real values back for. Ids and file paths only, never values.
+	 * real values back for. Ids and file paths only, never values: a path is recorded as Claude
+	 * sent it, with any value the key holds shown as its placeholder (PR #135 review).
 	 */
 	function recordSwaps(hook: HookEventName, input: unknown, handled: Handled<unknown>) {
 		const i = input as { session_id?: unknown; tool_input?: unknown } | undefined;
 		if (typeof i?.session_id !== 'string') return;
-		const key = placeholders.session(i.session_id);
-		const ids = (v: unknown) => new Set(placeholderRanges(JSON.stringify(v) ?? '').map((p) => p.id));
-		const before = ids(input);
-		const hidden = [...ids(handled.output)].filter((id) => !before.has(id) && key.valueOf(id) !== undefined);
 		const restored = handled.restored?.kind === 'restored' ? handled.restored : undefined;
+		const out = JSON.stringify(handled.output) ?? '';
+		// Most calls show no placeholder and put nothing back: stop before any more work.
+		if (!restored && !out.includes(OPEN)) return;
+		const key = placeholders.session(i.session_id);
+		const ids = (text: string) => new Set(placeholderRanges(text).map((p) => p.id));
+		const before = ids(JSON.stringify(input) ?? '');
+		const hidden = [...ids(out)].filter((id) => !before.has(id) && key.valueOf(id) !== undefined);
+		if (!restored && hidden.length === 0) return;
+		const path = pathOf(i.tool_input);
 		const common = {
 			ts: new Date().toISOString(),
 			session: i.session_id,
 			hook,
 			...(handled.toolName !== undefined && { tool: handled.toolName }),
-			...(pathOf(restored?.input ?? i.tool_input) !== undefined && { path: pathOf(restored?.input ?? i.tool_input) })
+			...(path !== undefined && { path: withPlaceholders(path, key) })
 		};
 		if (hidden.length) swapLog.record({ ...common, action: 'hidden', placeholders: hidden });
 		if (restored) swapLog.record({ ...common, action: 'restored', placeholders: restored.ids });
@@ -701,7 +709,6 @@ function hasToolResponse(body: unknown): body is { tool_response: unknown } {
 	return typeof body === 'object' && body !== null && 'tool_response' in body;
 }
 
-/** Tool names go into logs and events, so only keep ones that look like a tool name (AgentEvent's rule). */
 /** The file a tool call names (Read, Write, Edit, NotebookEdit, Glob, Grep), if any. */
 function pathOf(toolInput: unknown): string | undefined {
 	if (toolInput === null || typeof toolInput !== 'object') return undefined;
@@ -712,6 +719,24 @@ function pathOf(toolInput: unknown): string | undefined {
 	return undefined;
 }
 
+/**
+ * `text` with every value the key holds (any spelling, any case) shown as its placeholder, so a
+ * path like `deals/Northwind-renewal.md` is recorded as `deals/⟪customer_name_1⟫-renewal.md`.
+ */
+function withPlaceholders(text: string, key: SessionKey): string {
+	const swaps = key
+		.entries()
+		.flatMap((e) => e.spellings.map((spelling) => ({ spelling, id: e.id })))
+		.filter((s) => s.spelling.length >= MIN_KNOWN_LENGTH)
+		.sort((a, b) => b.spelling.length - a.spelling.length);
+	let out = text;
+	for (const { spelling, id } of swaps) {
+		out = out.replace(new RegExp(spelling.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), formatPlaceholder(id));
+	}
+	return out;
+}
+
+/** Tool names go into logs and events, so only keep ones that look like a tool name (AgentEvent's rule). */
 function safeToolName(name: string | undefined): string | undefined {
 	return name !== undefined && /^[A-Za-z0-9_-]{1,128}$/.test(name) ? name : undefined;
 }

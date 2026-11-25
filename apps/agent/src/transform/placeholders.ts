@@ -185,7 +185,8 @@ export function createPlaceholderStore({
 			session.lastUsed = t;
 			sessions.set(sessionId, session);
 			while (sessions.size > maxSessions) sessions.delete(sessions.keys().next().value!);
-			if (vault && t - session.lastSaved >= RESAVE_MS) changed(sessionId, session);
+			// Every check asks for its session's key: only one that holds values is worth a file.
+			if (vault && session.byValue.size > 0 && t - session.lastSaved >= RESAVE_MS) changed(sessionId, session);
 
 			const s = session;
 			const touch = () => changed(sessionId, s);
