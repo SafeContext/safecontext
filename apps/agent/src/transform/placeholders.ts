@@ -6,14 +6,17 @@
  * things: Safe Context hid something, what kind of data it was, and which one (the same value
  * gets the same placeholder throughout a Claude Code session).
  *
- * The key (placeholder ↔ real value) is per Claude Code session and lives only in the agent's
- * memory. It is never logged, sent to the dashboard or written to disk. It is what lets the
- * agent put real values back into local file tools (restore.ts) and hide them again in what
- * those tools return (`SessionKey.entries`). Bounded three ways: sessions kept (least recently
- * used dropped first), values per session (oldest dropped first) and idle time. Numbers are
- * never reused within a session, so a dropped value seen again gets a new number, never
- * another value's.
+ * The key (placeholder ↔ real value) is per Claude Code session. It is never logged or sent to
+ * the dashboard. With a vault (#85) it is also saved encrypted on this device, so placeholders
+ * still work after the agent restarts (swaps/vault.ts). It is what lets the agent put real
+ * values back into local file tools (restore.ts) and hide them again in what those tools return
+ * (`SessionKey.entries`). Bounded three ways in memory: sessions kept (least recently used
+ * dropped first, and loaded again from the vault when needed), values per session (oldest
+ * dropped first) and idle time. Numbers are never reused within a session, so a dropped value
+ * seen again gets a new number, never another value's.
  */
+
+import type { KeyVault, SessionSnapshot } from '../swaps/vault.ts';
 
 export const OPEN = '⟪';
 export const CLOSE = '⟫';
@@ -69,7 +72,14 @@ export interface PlaceholderStoreOptions {
 	idleMs?: number;
 	/** Clock in ms. Injected for tests. */
 	now?: () => number;
+	/** Where keys are saved so they outlive the agent (#85). Without it, memory only. */
+	vault?: Pick<KeyVault, 'load' | 'save'>;
+	/** Changes are saved this long after the first one, together. Default 200 ms. */
+	saveDelayMs?: number;
 }
+
+/** A session still in use is saved at least this often, so the vault's idle sweep keeps it. */
+const RESAVE_MS = 10 * 60 * 1000;
 
 export interface KeyEntry {
 	/** `customer_name_1` (no brackets). */
@@ -107,12 +117,16 @@ export interface SessionKey {
 
 export interface PlaceholderStore {
 	session(sessionId: string): SessionKey;
+	/** Save every changed key to the vault now (e.g. before the agent stops). */
+	flush(): void;
 	/** Sessions currently held. For tests. */
 	readonly size: number;
 }
 
 interface Session {
 	lastUsed: number;
+	/** When it was last saved to the vault (0: never). */
+	lastSaved: number;
 	/** data type + normalized value → entry, oldest first. */
 	byValue: Map<string, KeyEntry>;
 	byId: Map<string, KeyEntry>;
@@ -124,15 +138,41 @@ export function createPlaceholderStore({
 	maxSessions = 256,
 	maxPerSession = 4096,
 	idleMs = 12 * 60 * 60 * 1000,
-	now = () => Date.now()
+	now = () => Date.now(),
+	vault,
+	saveDelayMs = 200
 }: PlaceholderStoreOptions = {}): PlaceholderStore {
 	// Ordered by last use, oldest first: delete + set on every access.
 	const sessions = new Map<string, Session>();
+	/** Sessions changed since they were last saved. Holds the session, so eviction can't lose a change. */
+	const dirty = new Map<string, Session>();
+	let timer: NodeJS.Timeout | undefined;
+
+	function flush() {
+		clearTimeout(timer);
+		timer = undefined;
+		if (!vault) return;
+		for (const [id, s] of dirty) {
+			vault.save(id, snapshotOf(s));
+			s.lastSaved = now();
+		}
+		dirty.clear();
+	}
+
+	function changed(sessionId: string, s: Session) {
+		if (!vault) return;
+		dirty.set(sessionId, s);
+		if (timer === undefined) {
+			timer = setTimeout(flush, saveDelayMs);
+			timer.unref();
+		}
+	}
 
 	return {
 		get size() {
 			return sessions.size;
 		},
+		flush,
 		session(sessionId) {
 			const t = now();
 			for (const [id, s] of sessions) {
@@ -141,12 +181,14 @@ export function createPlaceholderStore({
 			}
 			let session = sessions.get(sessionId);
 			if (session) sessions.delete(sessionId);
-			else session = { lastUsed: t, byValue: new Map(), byId: new Map(), counters: new Map() };
+			else session = dirty.get(sessionId) ?? fromSnapshot(vault?.load(sessionId)) ?? newSession(t);
 			session.lastUsed = t;
 			sessions.set(sessionId, session);
 			while (sessions.size > maxSessions) sessions.delete(sessions.keys().next().value!);
+			if (vault && t - session.lastSaved >= RESAVE_MS) changed(sessionId, session);
 
 			const s = session;
+			const touch = () => changed(sessionId, s);
 			return {
 				idFor(dataTypeId, value) {
 					const k = `${dataTypeId}\0${normalize(value)}`;
@@ -154,6 +196,7 @@ export function createPlaceholderStore({
 					if (known !== undefined) {
 						if (!known.spellings.includes(value) && known.spellings.length < MAX_SPELLINGS) {
 							known.spellings.push(value);
+							touch();
 						}
 						return known.id;
 					}
@@ -168,6 +211,7 @@ export function createPlaceholderStore({
 						s.byValue.delete(oldKey);
 						s.byId.delete(old.id);
 					}
+					touch();
 					return entry.id;
 				},
 				valueOf: (id) => s.byId.get(id)?.value,
@@ -177,6 +221,7 @@ export function createPlaceholderStore({
 					const clean = cleanHint(hint);
 					if (entry && clean && !entry.hints.includes(clean) && entry.hints.length < MAX_SPELLINGS) {
 						entry.hints.push(clean);
+						touch();
 					}
 				},
 				issued(id, hint) {
@@ -188,6 +233,30 @@ export function createPlaceholderStore({
 			};
 		}
 	};
+}
+
+function newSession(t: number): Session {
+	return { lastUsed: t, lastSaved: 0, byValue: new Map(), byId: new Map(), counters: new Map() };
+}
+
+function snapshotOf(s: Session): SessionSnapshot {
+	return { lastUsed: s.lastUsed, counters: [...s.counters], entries: [...s.byValue.values()] };
+}
+
+function fromSnapshot(snapshot: SessionSnapshot | undefined): Session | undefined {
+	if (!snapshot) return undefined;
+	const s: Session = {
+		lastUsed: snapshot.lastUsed,
+		lastSaved: snapshot.lastUsed,
+		byValue: new Map(),
+		byId: new Map(),
+		counters: new Map(snapshot.counters)
+	};
+	for (const entry of snapshot.entries) {
+		s.byValue.set(`${entry.dataTypeId}\0${normalize(entry.value)}`, entry);
+		s.byId.set(entry.id, entry);
+	}
+	return s;
 }
 
 /** "Northwind", " northwind" and "NORTHWIND" are the same customer. */

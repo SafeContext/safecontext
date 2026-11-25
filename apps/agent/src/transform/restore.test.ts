@@ -36,6 +36,7 @@ describe('restoreToolInput', () => {
 		expect(r).toEqual({
 			kind: 'restored',
 			count: 2,
+			ids: ['customer_name_1', 'customer_personal_data_1'],
 			confirm: false,
 			input: { file_path: 'deals/Northwind-renewal.md', content: 'Dear jane@northwind.example' }
 		});
@@ -128,6 +129,7 @@ describe('tools the policy adds', () => {
 		expect(r).toEqual({
 			kind: 'restored',
 			count: 1,
+			ids: ['customer_name_1'],
 			confirm: true,
 			input: { channel: 'sales', text: 'Renewal: Northwind' }
 		});

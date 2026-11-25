@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config e2e/vitest.config.ts",
     "leak-eval": "tsx scripts/leak-eval.ts",
+    "swaps": "tsx src/cli.ts swaps",
     "build:extract": "mkdir -p native/bin && swiftc -O -o native/bin/sc-extract native/extract.swift"
   },
   "dependencies": {
