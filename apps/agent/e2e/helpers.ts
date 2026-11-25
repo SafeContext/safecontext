@@ -1,6 +1,7 @@
 /** Helpers for the plugin tests in this folder. */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { cpSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -56,6 +57,9 @@ export function startAgent(): Promise<RunningAgent> {
 	}
 	const waitForTier2 = withModelTiers && Boolean(env.SC_TIER2_MODEL || env.SC_TIER2_BASE_URL);
 	env.SC_AGENT_PORT = '0';
+	// Never the developer's own state folder or Keychain (#85).
+	env.SC_STATE_DIR = mkdtempSync(join(tmpdir(), 'sc-e2e-state-'));
+	env.SC_SAVE_KEYS = 'off';
 	const child = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
 		cwd: agentDir,
 		env,

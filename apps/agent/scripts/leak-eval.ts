@@ -245,6 +245,10 @@ function startAgent(policyFile: string): Promise<{ port: number; stop: () => Pro
 		Object.entries(process.env).filter(([k]) => !k.startsWith('SC_') || /^SC_TIER[12]_/.test(k))
 	) as NodeJS.ProcessEnv;
 	env.SC_AGENT_PORT = '0';
+	// Its own state folder and keys in memory only: each run starts clean. With the default folder
+	// it would reload the keys an earlier run saved (#85) and re-hide what other tiers found then.
+	env.SC_STATE_DIR = join(tmp, 'state');
+	env.SC_SAVE_KEYS = 'off';
 	env.SC_POLICY_FILE = policyFile;
 	const wantTier1 = Boolean(env.SC_TIER1_MODEL_DIR);
 	const wantTier2 = Boolean(env.SC_TIER2_MODEL || env.SC_TIER2_BASE_URL);

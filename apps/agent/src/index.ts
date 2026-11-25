@@ -44,7 +44,7 @@ const extractor = existsSync(config.extractBin) ? createExtractor(config.extract
 logger.log(extractor ? 'info' : 'warn', extractor ? 'extract_ready' : 'extract_missing');
 
 // Placeholder keys saved encrypted, so they outlive a restart, and the local swap record (#85).
-const opened = await openVault(config.stateDir, logger);
+const opened = config.saveKeys ? await openVault(config.stateDir, logger) : undefined;
 const placeholders = createPlaceholderStore({ vault: opened?.vault });
 const swapLog = createSwapLog({ dir: config.stateDir, onError: (code) => logger.log('error', code) });
 

@@ -52,6 +52,7 @@ describe('readConfig', () => {
 			policyFile: undefined,
 			checkBudgetMs: 8_000,
 			stateDir: defaultStateDir(),
+			saveKeys: true,
 			extractBin: DEFAULT_EXTRACT_BIN
 		});
 	});
@@ -63,13 +64,15 @@ describe('readConfig', () => {
 				SC_POLICY_FILE: '/p.json',
 				SC_CHECK_BUDGET_MS: '250',
 				SC_EXTRACT_BIN: '/opt/sc-extract',
-				SC_STATE_DIR: '/tmp/sc-state'
+				SC_STATE_DIR: '/tmp/sc-state',
+				SC_SAVE_KEYS: 'off'
 			})
 		).toEqual({
 			port: 5000,
 			policyFile: '/p.json',
 			checkBudgetMs: 250,
 			stateDir: '/tmp/sc-state',
+			saveKeys: false,
 			extractBin: '/opt/sc-extract'
 		});
 	});
