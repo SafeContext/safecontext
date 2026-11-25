@@ -523,7 +523,7 @@ export function createApp(deps: AppDeps): Hono {
 					}
 				}
 				const checked = await check(
-					toolInputTexts(input.tool_input),
+					toolInputTexts(input.tool_input, input.tool_name),
 					policy,
 					'PreToolUse',
 					placeholders.session(input.session_id)

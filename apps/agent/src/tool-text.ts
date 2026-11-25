@@ -137,9 +137,31 @@ export function toolOutputTexts(toolName: string, response: unknown): string[] {
 	return texts;
 }
 
-/** Every string in a tool's input (commands, URLs, prompts, MCP arguments, paths). */
-export function toolInputTexts(toolInput: Record<string, unknown>): string[] {
+/**
+ * Fields of Claude Code's local file tools that only name files on this Mac (#148). A codename or
+ * customer name in a file's name can't leave the Mac through them, and Claude has already seen it
+ * (it came from a listing or the person). Blocking them only broke work: Claude couldn't open
+ * `launches/lumen-launch-plan.md`. What the tool returns is still checked and cleaned, and
+ * placeholders in these fields are still swapped back (restore.ts).
+ */
+export const LOCAL_PATH_FIELDS: Readonly<Record<string, readonly string[]>> = {
+	Read: ['file_path'],
+	Glob: ['path', 'pattern'],
+	Grep: ['path', 'glob'],
+	Write: ['file_path'],
+	Edit: ['file_path'],
+	MultiEdit: ['file_path'],
+	NotebookEdit: ['notebook_path']
+};
+
+/**
+ * Every string in a tool's input that is checked (commands, URLs, prompts, MCP arguments, file
+ * contents), except the local file tools' path fields (`LOCAL_PATH_FIELDS`).
+ */
+export function toolInputTexts(toolInput: Record<string, unknown>, toolName = ''): string[] {
+	const skip = new Set(Object.hasOwn(LOCAL_PATH_FIELDS, toolName) ? LOCAL_PATH_FIELDS[toolName] : []);
+	const checked = Object.fromEntries(Object.entries(toolInput).filter(([field]) => !skip.has(field)));
 	const texts: string[] = [];
-	mapAllStrings(toolInput, (text) => (texts.push(text), text));
+	mapAllStrings(checked, (text) => (texts.push(text), text));
 	return texts;
 }
