@@ -10,6 +10,9 @@ import { jsonLogger } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
 import { startServer } from './server.ts';
 import { startSync } from './sync/index.ts';
+import { openVault } from './swaps/index.ts';
+import { createSwapLog } from './swaps/swap-log.ts';
+import { createPlaceholderStore } from './transform/placeholders.ts';
 
 const config = readConfig();
 const logger = jsonLogger();
@@ -34,8 +37,15 @@ const classifier = createClassifier({
 const extractor = existsSync(config.extractBin) ? createExtractor(config.extractBin) : undefined;
 logger.log(extractor ? 'info' : 'warn', extractor ? 'extract_ready' : 'extract_missing');
 
+// Placeholder keys saved encrypted, so they outlive a restart, and the local swap record (#85).
+const opened = await openVault(config.stateDir, logger);
+const placeholders = createPlaceholderStore({ vault: opened?.vault });
+const swapLog = createSwapLog({ dir: config.stateDir, onError: (code) => logger.log('error', code) });
+
 const app = createApp({
 	policy,
+	placeholders,
+	swapLog,
 	classifier,
 	extractor,
 	logger,
@@ -48,8 +58,10 @@ logger.log('info', 'listening', { port: server.port });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 	process.once(signal, () => {
-		void Promise.all([server.close(), sync ? sync.close() : policy.close?.(), tier1?.close()]).finally(() =>
-			process.exit(0)
-		);
+		void Promise.all([server.close(), sync ? sync.close() : policy.close?.(), tier1?.close()]).finally(() => {
+			placeholders.flush();
+			opened?.close();
+			process.exit(0);
+		});
 	});
 }

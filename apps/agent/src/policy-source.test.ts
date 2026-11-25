@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { DEFAULT_EXTRACT_BIN, readConfig } from './config.ts';
+import { defaultStateDir } from './sync/config.ts';
 import { memoryLogger } from './log.ts';
 import { filePolicySource } from './policy-source.ts';
 import { policyWith } from './test-helpers.ts';
@@ -50,6 +51,7 @@ describe('readConfig', () => {
 			port: 4747,
 			policyFile: undefined,
 			checkBudgetMs: 8_000,
+			stateDir: defaultStateDir(),
 			extractBin: DEFAULT_EXTRACT_BIN
 		});
 	});
@@ -60,12 +62,14 @@ describe('readConfig', () => {
 				SC_AGENT_PORT: '5000',
 				SC_POLICY_FILE: '/p.json',
 				SC_CHECK_BUDGET_MS: '250',
-				SC_EXTRACT_BIN: '/opt/sc-extract'
+				SC_EXTRACT_BIN: '/opt/sc-extract',
+				SC_STATE_DIR: '/tmp/sc-state'
 			})
 		).toEqual({
 			port: 5000,
 			policyFile: '/p.json',
 			checkBudgetMs: 250,
+			stateDir: '/tmp/sc-state',
 			extractBin: '/opt/sc-extract'
 		});
 	});

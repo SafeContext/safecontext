@@ -40,7 +40,17 @@ export type LogMessage =
 	 * (#75); and the server answered again.
 	 */
 	| 'tier2_failover'
-	| 'tier2_server_back';
+	| 'tier2_server_back'
+	/**
+	 * Saved placeholder keys (#85): ready (`deleted` old keys swept), off because the Keychain
+	 * couldn't be used (keys then last until the agent stops), or one file couldn't be read or saved.
+	 */
+	| 'vault_ready'
+	| 'vault_off'
+	| 'vault_read_failed'
+	| 'vault_write_failed'
+	/** The local swap record couldn't be written. */
+	| 'swap_log_failed';
 
 /** Why tier 2 couldn't be used, or a call failed. Codes only, never text. */
 export type Tier2LogReason =
@@ -89,6 +99,8 @@ export interface LogFields {
 	classifyMs?: number;
 	totalMs?: number;
 	port?: number;
+	/** Old saved keys deleted at start. */
+	deleted?: number;
 }
 
 export interface Logger {

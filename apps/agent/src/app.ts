@@ -38,14 +38,18 @@ import { mapToolOutputText, toolInputTexts, toolOutputTexts } from './tool-text.
 import { mergeSpans, type Span } from '@safecontext/detectors';
 import { createGeneralize, type GeneralizeModel } from './transform/generalize.ts';
 import { allowedBy, dropAllowedModelSpans } from './transform/allow.ts';
-import { knownValueFinder } from './transform/known.ts';
+import { knownValueFinder, MIN_KNOWN_LENGTH } from './transform/known.ts';
 import {
 	createPlaceholderStore,
 	dropPlaceholderSpans,
+	formatPlaceholder,
+	OPEN,
+	placeholderRanges,
 	type PlaceholderStore,
 	type SessionKey
 } from './transform/placeholders.ts';
 import { restoreToolInput, type Restored } from './transform/restore.ts';
+import { noopSwapLog, type SwapLog } from './swaps/swap-log.ts';
 import { mediaKind, type Extractor } from './extract.ts';
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { createRewriter } from './transform/rewrite.ts';
@@ -55,8 +59,10 @@ export interface AppDeps {
 	classifier: Classifier;
 	logger?: Logger;
 	events?: EventSink;
-	/** Per-session placeholder keys (in memory). Default: a new store with the default bounds. */
+	/** Per-session placeholder keys. Default: a new in-memory store with the default bounds. */
 	placeholders?: PlaceholderStore;
+	/** The local record of swaps (#85). Default: none. */
+	swapLog?: SwapLog;
 	/** Tier 2's generalize call (#16). Without it, only number values get a vague rewrite. */
 	generalizer?: GeneralizeModel;
 	/**
@@ -98,6 +104,36 @@ export function createApp(deps: AppDeps): Hono {
 	const { policy: policySource, classifier, logger = silentLogger, events = noopEventSink } = deps;
 	const now = deps.now ?? (() => performance.now());
 	const placeholders = deps.placeholders ?? createPlaceholderStore();
+	const swapLog = deps.swapLog ?? noopSwapLog;
+
+	/**
+	 * Notes in the swap record (#85) which placeholders this call showed Claude, and which it put
+	 * real values back for. Ids and file paths only, never values: a path is recorded as Claude
+	 * sent it, with any value the key holds shown as its placeholder (PR #135 review).
+	 */
+	function recordSwaps(hook: HookEventName, input: unknown, handled: Handled<unknown>) {
+		const i = input as { session_id?: unknown; tool_input?: unknown } | undefined;
+		if (typeof i?.session_id !== 'string') return;
+		const restored = handled.restored?.kind === 'restored' ? handled.restored : undefined;
+		const out = JSON.stringify(handled.output) ?? '';
+		// Most calls show no placeholder and put nothing back: stop before any more work.
+		if (!restored && !out.includes(OPEN)) return;
+		const key = placeholders.session(i.session_id);
+		const ids = (text: string) => new Set(placeholderRanges(text).map((p) => p.id));
+		const before = ids(JSON.stringify(input) ?? '');
+		const hidden = [...ids(out)].filter((id) => !before.has(id) && key.valueOf(id) !== undefined);
+		if (!restored && hidden.length === 0) return;
+		const path = pathOf(i.tool_input);
+		const common = {
+			ts: new Date().toISOString(),
+			session: i.session_id,
+			hook,
+			...(handled.toolName !== undefined && { tool: handled.toolName }),
+			...(path !== undefined && { path: withPlaceholders(path, key) })
+		};
+		if (hidden.length) swapLog.record({ ...common, action: 'hidden', placeholders: hidden });
+		if (restored) swapLog.record({ ...common, action: 'restored', placeholders: restored.ids });
+	}
 	const { generalizer, extractor, checkBudgetMs = DEFAULT_CHECK_BUDGET_MS } = deps;
 	const app = new Hono();
 
@@ -407,6 +443,13 @@ export function createApp(deps: AppDeps): Hono {
 				spans: decision.hits.reduce((n, h) => n + h.count, 0),
 				totalMs: round(totalMs)
 			});
+			if (parsed.success) {
+				try {
+					recordSwaps(hook, parsed.data, handled as Handled<unknown>);
+				} catch {
+					logger.log('error', 'swap_log_failed');
+				}
+			}
 			try {
 				events.record({
 					ts: new Date().toISOString(),
@@ -664,6 +707,33 @@ function toolNameOf(body: unknown): string | undefined {
 
 function hasToolResponse(body: unknown): body is { tool_response: unknown } {
 	return typeof body === 'object' && body !== null && 'tool_response' in body;
+}
+
+/** The file a tool call names (Read, Write, Edit, NotebookEdit, Glob, Grep), if any. */
+function pathOf(toolInput: unknown): string | undefined {
+	if (toolInput === null || typeof toolInput !== 'object') return undefined;
+	const t = toolInput as Record<string, unknown>;
+	for (const field of ['file_path', 'notebook_path', 'path']) {
+		if (typeof t[field] === 'string' && t[field]) return t[field];
+	}
+	return undefined;
+}
+
+/**
+ * `text` with every value the key holds (any spelling, any case) shown as its placeholder, so a
+ * path like `deals/Northwind-renewal.md` is recorded as `deals/⟪customer_name_1⟫-renewal.md`.
+ */
+function withPlaceholders(text: string, key: SessionKey): string {
+	const swaps = key
+		.entries()
+		.flatMap((e) => e.spellings.map((spelling) => ({ spelling, id: e.id })))
+		.filter((s) => s.spelling.length >= MIN_KNOWN_LENGTH)
+		.sort((a, b) => b.spelling.length - a.spelling.length);
+	let out = text;
+	for (const { spelling, id } of swaps) {
+		out = out.replace(new RegExp(spelling.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), formatPlaceholder(id));
+	}
+	return out;
 }
 
 /** Tool names go into logs and events, so only keep ones that look like a tool name (AgentEvent's rule). */

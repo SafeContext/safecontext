@@ -282,10 +282,21 @@ replaced the value outright (`404 4ms` → `a few hundred ms`) was read as fact,
 names (`customer_name_1-renewal.md`) broke simple tasks. Now nothing changes without a visible marker,
 and the marker works as a key.
 
-**The key.** Per Claude Code session, the agent keeps placeholder ↔ real value in memory only
-(`transform/placeholders.ts`): never logged, never sent to the dashboard, never written to disk.
-Bounded to 256 sessions, 4,096 values per session and 12 hours idle. An agent restart forgets
-every key. A placeholder the key doesn't hold is never guessed at (below).
+**The key.** Per Claude Code session, the agent keeps placeholder ↔ real value
+(`transform/placeholders.ts`): never logged, never sent to the dashboard. In memory it is bounded
+to 256 sessions, 4,096 values per session and 12 hours idle. Each session's key is also saved, so
+placeholders keep working after the agent restarts (#85, `swaps/vault.ts`): one file per session in
+`<state dir>/keys/`, encrypted with AES-256-GCM under a random key kept in the login Keychain, named
+by a hash of the session id, private to the user, and deleted after 12 hours idle. Claude Code's own
+transcript already holds the values swapped back in (§2), so this isn't the first copy on disk. With
+no usable Keychain the key stays in memory only and a restart forgets it. Placeholders are never
+shared between sessions. A placeholder the key doesn't hold is never guessed at (below).
+
+**The swap record** (#85, `swaps/swap-log.ts`). Each time the agent shows Claude placeholders or puts
+real values back for a tool, it appends a line to `<state dir>/swaps.jsonl`: time, session, hook,
+tool, action (`hidden` or `restored`), placeholder ids and the file the tool named. Never a real
+value, and never sent anywhere (logs and dashboard events stay metadata only). The file starts
+again past 5 MB, keeping one older file. `safecontext swaps` (`src/cli.ts`) shows it.
 
 **Swap-back** (`transform/restore.ts`). Before a tool runs, the agent puts the real values back into
 its input, so a file Claude writes holds the real email address and `Read
@@ -310,8 +321,8 @@ the conversation keeps Claude's own call). The rules follow from §2's spike:
   Claude Code's protected list, so it stays safe if that list grows, and it is the same in every
   permission mode. Otherwise the call is denied, telling Claude why. Reads have no such limit:
   auto mode never sends a read to its check.
-- **Unknown placeholder:** if the key doesn't hold one (agent restarted, session too old, or made
-  up), a swap-back tool is denied, telling Claude to read the source again. Running it would open
+- **Unknown placeholder:** if the key doesn't hold one (session idle over 12 hours, key not saved,
+  or made up), a swap-back tool is denied, telling Claude to read the source again. Running it would open
   the wrong file, or write the placeholder into a file as if it were the value.
 - The reply is `updatedInput` with no `permissionDecision` (§2), so permission prompts still appear.
 - Red data Claude wrote itself is still checked first and denied as before.
@@ -330,8 +341,7 @@ them exactly, which tools put real values back (and which ask the user first), a
 off, and IT can add tool names or prefixes (`mcp__slack__*`), checked with `SwapBack`. The draft
 list is `Organization.swapBackTools`, copied into each published version like `failMode`.
 
-Not done (#83 follow-ups): a local record of what was swapped where (the key is the only record, in
-memory), keeping placeholders across agent restarts or sessions, and a usefulness benchmark.
+Not done (#83 follow-up): a usefulness benchmark (#84).
 
 Tool output is always cleaned span by span. Prompts can't be edited (§2), and the agent never
 cleans what Claude itself wrote in a tool input (it only swaps placeholders back), so both are

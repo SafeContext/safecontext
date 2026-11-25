@@ -76,7 +76,8 @@ export type Restored =
 	/** No placeholder to put back, or a tool that never gets real values. */
 	| { kind: 'none' }
 	/** `confirm`: not a local file tool, so the user approves the call first (the hook answers `ask`). */
-	| { kind: 'restored'; input: Record<string, unknown>; count: number; confirm: boolean }
+	/** `ids`: the placeholders put back, each once, for the swap record (#85). */
+	| { kind: 'restored'; input: Record<string, unknown>; count: number; ids: string[]; confirm: boolean }
 	| { kind: 'refused'; reason: 'unknown_placeholder' | 'outside_project' | 'sandbox_escape'; ids: string[] };
 
 export function restoreToolInput(
@@ -94,6 +95,7 @@ export function restoreToolInput(
 	const tool = local ?? OTHER_TOOL;
 
 	let count = 0;
+	const swapped = new Set<string>();
 	const unknown = new Set<string>();
 
 	/**
@@ -111,6 +113,7 @@ export function restoreToolInput(
 		found.forEach((m, i) => options[i]!.length === 0 && unknown.add(m[1]!));
 		if (found.length === 0 || options.some((o) => o.length === 0)) return text;
 		count += found.length;
+		for (const m of found) swapped.add(m[1]!);
 		const single = options.every((o) => o.length === 1);
 		let best: { out: string; score: number } | undefined;
 		for (const choice of combinations(options, MAX_CANDIDATES)) {
@@ -173,7 +176,7 @@ export function restoreToolInput(
 			}
 		}
 	}
-	return { kind: 'restored', input: restored, count, confirm: local === undefined };
+	return { kind: 'restored', input: restored, count, ids: [...swapped], confirm: local === undefined };
 }
 
 /**
