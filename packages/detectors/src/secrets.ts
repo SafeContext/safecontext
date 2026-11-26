@@ -214,12 +214,19 @@ export function findKeyedTokens(text: string): Array<[start: number, end: number
 	return found;
 }
 
+/**
+ * A run of eight or more X or * characters: a placeholder in docs (`AKIAXXXXXXXXXXXXXXXX`,
+ * `sk_live_********`), never a real key.
+ */
+const PLACEHOLDER_RUN = /([Xx*])\1{7,}/;
+
 export const secretsDetector: Detector = {
 	id: 'secrets',
 	detect(text) {
 		const spans: Span[] = [];
 		for (const { regex } of SECRET_RULES) {
 			for (const m of text.matchAll(regex)) {
+				if (PLACEHOLDER_RUN.test(m[0])) continue;
 				spans.push(ruleSpan(m.index, m.index + m[0].length, BUILTIN_DATA_TYPE.secrets));
 			}
 		}

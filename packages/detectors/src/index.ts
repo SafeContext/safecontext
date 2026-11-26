@@ -20,6 +20,7 @@ export {
 	emailDetector,
 	hasCardBrandShape,
 	ipDetector,
+	isRoleOrExampleAddress,
 	passesLuhn,
 	phoneDetector
 } from './personal-data.ts';

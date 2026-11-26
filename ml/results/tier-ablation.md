@@ -5,9 +5,9 @@ M3 Max. Two measurements:
 
 - **Leak evaluation** (`apps/agent/scripts/leak-eval.ts`): 99 realistic Claude-written documents
   (`llm-test`, 624 sensitive items, 47 safe documents) and 205 template documents (849 items, 61
-  safe). Full reports in `tier-ablation/`.
+  safe). Full reports: `tier-ablation-leak-*.md`.
 - **Usefulness benchmark** (`apps/agent/scripts/usefulness.ts`): 8 MacroHard tasks in real Claude
-  Code on haiku, 3 runs each per setup. Report: `tier-ablation/usefulness-tiers.md`.
+  Code on haiku, 3 runs each per setup. Report: `tier-ablation-usefulness-tiers.md`.
 
 ## Leak evaluation
 
@@ -71,3 +71,50 @@ By data type (realistic set):
 2. Make tier 2 optional: off by default on each Mac, on when a company model server is available
    (#75), where the cost on the laptop goes away.
 3. Replace tiers 1 and 2 with one larger model on a company server, and compare it in this harness.
+
+## Follow-up: why tier 2 cleared so little, and the fix (#152, 26 Nov 2026)
+
+The leak report now lists what was hidden in each safe document. That showed the false flags
+were mostly **outside tier 2's job**, not tier 2 failing at it:
+
+- **Realistic set:** 11 of the 12 changed safe documents were changed only because a company role
+  or example address (`support@example.com`, `press@example.com`, `developers@macrohard.io`) was
+  hidden as customer personal data. Tier 0 already leaves those alone (#112), but tier 1 tagged
+  them anyway, and tier 2 may not clear personal data.
+- **Template set:** tier 2 cleared every flag it was allowed to judge (press-release dates and
+  codenames, a public "30%"). What was left: placeholder keys (`AKIAXXXXXXXXXXXXXXXX`), fill-in
+  addresses (`you@yourcompany.com`) and one codename tagged as a customer name.
+- **Roadmap prompt (#145):** tier 2 did judge "2027 roadmap", and kept it: its prompt never said
+  that naming a document isn't giving away what is in it.
+
+Fixes: tier 1 drops email spans that tier 0's rule says are role, example or placeholder
+addresses; `developers@` is a role address; secret rules skip keys with a run of 8 or more `X` or
+`*`; and tier 2's prompt (version 2) adds one rule: a generic phrase for a document, topic or
+kind of figure ("our 2027 roadmap") isn't sensitive, while a codename, product name, date, amount
+or percentage never counts as one.
+
+| Tiers | Realistic: items caught | Realistic: safe docs changed | Templates: items caught | Templates: safe docs changed | Check time p50 / p95 (realistic) |
+| --- | --- | --- | --- | --- | --- |
+| 0 + 1, before → after | 94.7% → 94.7% | 12/47 → **1/47** | 97.9% → 97.9% | 10/61 → **5/61** | 187 / 333 → 180 / 337 ms |
+| 0 + 1 + 2, before → after | 94.7% → 94.7% | 12/47 → **1/47** | 97.9% → 97.9% | 6/61 → **1/61** | 784 / 3515 → 897 / 3781 ms |
+
+The one realistic document left is a code file with `relay-alerts@macrohard.io` (a team address
+whose name isn't only role words). With tiers 0 + 1 it also loses a "250" that tier 2 clears.
+Reports: `tier-ablation-leak-*-after-152.md`.
+
+**Roadmap prompt:** in real Claude Code (task P2, 3 runs each), tiers 0 + 1 + 2 now finish it 3 of
+3 times; tiers 0 + 1 still block it 3 of 3 (`tier-ablation-usefulness-p2-after-152.md`). The runs
+also showed a leak unrelated to tier 2: "Project Atlas" is hidden but a later plain "Atlas" is
+not (#153).
+
+**Tier 2's own scores** (`tier2-llm.md`): the new prompt gives the same results as the old one on
+dev, test and llm-test: the same spans cleared, red recall unchanged. Two first
+drafts of the rule did clear true spans (a codename used as a document title, a deal amount),
+which the agent-level eval caught; the final wording doesn't.
+
+**What it means for the options above:** on its own job, tier 2 works. It took the template set's
+safe documents changed from 5 to 1, and it is the only thing that lets the roadmap prompt
+through. Most of the false flags it "missed" belonged to tier 1 and tier 0 rules, now fixed. Its
+cost (about 0.7 s more per check at the median, 7 GB of memory) is unchanged, so the
+question of where it runs (each Mac or a company server, #75) still stands.
+

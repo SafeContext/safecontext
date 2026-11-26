@@ -90,6 +90,8 @@ interface Result {
 	withheld: boolean;
 	ms: number;
 	spans: Array<{ label: string; text: string; leaked: boolean }>;
+	/** Safe documents only: what was hidden, as `[original, what Claude saw]`. */
+	hidden?: Array<[string, string]>;
 }
 const results: Result[] = [];
 try {
@@ -128,7 +130,8 @@ try {
 			changed: replaced !== undefined,
 			withheld,
 			ms,
-			spans: doc.spans.map((s) => ({ label: s.label, text: s.text, leaked: seen.includes(s.text) }))
+			spans: doc.spans.map((s) => ({ label: s.label, text: s.text, leaked: seen.includes(s.text) })),
+			...(doc.spans.length === 0 && replaced !== undefined && !withheld ? { hidden: changes(doc.text, replaced) } : {})
 		});
 		process.stderr.write(`\r${i + 1}/${docs.length}`);
 	}
@@ -219,7 +222,8 @@ const md = [
 					.map((t) => `\`${t.replaceAll('|', '\\|').replaceAll('`', "'")}\``)
 					.join(', ')} |`
 		),
-	''
+	'',
+	...hiddenSection()
 ].join('\n');
 
 const file = join(outDir, `leak-${name}.md`);
@@ -227,6 +231,68 @@ writeFileSync(file, md);
 if (args.includes('--json')) console.log(JSON.stringify(summary, null, 2));
 else console.log(md);
 console.error(`wrote ${file.replace(root, '')}`);
+
+/** What the agent changed in each safe document: the false flags. */
+function hiddenSection(): string[] {
+	const changed = safe.filter((r) => r.hidden?.length);
+	if (!changed.length) return [];
+	const code = (t: string) => `\`${t.replaceAll('|', '\\|').replaceAll('`', "'")}\``;
+	return [
+		'## What was hidden in safe documents',
+		'',
+		'| Document | Original → what Claude saw |',
+		'| --- | --- |',
+		...changed.map((r) => `| ${r.id} | ${r.hidden!.map(([a, b]) => `${code(a)} → ${code(b)}`).join('<br>')} |`),
+		''
+	];
+}
+
+/**
+ * The changed stretches between a document and what Claude saw. Cleaning keeps lines (#106), so
+ * lines are compared in order, then words within a changed line.
+ */
+export function changes(before: string, after: string): Array<[string, string]> {
+	const a = before.split('\n');
+	const b = after.split('\n');
+	if (a.length !== b.length) return [[before, after]];
+	const out: Array<[string, string]> = [];
+	for (const [i, line] of a.entries()) {
+		if (line !== b[i]) out.push(...wordChanges(line, b[i]!));
+	}
+	return out;
+}
+
+function wordChanges(before: string, after: string): Array<[string, string]> {
+	const x = before.split(/(\s+)/);
+	const y = after.split(/(\s+)/);
+	// Longest common subsequence of words, then the runs between matches.
+	const n = x.length;
+	const m = y.length;
+	const L = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+	for (let i = n - 1; i >= 0; i--) {
+		for (let j = m - 1; j >= 0; j--)
+			L[i]![j] = x[i] === y[j] ? L[i + 1]![j + 1]! + 1 : Math.max(L[i + 1]![j]!, L[i]![j + 1]!);
+	}
+	const out: Array<[string, string]> = [];
+	let i = 0;
+	let j = 0;
+	let da = '';
+	let db = '';
+	const flush = () => {
+		if (da.trim() || db.trim()) out.push([da.trim(), db.trim()]);
+		da = db = '';
+	};
+	while (i < n || j < m) {
+		if (i < n && j < m && x[i] === y[j]) {
+			flush();
+			i++;
+			j++;
+		} else if (j >= m || (i < n && L[i + 1]![j]! >= L[i]![j + 1]!)) da += x[i++];
+		else db += y[j++];
+	}
+	flush();
+	return out;
+}
 
 /** The tier 1 model's pinned revision (provenance.json), else the folder name. */
 function modelRevision(dir: string): string {

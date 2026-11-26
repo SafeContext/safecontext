@@ -12,6 +12,7 @@ A span is NOT sensitive when the document shows it is already public or not real
 - the product or feature has already shipped, launched, been released or is generally available
 - the date or number was announced publicly, is on the pricing page, is a published SLA, or comes from a public survey or marketing claim
 - it is a placeholder, an example value or a made-up sample
+- the span is a generic phrase for a document, topic or kind of figure, not its content: "our 2027 roadmap", "the Q3 revenue figures", "last month's churn". A codename, product name, date, amount or percentage is never such a phrase, even when it is a title or heading
 
 Judge each span by what the document says about that span, not by how it looks. The same codename is sensitive in a launch plan and not sensitive in a press release about its launch. Internal chat can mention public facts ("shipped publicly last year", "it's on the pricing page"), and public-looking text can contain internal facts ("internal only", "confidential", "planned", "target date", "don't share").
 

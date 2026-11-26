@@ -27,13 +27,15 @@ function fakeModel(
 		ms?: number;
 		labels?: Record<string, string>;
 		threshold?: number;
+		maxWidth?: number;
 	} = {}
 ) {
+	const width = opts.maxWidth ?? 3;
 	const calls: { labels: string[]; words: string[] }[] = [];
 	let inFlight = 0;
 	let maxInFlight = 0;
 	const model: TaggerModel = {
-		maxWidth: 3,
+		maxWidth: width,
 		maxWords: opts.maxWords ?? 384,
 		maxTokens: opts.maxTokens ?? 512,
 		...(opts.labels && { labels: opts.labels }),
@@ -50,15 +52,15 @@ function fakeModel(
 					.slice(1);
 				expect(labels).toHaveLength(labelCount);
 				calls.push({ labels, words: words.map((w) => w.text) });
-				const logits = new Float32Array(words.length * 3 * labelCount).fill(-10);
+				const logits = new Float32Array(words.length * width * labelCount).fill(-10);
 				for (let s = 0; s < words.length; s++) {
-					for (let w = 0; w < 3 && s + w < words.length; w++) {
+					for (let w = 0; w < width && s + w < words.length; w++) {
 						const phrase = words
 							.slice(s, s + w + 1)
 							.map((x) => x.text)
 							.join(' ');
 						const k = labels.indexOf(entities[phrase] ?? '');
-						if (k !== -1) logits[(s * 3 + w) * labelCount + k] = 5;
+						if (k !== -1) logits[(s * width + w) * labelCount + k] = 5;
 					}
 				}
 				return logits;
@@ -206,6 +208,18 @@ describe('tier 1 on long text', () => {
 		const text = 'Roadmap 2027: GA on 3 March 2027';
 		const [spans] = await createTier1({ model }).detect([text], ctx());
 		expect(spans!.map((s) => text.slice(s.start, s.end))).toEqual(['3 March 2027']);
+	});
+
+	it("drops role and example addresses, as tier 0 does, but keeps a person's (#112)", async () => {
+		const pd = 'Customer personal data';
+		const words = (email: string) => email.replace(/[@.]/g, ' $& ');
+		const { model } = fakeModel(
+			{ [words('support@example.com')]: pd, [words('press@macrohard.io')]: pd, [words('jane.doe@northwind.com')]: pd },
+			{ maxWidth: 8 }
+		);
+		const text = 'Mail support@example.com, press@macrohard.io. Or jane.doe@northwind.com.';
+		const [spans] = await createTier1({ model }).detect([text], ctx());
+		expect(spans!.map((s) => text.slice(s.start, s.end))).toEqual(['jane.doe@northwind.com']);
 	});
 
 	it('never uses windows larger than the model limit', async () => {

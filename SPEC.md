@@ -223,6 +223,9 @@ data type (tier 0). When spans of two data types overlap, the stricter type in t
 - **When it runs:** only for data types whose action isn't `allow`. It is skipped when there is no
   text, and for a prompt or tool call that tier 0 already blocks. Tool output always gets tier 1.
   Long text is split into overlapping windows; the check budget (§2a) still applies.
+- **Rules over the model** (#107, #152): tier 1 never tags a bare year ("2027"), or an email
+  address that tier 0's rule leaves alone as a role, example or placeholder address
+  (`support@`, `press@`, `jane@example.com`, `you@yourcompany.com`, #112).
 - **Hosting:** the export lives in a private Hugging Face org (§4a).
 
 **Tier 2 as built (#14, #16).**
@@ -246,7 +249,9 @@ data type (tier 0). When spans of two data types overlap, the stricter type in t
   exactly; a fixture written by the Python reference checks it.
 - **Context judgement** (the last classifier tier): tier 1 spans of the labels in `tier2.json`
   (`unreleased-roadmap`, `revenue-figures`, `internal-metrics`, `deal-sizes`) go to the model,
-  which says whether each is sensitive *in this document*. Spans it says aren't are removed. The
+  which says whether each is sensitive *in this document*. Spans it says aren't are removed. A span
+  that only names a document, plan or kind of figure ("our 2027 roadmap", "the Q3 revenue figures")
+  without giving its content isn't sensitive (prompt version 2, #152). The
   classifier only lets tier 2 remove tagger spans of those labels. It never removes a tier 0 rule
   or term-list match, or a span overlapping one. For a prompt or tool input, tier 2 runs only
   if it could change the verdict.

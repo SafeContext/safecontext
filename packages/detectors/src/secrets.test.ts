@@ -21,7 +21,8 @@ const CASES: Record<string, { secret: string; nearMisses: string[] }> = {
 		nearMisses: [
 			`AKIA${'IOSFODNN7EXAMPL'}`,
 			`AKIA${'iosfodnn7example'}`,
-			`AKIA${'1OSFODNN7EXAMPLE'}`
+			`AKIA${'1OSFODNN7EXAMPLE'}`,
+			`AKIA${'X'.repeat(16)}`
 		]
 	},
 	'github-pat': { secret: `ghp_${fill(ALNUM, 36)}`, nearMisses: [`ghp_${fill(ALNUM, 20)}`] },
