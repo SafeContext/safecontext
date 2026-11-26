@@ -34,13 +34,16 @@ describe('emailDetector', () => {
 
 	it.each([
 		'support@example.com',
+		'developers@macrohard.io',
 		'billing@acme.io',
 		'no-reply@northwind.com',
 		'oncall@macrohard.io',
 		'finance-board@macrohard.io',
 		'Info+press@contoso.com',
 		'jane.doe@example.org',
-		'dev@docs.example.net'
+		'dev@docs.example.net',
+		'you@yourcompany.com',
+		'admin@your-domain.io'
 	])('leaves the team or documentation address %s alone (#112)', (email) => {
 		expect(found(emailDetector, `contact ${email} today`)).toEqual([]);
 		expect(isRoleOrExampleAddress(email)).toBe(true);

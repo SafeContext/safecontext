@@ -1,4 +1,4 @@
-import { mergeSpans, type Span } from '@safecontext/detectors';
+import { isRoleOrExampleAddress, mergeSpans, type Span } from '@safecontext/detectors';
 import type { DataType, Policy } from '@safecontext/policy';
 import { severity, stopsPromptsAndToolCalls, strictness, summarize } from '../../decide.ts';
 import type { Tier1Config } from '../../config.ts';
@@ -39,6 +39,17 @@ const MIN_BUDGET_MS = 50;
  * Dates that include it ("3 March 2027") are still found.
  */
 const BARE_YEAR = /^(?:19|20)\d{2}$/;
+/** A span that is one email address, give or take punctuation around it. */
+const LONE_EMAIL = /^[\s"'<(]*([^\s@"'<>()]+@[^\s@"'<>()]+?)[\s"'>).,;:]*$/u;
+/**
+ * Tier 0 already decides email addresses: role and example addresses (`support@`,
+ * `jane@example.com`) aren't a person's details (#112). The tagger can't see that, so it
+ * mustn't hide what the rule let through.
+ */
+function isRoleOrExampleEmail(span: string): boolean {
+	const m = LONE_EMAIL.exec(span);
+	return m !== null && isRoleOrExampleAddress(m[1]!);
+}
 /** A label prompt this close to the model's token limit leaves no room for text. */
 const MIN_TEXT_TOKENS = 32;
 
@@ -143,7 +154,8 @@ export function createTier1({ model, threshold, label = labelTemplate('{name}'),
 				)) {
 					const logits = await queued(signal, () => m.score(promptIds, dataTypeIds.length, encoded.slice(a, b)));
 					for (const s of decode(logits, words.slice(a, b), dataTypeIds.length, m.maxWidth, minScore)) {
-						if (BARE_YEAR.test(text.slice(s.start, s.end))) continue;
+						const found = text.slice(s.start, s.end);
+						if (BARE_YEAR.test(found) || isRoleOrExampleEmail(found)) continue;
 						spans.push({
 							start: s.start,
 							end: s.end,

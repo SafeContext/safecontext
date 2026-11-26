@@ -63,7 +63,7 @@ const FILE_EXTENSIONS = new Set([
  */
 const ROLE_WORDS = new Set([
 	'abuse', 'accounts', 'admin', 'alerts', 'billing', 'board', 'careers', 'contact', 'customerservice',
-	'devops', 'donotreply', 'engineering', 'enquiries', 'feedback', 'finance', 'hello', 'help',
+	'developer', 'developers', 'devops', 'donotreply', 'engineering', 'enquiries', 'feedback', 'finance', 'hello', 'help',
 	'hostmaster', 'hr', 'info', 'inquiries', 'it', 'jobs', 'legal', 'marketing', 'media', 'no',
 	'noreply', 'notifications', 'office', 'on', 'oncall', 'ops', 'postmaster', 'press', 'privacy',
 	'reply', 'sales', 'security', 'service', 'support', 'team', 'webmaster'
@@ -71,13 +71,16 @@ const ROLE_WORDS = new Set([
 
 /** Domains reserved for documentation (RFC 2606): addresses there are examples, not people. */
 const EXAMPLE_DOMAINS = new Set(['example.com', 'example.org', 'example.net']);
+/** Fill-in-the-blank domains in docs and templates (`you@yourcompany.com`). */
+const PLACEHOLDER_DOMAIN = /^your-?(?:company|domain|org|organisation|organization)\./;
 
-/** A team or documentation address, not a person's (#112). */
+/** A team, documentation or placeholder address, not a person's (#112). */
 export function isRoleOrExampleAddress(email: string): boolean {
 	const at = email.lastIndexOf('@');
 	const local = email.slice(0, at).toLowerCase().replace(/\+.*$/, '');
 	const domain = email.slice(at + 1).toLowerCase();
 	if (EXAMPLE_DOMAINS.has(domain) || [...EXAMPLE_DOMAINS].some((d) => domain.endsWith(`.${d}`))) return true;
+	if (PLACEHOLDER_DOMAIN.test(domain)) return true;
 	const words = local.split(/[-_.]+/).filter(Boolean);
 	return words.length > 0 && words.every((w) => ROLE_WORDS.has(w));
 }

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "about": "Tier 2 prompts (issue #14), loaded by ml/src/safecontext_ml/tier2/prompts.py and by the agent (#16). Each task directory has system.md, user.md (template), schema.json (answer JSON Schema) and examples.json (few-shot turns). Bump `version` when any prompt file changes, and re-run the scores in ml/results/tier2-llm.md.",
+  "version": 2,
+  "about": "Tier 2 prompts (issue #14), loaded by ml/src/safecontext_ml/tier2/prompts.py and by the agent (#16). Each task directory has system.md, user.md (template), schema.json (answer JSON Schema) and examples.json (few-shot turns). Bump `version` when any prompt file changes, and re-run the scores in ml/results/tier2-llm.md and the agent's leak eval (apps/agent/scripts/leak-eval.ts, tiers 0+1+2): the agent's shorter tier 1 windows give tier 2 spans the ML scores don't see (#152).",
   "request": {
     "endpoint": "POST {base_url}/chat/completions (OpenAI-compatible)",
     "temperature": 0,

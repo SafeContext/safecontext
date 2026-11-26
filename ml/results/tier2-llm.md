@@ -3,7 +3,7 @@
 **Chosen:** **Gemma 4 E4B instruct** (`gemma4:e4b-it-q4_K_M`, Apache-2.0) on **Ollama**,
 Q4_K_M quantisation, server started with `OLLAMA_CONTEXT_LENGTH=8192`. Pinned in
 [`models.lock.json`](../models.lock.json) under `external` (`tier2-llm`, with the MLX build as
-`tier2-llm-mlx`). Prompts: [`prompts/tier2/`](../prompts/tier2/) (version 1).
+`tier2-llm-mlx`). Prompts: [`prompts/tier2/`](../prompts/tier2/) (version 2, #152; the scores below are version 1 unless noted).
 
 - **Context judgement** (tier 1 spans of roadmap / revenue / metrics / deal types, test split,
   Macrohard): roadmap-vs-press-release hard negatives flagged **52% → 0%** (26/50 → 0/50); safe
@@ -85,6 +85,32 @@ prompt cleared an unlabelled internal ARR figure, so the system prompt now says 
 private unless the document shows otherwise.
 
 Per-run reports: [`tier2-ollama-gemma4-e4b-it-q4_K_M-on-tier1-mh-test-test-sample.md`](tier2-ollama-gemma4-e4b-it-q4_K_M-on-tier1-mh-test-test-sample.md).
+
+### Prompt version 2 (#152)
+
+One rule added to the context prompt: a span that is a generic phrase for a document, topic or
+kind of figure ("our 2027 roadmap", "the Q3 revenue figures") isn't sensitive, and a codename,
+product name, date, amount or percentage never counts as one. It lets prompts like "Summarise
+our 2027 roadmap" through (#145). Scored on today's tier 1 export (retrained in #78, so the tier
+1 numbers differ from the table above), both versions on the same tier 1 spans:
+
+| Split | Tier 1 only: safe docs / hard neg. flagged | v1: safe / hard neg. | v2: safe / hard neg. | Red recall (all three) | True spans cleared (v1 / v2) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| dev (216 Macrohard) | 13/75 / 16/95 | 9/75 / 12/95 | 9/75 / 12/95 | 94.0% | 0 / 0 |
+| test (205 Macrohard) | 6/61 / 20/79 | 2/61 / 1/79 | 2/61 / 1/79 | 89.9% | 2 / 2 |
+| llm-test (99) | 18/47 | 18/47 | 18/47 | 74.8% | 0 / 0 |
+
+On test both versions clear the same two true spans: counts of lost webhook deliveries
+("247,777", "156.7k") that are internal metrics, but that tier 1 labelled as deal sizes. Tier 2
+rightly says they aren't deal values, and the span goes. Recall per label doesn't move because
+each count appears twice and the other copy stays flagged (in the agent, #144 then hides both).
+Tier 2 judging the label rather than the data is a known weakness, not new in version 2. The
+llm-test safe documents are flagged for personal data, which tier 2 doesn't judge (the agent now
+drops most of those before tier 2, see `tier-ablation.md`). Two earlier drafts of the rule (with
+a new few-shot example, or "only names a document or plan") cleared true spans: a codename used
+as a document title, a deal amount, a pilot date. They were caught by the agent's leak eval,
+which runs tier 1 with the agent's 48-word windows and so gives tier 2 different spans: check
+prompt changes there too.
 
 ## Generalize
 
